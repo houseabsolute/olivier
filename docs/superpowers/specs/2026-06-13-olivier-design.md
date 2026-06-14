@@ -188,6 +188,16 @@ Files without MBIDs are still cataloged from plain tags, flagged `enriched = fal
 - **Settings:** root folders (+ rescan), language-leads toggle (default A), MusicBrainz contact email (default autarch@urth.org), play threshold, about.
 - **Adaptive:** one Flutter codebase, breakpoint-driven — desktop = rail + columns + bottom bar; mobile = bottom nav + drill-down (Artists → Albums → Album detail) + mini-player. **Embedded cover art** shows in now-playing, album headers, and mobile.
 
+### 6.1 Default sort orders
+
+- **Artists** (album-artist headers) — by **sort name**: people sort *Last, First* (`Nina Simone` → `Simone, Nina`); groups sort by their name (`Living Colour`); leading articles are moved to the end so they're effectively ignored (`The Beatles` → `Beatles, The`, under **B**; `A Perfect Circle` → `Perfect Circle, A`, under **P**; `An Pierle` → `Pierlé, An`). Non-Latin artists sort by their **transliterated** sort name in the same *Last, First* order (椎名林檎 → `Sheena, Ringo`). These are the MusicBrainz `sort-name` conventions — **verified against the live API** (Person → "Last, First"; Group → leading article moved to the end) — so no client-side person/band classification or article-stripping is needed for MB-matched artists.
+  - **Sort-key source**, in priority: (1) the chosen display-transliteration alias's `sort-name` (when §5.1 selected one); (2) the MusicBrainz entity `sort-name` (this is also tier 1's value whenever §5.1 fell back to the entity sort-name); (3) the embedded `albumartistsort`/`artistsort` tag (ID3 `TSO2`/`TSOP`, Vorbis `ALBUMARTISTSORT`/`ARTISTSORT`, MP4 `soaa`/`soar`) for un-enriched files; (4) the display name with a leading `A`/`An`/`The` stripped, as a last resort for files with no sort tag at all.
+  - The sort key is **distinct from the §5.1 display transliteration**: 椎名林檎 *displays* as `Ringo Sheena` (First Last) but *sorts* as `Sheena, Ringo` (Last, First). The sort key is always a Latin string (transliterated for non-Latin artists) and is compared **case-insensitively**.
+- **Albums** (within an artist) — by **original release year** ascending (release-group `first-release-date`), then by the original `release.title` as a tie-break.
+- **Tracks** (within an album) — by **disc number**, then **track number**, ascending.
+
+Sorting is computed in the **Rust query layer** (one ordering, consistent across desktop and mobile), with the artist sort key stored/indexed for fast ordered queries. *A manual per-artist sort-name/transliteration override (e.g., to prefer `Shiina` over MusicBrainz's `Sheena`) is a post-v1 enhancement the schema can accommodate via an editable column.*
+
 ---
 
 ## 7. Cross-platform / OS integration
