@@ -10,6 +10,8 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 flutter_rust_bridge = "=2.12.0"
 anyhow = "1"
 lofty = "0.24"
+rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite_migration = "2.5"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
