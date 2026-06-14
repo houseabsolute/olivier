@@ -19,9 +19,12 @@ pub fn scan_roots(
     roots: &[String],
     mut on_progress: impl FnMut(ScanProgress),
 ) -> anyhow::Result<()> {
-    let epoch = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_secs() as i64;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?;
+    // scan_epoch is a per-run id used by the deletion sweep; use nanos so two scans
+    // in the same wall-clock second still get distinct epochs. added_at is a real
+    // unix-seconds timestamp — don't conflate the two.
+    let epoch = now.as_nanos() as i64;
+    let now_secs = now.as_secs() as i64;
 
     let mut files_seen: u64 = 0;
     let mut files_changed: u64 = 0;
@@ -87,7 +90,7 @@ pub fn scan_roots(
             // Parse tags and upsert
             let tags = read_tags(path).with_context(|| format!("read_tags for {path_str}"))?;
             let tx = conn.transaction()?;
-            upsert_file(&tx, &tags, &path_str, mtime, size, epoch)?;
+            upsert_file(&tx, &tags, &path_str, mtime, size, epoch, now_secs)?;
             tx.commit()?;
 
             files_changed += 1;
@@ -109,12 +112,15 @@ pub fn scan_roots(
         "DELETE FROM file WHERE scan_epoch != ?1",
         rusqlite::params![epoch],
     )?;
+    // track_stats references track, so it must be deleted BEFORE the track — FKs ARE
+    // enforced here (libsqlite3-sys bundles SQLite with SQLITE_DEFAULT_FOREIGN_KEYS=1).
+    // Key both off `file` so an orphaned (no-file) track and its stats go together.
     conn.execute(
-        "DELETE FROM track WHERE id NOT IN (SELECT track_id FROM file)",
+        "DELETE FROM track_stats WHERE track_id NOT IN (SELECT track_id FROM file)",
         [],
     )?;
     conn.execute(
-        "DELETE FROM track_stats WHERE track_id NOT IN (SELECT id FROM track)",
+        "DELETE FROM track WHERE id NOT IN (SELECT track_id FROM file)",
         [],
     )?;
     conn.execute(
@@ -147,6 +153,7 @@ fn upsert_file(
     mtime: i64,
     size: i64,
     epoch: i64,
+    now_secs: i64,
 ) -> anyhow::Result<()> {
     let album_artist_name = tags
         .album_artist
@@ -247,7 +254,7 @@ fn upsert_file(
             size,
             tags.codec.as_deref(),
             track_id,
-            epoch,
+            now_secs,
             tags.has_cover as i64,
             epoch
         ],

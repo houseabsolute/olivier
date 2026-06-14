@@ -310,3 +310,41 @@ fn record_play_accumulates_stats() {
     assert_eq!(last_played, 2000);
     assert_eq!(first_played, 1000);
 }
+
+#[test]
+fn rescan_removes_orphaned_rows() {
+    // Exercises the deletion sweep with FK enforcement on: a removed file must
+    // cascade-prune its track_stats, track, release, release_group, and artist.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::copy(
+        format!("{}/tests/fixtures/sample.flac", env!("CARGO_MANIFEST_DIR")),
+        dir.path().join("sample.flac"),
+    )
+    .unwrap();
+    let mut conn = open(":memory:").unwrap();
+    let root = dir.path().to_string_lossy().to_string();
+    scan_roots(&mut conn, std::slice::from_ref(&root), |_| {}).unwrap();
+    assert_eq!(
+        conn.query_row("SELECT count(*) FROM file", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+
+    // Remove the file, then re-scan the now-empty dir: the sweep must not hit a
+    // FOREIGN KEY constraint and must drop every catalog row to zero.
+    std::fs::remove_file(dir.path().join("sample.flac")).unwrap();
+    scan_roots(&mut conn, std::slice::from_ref(&root), |_| {}).unwrap();
+    for table in [
+        "file",
+        "track_stats",
+        "track",
+        "release",
+        "release_group",
+        "artist",
+    ] {
+        let n: i64 = conn
+            .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 0, "{table} not pruned");
+    }
+}
