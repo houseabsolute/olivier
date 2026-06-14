@@ -36,6 +36,9 @@ dependencies:
   rust_lib_olivier:
     path: rust_builder
   flutter_rust_bridge: 2.12.0
+  just_audio: ^0.10.5
+  just_audio_media_kit: ^2.1.0
+  media_kit_libs_linux: any
 
 dev_dependencies:
   flutter_test:
