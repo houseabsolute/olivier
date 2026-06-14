@@ -1,0 +1,9 @@
+# Dev tools for Olivier, managed by mise (https://mise.jdx.dev).
+# Run `mise install` to install pinned tools, then `mise exec -- <tool>` (or rely
+# on mise shell activation in this directory) to use them.
+#
+# Rust (rustup) and Flutter (snap) are managed outside mise; this file pins the
+# cargo-installed CLI tools the build needs.
+
+[tools]
+"cargo:flutter_rust_bridge_codegen" = "2.12.0"

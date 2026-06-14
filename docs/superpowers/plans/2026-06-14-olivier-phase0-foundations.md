@@ -21,10 +21,11 @@ Before Task 1, confirm these are installed (do **not** automate; just verify and
 - Flutter Linux desktop deps: `clang cmake ninja-build pkg-config libgtk-3-dev`
 - libmpv (Linux audio backend): `sudo apt-get install -y libmpv-dev mpv` (Fedora: `mpv-libs mpv-libs-devel`; Arch: `mpv`)
 - `ffmpeg` and Python `mutagen` (for test fixtures only): `ffmpeg -version`; `python3 -c "import mutagen, sys; print(mutagen.version_string)"` (install with `pip install --user mutagen`)
-- The frb codegen CLI, pinned to match the Dart/Rust package versions:
+- The frb codegen CLI is pinned in the repo's `mise.toml` (`cargo:flutter_rust_bridge_codegen` = 2.12.0). Install it with:
   ```bash
-  cargo install flutter_rust_bridge_codegen --version 2.12.0
+  mise install            # run from the repo root; compiles the CLI on first run
   ```
+  Invoke codegen via `mise exec -- flutter_rust_bridge_codegen …` (used throughout this plan) so it resolves regardless of shell activation.
 - Android NDK r27+ is **only** needed in Phase 4; not required for Phase 0.
 
 If any are missing, stop and report — don't guess substitutes.
@@ -90,7 +91,7 @@ Expected: Flutter files created (`lib/main.dart`, `pubspec.yaml`, `android/`, `l
 
 ```bash
 cd /home/autarch/projects/olivier
-flutter_rust_bridge_codegen integrate
+mise exec -- flutter_rust_bridge_codegen integrate
 ```
 
 Expected: creates `rust/` (crate `rust_lib_olivier`), `rust_builder/`, `flutter_rust_bridge.yaml`, `lib/src/rust/`, and adds `flutter_rust_bridge` + `rust_lib_olivier` to `pubspec.yaml`. Answer "yes" if it offers to modify `main.dart`.
@@ -127,7 +128,7 @@ pub fn init_app() {
 
 ```bash
 cd /home/autarch/projects/olivier
-flutter_rust_bridge_codegen generate
+mise exec -- flutter_rust_bridge_codegen generate
 ```
 
 Expected: `lib/src/rust/api/simple.dart` now exposes `olivierVersion()`; no errors.
@@ -777,7 +778,7 @@ Add `pub mod tags;` to `rust/src/api/mod.rs`. (flutter_rust_bridge can mirror th
 - [ ] **Step 2: Regenerate bindings**
 
 ```bash
-cd /home/autarch/projects/olivier && flutter_rust_bridge_codegen generate
+cd /home/autarch/projects/olivier && mise exec -- flutter_rust_bridge_codegen generate
 ```
 
 Expected: `lib/src/rust/api/tags.dart` exposes `readTrackTags(path: ...)` returning a generated `TrackTags` class.
@@ -1354,7 +1355,7 @@ Expected: PASS.
 - [ ] **Step 4: Regenerate bindings + wire Dart write-back/hydration**
 
 ```bash
-cd /home/autarch/projects/olivier && flutter_rust_bridge_codegen generate
+cd /home/autarch/projects/olivier && mise exec -- flutter_rust_bridge_codegen generate
 ```
 
 Add `path_provider: ^2.1.0` to `pubspec.yaml` `dependencies` and `flutter pub get`. In `queue_controller.dart`, call `saveQueue(...)` after every structural change and a throttled `saveQueue` (~5s / on pause) for position; on app start call `loadQueue(...)` and rebuild via `setAudioSources(..., initialIndex:, initialPosition:)`. Use the app's documents dir (`getApplicationDocumentsDirectory()` from `path_provider`, e.g. `<dir>/olivier.db`) for the db path.
