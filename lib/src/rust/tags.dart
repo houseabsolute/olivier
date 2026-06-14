@@ -25,6 +25,9 @@ class TrackTags {
   final String? originalDate;
   final String? reissueDate;
   final bool hasCover;
+  final String? artistSort;
+  final String? albumArtistSort;
+  final String? codec;
 
   const TrackTags({
     this.title,
@@ -45,6 +48,9 @@ class TrackTags {
     this.originalDate,
     this.reissueDate,
     required this.hasCover,
+    this.artistSort,
+    this.albumArtistSort,
+    this.codec,
   });
 
   @override
@@ -66,7 +72,10 @@ class TrackTags {
       releaseTrackMbid.hashCode ^
       originalDate.hashCode ^
       reissueDate.hashCode ^
-      hasCover.hashCode;
+      hasCover.hashCode ^
+      artistSort.hashCode ^
+      albumArtistSort.hashCode ^
+      codec.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -90,5 +99,8 @@ class TrackTags {
           releaseTrackMbid == other.releaseTrackMbid &&
           originalDate == other.originalDate &&
           reissueDate == other.reissueDate &&
-          hasCover == other.hasCover;
+          hasCover == other.hasCover &&
+          artistSort == other.artistSort &&
+          albumArtistSort == other.albumArtistSort &&
+          codec == other.codec;
 }

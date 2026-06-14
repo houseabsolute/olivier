@@ -75,6 +75,18 @@ fn reads_musicbrainz_ids_for_all_formats() {
     }
 }
 
+#[test]
+fn reads_sort_names_for_all_formats() {
+    for name in FILES {
+        let t = read_tags(&fixture(name)).unwrap();
+        assert_eq!(
+            t.album_artist_sort.as_deref(),
+            Some("Shiina, Ringo"),
+            "{name} aa-sort"
+        );
+    }
+}
+
 const MP4_FILES: &[&str] = &["sample.m4a", "sample.alac.m4a"];
 
 #[test]

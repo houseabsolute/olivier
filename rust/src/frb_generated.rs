@@ -335,6 +335,9 @@ impl SseDecode for crate::tags::TrackTags {
         let mut var_originalDate = <Option<String>>::sse_decode(deserializer);
         let mut var_reissueDate = <Option<String>>::sse_decode(deserializer);
         let mut var_hasCover = <bool>::sse_decode(deserializer);
+        let mut var_artistSort = <Option<String>>::sse_decode(deserializer);
+        let mut var_albumArtistSort = <Option<String>>::sse_decode(deserializer);
+        let mut var_codec = <Option<String>>::sse_decode(deserializer);
         return crate::tags::TrackTags {
             title: var_title,
             artist: var_artist,
@@ -354,6 +357,9 @@ impl SseDecode for crate::tags::TrackTags {
             original_date: var_originalDate,
             reissue_date: var_reissueDate,
             has_cover: var_hasCover,
+            artist_sort: var_artistSort,
+            album_artist_sort: var_albumArtistSort,
+            codec: var_codec,
         };
     }
 }
@@ -463,6 +469,9 @@ impl flutter_rust_bridge::IntoDart for crate::tags::TrackTags {
             self.original_date.into_into_dart().into_dart(),
             self.reissue_date.into_into_dart().into_dart(),
             self.has_cover.into_into_dart().into_dart(),
+            self.artist_sort.into_into_dart().into_dart(),
+            self.album_artist_sort.into_into_dart().into_dart(),
+            self.codec.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -576,6 +585,9 @@ impl SseEncode for crate::tags::TrackTags {
         <Option<String>>::sse_encode(self.original_date, serializer);
         <Option<String>>::sse_encode(self.reissue_date, serializer);
         <bool>::sse_encode(self.has_cover, serializer);
+        <Option<String>>::sse_encode(self.artist_sort, serializer);
+        <Option<String>>::sse_encode(self.album_artist_sort, serializer);
+        <Option<String>>::sse_encode(self.codec, serializer);
     }
 }
 

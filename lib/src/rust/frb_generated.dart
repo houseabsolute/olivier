@@ -304,8 +304,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TrackTags dco_decode_track_tags(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 18)
-      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
+    if (arr.length != 21)
+      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
     return TrackTags(
       title: dco_decode_opt_String(arr[0]),
       artist: dco_decode_opt_String(arr[1]),
@@ -325,6 +325,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       originalDate: dco_decode_opt_String(arr[15]),
       reissueDate: dco_decode_opt_String(arr[16]),
       hasCover: dco_decode_bool(arr[17]),
+      artistSort: dco_decode_opt_String(arr[18]),
+      albumArtistSort: dco_decode_opt_String(arr[19]),
+      codec: dco_decode_opt_String(arr[20]),
     );
   }
 
@@ -473,6 +476,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_originalDate = sse_decode_opt_String(deserializer);
     var var_reissueDate = sse_decode_opt_String(deserializer);
     var var_hasCover = sse_decode_bool(deserializer);
+    var var_artistSort = sse_decode_opt_String(deserializer);
+    var var_albumArtistSort = sse_decode_opt_String(deserializer);
+    var var_codec = sse_decode_opt_String(deserializer);
     return TrackTags(
         title: var_title,
         artist: var_artist,
@@ -491,7 +497,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         releaseTrackMbid: var_releaseTrackMbid,
         originalDate: var_originalDate,
         reissueDate: var_reissueDate,
-        hasCover: var_hasCover);
+        hasCover: var_hasCover,
+        artistSort: var_artistSort,
+        albumArtistSort: var_albumArtistSort,
+        codec: var_codec);
   }
 
   @protected
@@ -633,6 +642,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.originalDate, serializer);
     sse_encode_opt_String(self.reissueDate, serializer);
     sse_encode_bool(self.hasCover, serializer);
+    sse_encode_opt_String(self.artistSort, serializer);
+    sse_encode_opt_String(self.albumArtistSort, serializer);
+    sse_encode_opt_String(self.codec, serializer);
   }
 
   @protected
