@@ -6,8 +6,9 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async => await RustLib.init());
-  testWidgets('Can call rust function', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
-    expect(find.textContaining('Result: `Hello, Tom!`'), findsOneWidget);
+  testWidgets('App renders with version string', (WidgetTester tester) async {
+    await tester.pumpWidget(const OlivierApp());
+    // The app body displays the Rust version string (e.g. "rust_lib_olivier 0.1.0")
+    expect(find.textContaining('rust_lib_olivier'), findsOneWidget);
   });
 }

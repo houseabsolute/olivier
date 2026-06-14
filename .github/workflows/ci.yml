@@ -1,0 +1,40 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --all
+
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # rust-toolchain is required by the `flutter build linux` step below:
+      # cargokit invokes `cargo` (found via PATH) to build the Rust cdylib.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: jdx/mise-action@v2 # installs the mise-pinned Flutter/ninja/codegen
+      - name: System libraries for Flutter Linux desktop
+        run: |
+          sudo apt-get update
+          # libstdc++-14-dev is REQUIRED, not optional: Flutter forces clang for the
+          # Linux build, clang auto-selects gcc-14 on Ubuntu 24.04, and without the
+          # gcc-14 libstdc++ the C++ compiler test fails ("cannot find -lstdc++").
+          # Do not remove it. (ninja comes from mise, not apt.)
+          sudo apt-get install -y clang cmake pkg-config libgtk-3-dev liblzma-dev libstdc++-14-dev libmpv-dev
+      - run: mise exec -- flutter pub get
+      - run: mise exec -- flutter analyze
+      - run: mise exec -- flutter test
+      - run: mise exec -- flutter build linux --debug
