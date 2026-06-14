@@ -1,0 +1,151 @@
+exclude = [
+    "build/**",
+    "target/**",
+    "rust/target/**",
+    ".dart_tool/**",
+    ".superpowers/**",
+    "lib/src/rust/**",           # generated flutter_rust_bridge Dart bindings
+    "rust/src/frb_generated.rs", # generated flutter_rust_bridge Rust glue
+    "rust_builder/**",           # vendored cargokit
+    "rust/tests/fixtures/**",    # binary audio test fixtures
+    "android/**",                # flutter-generated platform scaffold
+    "ios/**",
+    "linux/**",
+    "macos/**",
+    "web/**",
+    "windows/**",
+    ".metadata",                 # flutter-managed
+    "**/*.lock",                 # Cargo.lock / pubspec.lock
+    "**/*.AppImage",
+    "**/*.gz",
+    "**/*.zip",
+]
+
+[commands.clippy]
+type = "lint"
+include = "**/*.rs"
+invoke = "once"
+path-args = "none"
+working-dir = "root"
+cmd = [
+    "cargo",
+    "clippy",
+    "--manifest-path",
+    "rust/Cargo.toml",
+    "--color",
+    "always",
+    "--locked",
+    "--all-targets",
+    "--all-features",
+    "--",
+    "-D",
+    "warnings",
+]
+ok_exit_codes = 0
+lint_failure_exit_codes = 101
+expect_stderr = true
+
+[commands."clippy --fix"]
+type = "tidy"
+include = "**/*.rs"
+invoke = "once"
+path-args = "none"
+working-dir = "root"
+cmd = [
+    "cargo",
+    "clippy",
+    "--fix",
+    "--allow-dirty",
+    "--manifest-path",
+    "rust/Cargo.toml",
+    "--locked",
+    "--all-targets",
+    "--all-features",
+    "--",
+    "-D",
+    "warnings",
+]
+ok_exit_codes = 0
+lint_failure_exit_codes = 101
+expect_stderr = true
+
+[commands.rustfmt]
+type = "both"
+include = "**/*.rs"
+cmd = ["rustfmt", "--edition", "2021"]
+lint_flags = "--check"
+ok_exit_codes = [0]
+lint_failure_exit_codes = [1]
+
+[commands.dart-format]
+type = "both"
+include = "**/*.dart"
+cmd = ["dart", "format"]
+lint_flags = ["--output", "none", "--set-exit-if-changed"]
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
+
+[commands.flutter-analyze]
+type = "lint"
+include = "**/*.dart"
+invoke = "once"
+path-args = "none"
+working-dir = "root"
+cmd = ["flutter", "analyze"]
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
+expect_stderr = true
+
+[commands.prettier]
+type = "both"
+include = ["**/*.md", "**/*.yml", "**/*.yaml"]
+exclude = ["docs/superpowers/**"]
+cmd = ["prettier", "--no-config", "--print-width", "100", "--prose-wrap", "always"]
+lint-flags = "--check"
+tidy-flags = "--write"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+ignore-stderr = ["Code style issues"]
+
+[commands.taplo]
+type = "both"
+include = "**/*.toml"
+cmd = ["taplo", "format", "--option", "indent_string=    ", "--option", "column_width=100"]
+lint_flags = "--check"
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
+ignore_stderr = "INFO taplo.+"
+
+[commands.shellcheck]
+type = "lint"
+include = "**/*.sh"
+cmd = "shellcheck"
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
+
+[commands.shfmt]
+type = "both"
+include = "**/*.sh"
+cmd = ["shfmt", "--simplify", "--indent", "4"]
+lint_flags = "--diff"
+tidy_flags = "--write"
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
+
+[commands.omegasort-gitignore]
+type = "both"
+include = "**/.gitignore"
+cmd = ["omegasort", "--sort", "path", "--unique"]
+lint-flags = "--check"
+tidy-flags = "--in-place"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+ignore-stderr = ["The .+ file is not sorted", "The .+ file is not unique"]
+
+[commands.typos]
+type = "lint"
+include = "**/*"
+cmd = "typos"
+invoke = "once"
+ok-exit-codes = 0
+lint-failure-exit-codes = 2

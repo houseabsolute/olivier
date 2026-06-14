@@ -1,39 +1,28 @@
-# Miscellaneous
+/build/
+/android/app/debug
+/android/app/profile
+/android/app/release
 *.class
+*.iml
+*.ipr
+*.iws
 *.log
 *.pyc
 *.swp
 .DS_Store
 .atom/
 .buildlog/
-.history
-.svn/
-migrate_working_dir/
-
-# IntelliJ / IDE
-*.iml
-*.ipr
-*.iws
-.idea/
-
-# Flutter/Dart/Pub related
-**/doc/api/
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
+.history
+.idea/
 .packages
-
-# Symbolication / obfuscation
-app.*.symbols
-app.*.map.json
-
-# Android build artifacts placed by Android Studio
-/android/app/debug
-/android/app/profile
-/android/app/release
-
-# Brainstorming visual companion (local only)
+.pub/
+.pub-cache/
 .superpowers/
+.svn/
+app.*.map.json
+app.*.symbols
+migrate_working_dir/
+**/doc/api/

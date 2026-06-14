@@ -48,18 +48,24 @@ fn read_ids(path: &Path, ft: FileType) -> anyhow::Result<Ids> {
             let file = MpegFile::read_from(&mut f, ParseOptions::new())?;
             if let Some(tag) = file.id3v2() {
                 ids.release_mbid = tag.get_user_text("MusicBrainz Album Id").map(str::to_owned);
-                ids.release_group_mbid =
-                    tag.get_user_text("MusicBrainz Release Group Id").map(str::to_owned);
-                ids.artist_mbid = tag.get_user_text("MusicBrainz Artist Id").map(str::to_owned);
-                ids.album_artist_mbid =
-                    tag.get_user_text("MusicBrainz Album Artist Id").map(str::to_owned);
-                ids.release_track_mbid =
-                    tag.get_user_text("MusicBrainz Release Track Id").map(str::to_owned);
+                ids.release_group_mbid = tag
+                    .get_user_text("MusicBrainz Release Group Id")
+                    .map(str::to_owned);
+                ids.artist_mbid = tag
+                    .get_user_text("MusicBrainz Artist Id")
+                    .map(str::to_owned);
+                ids.album_artist_mbid = tag
+                    .get_user_text("MusicBrainz Album Artist Id")
+                    .map(str::to_owned);
+                ids.release_track_mbid = tag
+                    .get_user_text("MusicBrainz Release Track Id")
+                    .map(str::to_owned);
                 // from_utf8(...).ok() (not from_utf8_lossy) so a corrupt UFID yields
                 // None rather than a U+FFFD-mangled, lookup-breaking MBID string.
                 ids.recording_mbid = tag.into_iter().find_map(|frame| match frame {
-                    Frame::UniqueFileIdentifier(u) if u.owner == "http://musicbrainz.org" =>
-                        String::from_utf8(u.identifier.to_vec()).ok(),
+                    Frame::UniqueFileIdentifier(u) if u.owner == "http://musicbrainz.org" => {
+                        String::from_utf8(u.identifier.to_vec()).ok()
+                    }
                     _ => None,
                 });
             }
@@ -129,7 +135,10 @@ pub fn read_tags(path: &Path) -> anyhow::Result<TrackTags> {
     let length_ms = tagged.properties().duration().as_millis() as u64;
     let ft = tagged.file_type();
 
-    let mut out = TrackTags { length_ms, ..Default::default() };
+    let mut out = TrackTags {
+        length_ms,
+        ..Default::default()
+    };
     if let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) {
         out.title = tag.title().map(|c| c.to_string());
         out.artist = tag.artist().map(|c| c.to_string());
@@ -140,8 +149,12 @@ pub fn read_tags(path: &Path) -> anyhow::Result<TrackTags> {
         out.disc_no = tag.disk();
         out.disc_total = tag.disk_total();
         out.has_cover = !tag.pictures().is_empty();
-        out.reissue_date = tag.get_string(ItemKey::RecordingDate).map(|s| s.to_string());
-        out.original_date = tag.get_string(ItemKey::OriginalReleaseDate).map(|s| s.to_string());
+        out.reissue_date = tag
+            .get_string(ItemKey::RecordingDate)
+            .map(|s| s.to_string());
+        out.original_date = tag
+            .get_string(ItemKey::OriginalReleaseDate)
+            .map(|s| s.to_string());
     }
 
     let ids = read_ids(path, ft)?;

@@ -1,0 +1,7 @@
+# Allowances for tokens typos misreads as misspellings.
+[default.extend-words]
+# ID3v2 frame identifiers (TPE1/TPE2 = artist frames, TPOS = disc number) — not typos.
+TPE = "TPE"
+TPOS = "TPOS"
+# MP4 atom "©nam" (title): the "nam" token is not a misspelling of "name".
+nam = "nam"
