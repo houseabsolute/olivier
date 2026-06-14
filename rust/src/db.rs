@@ -42,6 +42,8 @@ pub fn search_contains(conn: &Connection, query: &str) -> anyhow::Result<Vec<Str
             out.push(r?);
         }
     } else {
+        // NOTE (Phase 3): this LIKE does not escape % or _ in `query`. Fine for the
+        // Phase-0 spike, but add `ESCAPE` handling before this backs real search.
         let mut stmt = conn.prepare("SELECT text FROM search WHERE text LIKE '%' || ?1 || '%'")?;
         let rows = stmt.query_map([query], |r| r.get::<_, String>(0))?;
         for r in rows {
@@ -60,14 +62,17 @@ pub struct QueueSnapshot {
 }
 
 pub fn save_queue(conn: &Connection, snap: &QueueSnapshot) -> anyhow::Result<()> {
-    conn.execute("DELETE FROM queue_item", [])?;
+    // One transaction so a crash mid-save can't leave a truncated queue, and so
+    // the whole replace is a single fsync rather than one per row.
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("DELETE FROM queue_item", [])?;
     for (i, p) in snap.paths.iter().enumerate() {
-        conn.execute(
+        tx.execute(
             "INSERT INTO queue_item(position, path) VALUES (?1, ?2)",
             rusqlite::params![i as i64, p],
         )?;
     }
-    conn.execute(
+    tx.execute(
         "INSERT INTO playback_state(id, current_index, position_ms, shuffle)
          VALUES (0, ?1, ?2, ?3)
          ON CONFLICT(id) DO UPDATE SET current_index=?1, position_ms=?2, shuffle=?3",
@@ -77,6 +82,7 @@ pub fn save_queue(conn: &Connection, snap: &QueueSnapshot) -> anyhow::Result<()>
             snap.shuffle as i64
         ],
     )?;
+    tx.commit()?;
     Ok(())
 }
 

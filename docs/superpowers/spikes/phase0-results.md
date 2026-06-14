@@ -11,8 +11,9 @@ plan: [phase0-foundations](../plans/2026-06-14-olivier-phase0-foundations.md).
   (with MP4 correctly yielding no original date).
 - **FTS5 trigram CJK search** — `rust/tests/db_test.rs`: bundled SQLite ships FTS5; 3-char CJK
   via `MATCH`, 1–2-char CJK via `LIKE` fallback, and Latin substrings all match.
-- **FFI bridge** — `integration_test/tags_ffi_test.dart` (run headless under xvfb) reads tags
-  from a fixture through the Dart↔Rust bridge.
+- **FFI bridge** — `integration_test/tags_ffi_test.dart` reads tags from a fixture through the
+  Dart↔Rust bridge. Run **in CI** headless under xvfb (`flutter test integration_test/ -d linux`),
+  so a bridge regression is caught — not just locally.
 - **Persisted-queue round-trip (spec §3.4 core)** — `rust/tests/db_test.rs::queue_round_trips`
   saves and reloads a `QueueSnapshot` (paths + index + position + shuffle).
 - **Builds + links** — `flutter build linux --debug` produces the app and the linked
@@ -72,6 +73,10 @@ library file of each codec.
   MBIDs). Accepted for Phase 0; optimize to a single parse in Phase 1.
 - **Phase-0 queue persistence is by file path**; the spec's `track_id`-keyed `queue_item` and
   `shuffled_position` land in Phase 3 with the real catalog.
+- **Queue position offset:** Phase 0 persists/restores queue + current index + shuffle, and the
+  restore mechanism seeks to the saved offset (`restoreFromSnapshot`). The **throttled mid-track
+  write-back** (a periodic / on-pause capture of `player.position`, per spec §3.4) is deferred to
+  Phase 3 — for now position is only captured at structural changes, so it's typically 0.
 - **`crate-type` includes `rlib`** (added so integration tests can link the crate) alongside
   `cdylib`/`staticlib`.
 - **Lint/tidy is precious** (`just lint` / `just tidy`); subagents and CI use it.

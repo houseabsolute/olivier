@@ -101,7 +101,8 @@ class _HomePageState extends State<HomePage> {
     // Plays a bundled fixture to confirm the libmpv engine starts. Absolute path
     // because `flutter run` launches with CWD=/tmp. For an AUDIBLE / per-codec test,
     // point this at real library files (the fixtures are 1 s of silence).
-    await audioHandler.player.setFilePath('$_fixtureDir/sample.flac');
+    await audioHandler.player.setFilePath(
+        '/home/autarch/mnt/music/Hitsujibungaku/12_hugs__like_butterflies_/01-Hug_m4a.mp3');
     await audioHandler.play();
   }
 

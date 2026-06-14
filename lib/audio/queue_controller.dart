@@ -25,14 +25,17 @@ class QueueController {
     await _persist();
   }
 
-  Future<void> _rebuild(int initialIndex) async {
+  Future<void> _rebuild(
+    int initialIndex, {
+    Duration initialPosition = Duration.zero,
+  }) async {
     final order =
         _shuffled ? (List.of(_orderedPaths)..shuffle()) : _orderedPaths;
     await player.setAudioSources(
       [for (final p in order) AudioSource.file(p)],
       initialIndex:
           order.isEmpty ? null : initialIndex.clamp(0, order.length - 1),
-      initialPosition: Duration.zero,
+      initialPosition: initialPosition,
     );
   }
 
@@ -50,7 +53,13 @@ class QueueController {
   Future<void> restoreFromSnapshot(QueueSnapshot snap) async {
     _orderedPaths = List.of(snap.paths);
     _shuffled = snap.shuffle;
-    await _rebuild(snap.currentIndex);
+    // Seek back to the saved offset for the current track on restore.
+    // (Throttled mid-track position write-back is deferred to Phase 3 — for
+    // now position is only captured at structural changes, so it's typically 0.)
+    await _rebuild(
+      snap.currentIndex,
+      initialPosition: Duration(milliseconds: snap.positionMs.toInt()),
+    );
   }
 
   List<String> get orderedPaths => List.unmodifiable(_orderedPaths);
