@@ -1,6 +1,6 @@
 use rust_lib_olivier::catalog::ids::{album_artist_key, sort_name};
 use rust_lib_olivier::catalog::query::{
-    albums_for_artist, artists_page, file_paths_for_album, tracks_for_album,
+    albums_for_artist, artists_page, file_paths_for_album, record_play, tracks_for_album,
 };
 use rust_lib_olivier::catalog::scan::scan_roots;
 use rust_lib_olivier::db::open;
@@ -272,4 +272,41 @@ fn scan_stores_embedded_sort_name() {
         .query_row("SELECT sort_name FROM artist LIMIT 1", [], |r| r.get(0))
         .unwrap();
     assert_eq!(sort, "Shiina, Ringo");
+}
+
+#[test]
+fn record_play_accumulates_stats() {
+    let conn = open(":memory:").unwrap();
+
+    // Seed parent rows required by FK constraints (bundled SQLite has them enabled).
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('a', 'Artist', 'Artist')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('r', 'a', 'Album')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position) VALUES (1, 'r', 1, 1)",
+        [],
+    )
+    .unwrap();
+
+    record_play(&conn, 1, 1000).unwrap();
+    record_play(&conn, 1, 2000).unwrap();
+
+    let (play_count, last_played, first_played): (i64, i64, i64) = conn
+        .query_row(
+            "SELECT play_count, last_played, first_played FROM track_stats WHERE track_id = 1",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
+
+    assert_eq!(play_count, 2);
+    assert_eq!(last_played, 2000);
+    assert_eq!(first_played, 1000);
 }

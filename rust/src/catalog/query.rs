@@ -85,6 +85,22 @@ pub fn tracks_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Result
     Ok(out)
 }
 
+/// Record one qualifying play. The "what counts as a play" threshold is enforced
+/// Dart-side; this just bumps the aggregate. (Spec §4's per-play event table is
+/// deferred — Phase 1 keeps only the track_stats aggregate.)
+pub fn record_play(conn: &Connection, track_id: i64, played_at: i64) -> anyhow::Result<()> {
+    conn.execute(
+        "INSERT INTO track_stats(track_id, last_played, play_count, first_played)
+         VALUES (?1, ?2, 1, ?2)
+         ON CONFLICT(track_id) DO UPDATE SET
+             last_played  = excluded.last_played,
+             play_count   = play_count + 1,
+             first_played = COALESCE(first_played, excluded.first_played)",
+        rusqlite::params![track_id, played_at],
+    )?;
+    Ok(())
+}
+
 /// Absolute file paths for an album in track order (for building the play queue).
 pub fn file_paths_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Result<Vec<String>> {
     let mut out = Vec::new();
