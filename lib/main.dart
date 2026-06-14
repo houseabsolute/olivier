@@ -1,9 +1,15 @@
+import 'dart:io' show Platform;
+
+import 'package:audio_service/audio_service.dart';
+import 'package:audio_service_mpris/audio_service_mpris.dart';
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
+import 'package:olivier/audio/audio_handler.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/src/rust/api/simple.dart';
 import 'package:olivier/src/rust/frb_generated.dart';
+
+late final OlivierAudioHandler audioHandler;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +21,27 @@ Future<void> main() async {
     macOS: false,
   );
   await RustLib.init();
+  if (Platform.isLinux) {
+    AudioServiceMpris.init(
+      dBusName: 'OlivierMusicPlayer',
+      identity: 'Olivier',
+      // Without these, MPRIS advertises no capabilities and playerctl / desktop
+      // controls are inert — which would defeat the point of this spike.
+      canControl: true,
+      canPlay: true,
+      canPause: true,
+      canGoNext: true,
+      canGoPrevious: true,
+    );
+  }
+  audioHandler = await AudioService.init(
+    builder: () => OlivierAudioHandler(),
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'org.urth.olivier.channel.audio',
+      androidNotificationChannelName: 'Music playback',
+      androidNotificationOngoing: true,
+    ),
+  );
   runApp(const OlivierApp());
 }
 
@@ -37,16 +64,15 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final _player = AudioPlayer();
-  late final QueueController _queue = QueueController(_player);
+  late final QueueController _queue = QueueController(audioHandler.player);
   bool _shuffleOn = false;
 
   // --- spike: single-track play (Task 9) ---
   Future<void> _playTest() async {
     // Plays a bundled fixture to confirm the libmpv engine starts.
     // For audible / per-codec testing a human will point this at real library files.
-    await _player.setFilePath('rust/tests/fixtures/sample.flac');
-    await _player.play();
+    await audioHandler.player.setFilePath('rust/tests/fixtures/sample.flac');
+    await audioHandler.play();
   }
 
   // --- spike: 3-track queue + shuffle (Task 10) ---
@@ -58,18 +84,12 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _queueAndPlay() async {
     await _queue.setQueue(_fixtureQueue);
-    await _player.play();
+    await audioHandler.play();
   }
 
   Future<void> _toggleShuffle(bool on) async {
     setState(() => _shuffleOn = on);
     await _queue.setShuffle(on);
-  }
-
-  @override
-  void dispose() {
-    _player.dispose();
-    super.dispose();
   }
 
   @override
