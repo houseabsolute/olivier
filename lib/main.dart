@@ -98,17 +98,22 @@ class _HomePageState extends State<HomePage> {
 
   // --- spike: single-track play (Task 9) ---
   Future<void> _playTest() async {
-    // Plays a bundled fixture to confirm the libmpv engine starts.
-    // For audible / per-codec testing a human will point this at real library files.
-    await audioHandler.player.setFilePath('rust/tests/fixtures/sample.flac');
+    // Plays a bundled fixture to confirm the libmpv engine starts. Absolute path
+    // because `flutter run` launches with CWD=/tmp. For an AUDIBLE / per-codec test,
+    // point this at real library files (the fixtures are 1 s of silence).
+    await audioHandler.player.setFilePath('$_fixtureDir/sample.flac');
     await audioHandler.play();
   }
 
   // --- spike: 3-track queue + shuffle (Task 10) ---
+  // Absolute paths: `flutter run` launches the app with CWD=/tmp, so relative
+  // fixture paths don't resolve. (Phase 1 plays real catalog paths instead.)
+  static const _fixtureDir =
+      '/home/autarch/projects/olivier/rust/tests/fixtures';
   static const _fixtureQueue = [
-    'rust/tests/fixtures/sample.flac',
-    'rust/tests/fixtures/sample.mp3',
-    'rust/tests/fixtures/sample.opus',
+    '$_fixtureDir/sample.flac',
+    '$_fixtureDir/sample.mp3',
+    '$_fixtureDir/sample.opus',
   ];
 
   Future<void> _queueAndPlay() async {
