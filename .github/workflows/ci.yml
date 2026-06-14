@@ -46,6 +46,9 @@ jobs:
       - run: mise exec -- flutter pub get
       - run: mise exec -- flutter test
       - run: mise exec -- flutter build linux --debug
-      # FFI bridge round-trip: run the integration test headless on the linux device
-      # so a Dart<->Rust regression is caught (plain `flutter test` skips integration_test/).
-      - run: xvfb-run -a mise exec -- flutter test integration_test/ -d linux
+      # FFI bridge round-trips: run each integration test headless on the linux device
+      # (plain `flutter test` skips integration_test/). One invocation per file —
+      # `flutter test integration_test/ -d linux` launches the app once per file and the
+      # second launch fails, so run them separately.
+      - run: xvfb-run -a mise exec -- flutter test integration_test/tags_ffi_test.dart -d linux
+      - run: xvfb-run -a mise exec -- flutter test integration_test/catalog_ffi_test.dart -d linux
