@@ -6,4 +6,6 @@
 # cargo-installed CLI tools the build needs.
 
 [tools]
-"cargo:flutter_rust_bridge_codegen" = "2.12.0"
+flutter = "3.44.2"
+# Prebuilt binary from GitHub releases (no from-source compile).
+"github:fzyzcjy/flutter_rust_bridge" = { version = "2.12.0", exe = "flutter_rust_bridge_codegen" }

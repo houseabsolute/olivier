@@ -16,7 +16,7 @@
 
 Before Task 1, confirm these are installed (do **not** automate; just verify and report versions):
 
-- Flutter SDK (stable 3.x): `flutter --version`
+- Flutter SDK and the codegen CLI are both pinned in the repo's `mise.toml` (Flutter 3.44.2 via the `http:flutter` backend; `flutter_rust_bridge_codegen` 2.12.0). Install with `mise install` (from the repo root). **Run all `flutter`, `dart`, and `flutter_rust_bridge_codegen` commands via `mise exec -- …`** (or rely on mise shell-activation in this directory) so they use the pinned, non-snap toolchain — do not use the snap `flutter`.
 - Rust ≥ 1.85 (lofty 0.24 MSRV): `rustc --version`
 - Flutter Linux desktop deps: `clang cmake ninja-build pkg-config libgtk-3-dev`
 - libmpv (Linux audio backend): `sudo apt-get install -y libmpv-dev mpv` (Fedora: `mpv-libs mpv-libs-devel`; Arch: `mpv`)
