@@ -41,6 +41,7 @@ dependencies:
   media_kit_libs_linux: any
   audio_service: ^0.18.18
   audio_service_mpris: ^1.0.0-beta.2
+  path_provider: ^2.1.0
 
 dev_dependencies:
   flutter_test:

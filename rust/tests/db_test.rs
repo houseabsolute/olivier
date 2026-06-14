@@ -1,4 +1,4 @@
-use rust_lib_olivier::db::{open, search_contains};
+use rust_lib_olivier::db::{load_queue, open, save_queue, search_contains, QueueSnapshot};
 
 fn seed() -> rusqlite::Connection {
     let conn = open(":memory:").unwrap();
@@ -31,4 +31,17 @@ fn latin_substring_matches() {
     let conn = seed();
     let hits = search_contains(&conn, "Ringo").unwrap();
     assert_eq!(hits, ["Ringo Sheena live"]);
+}
+
+#[test]
+fn queue_round_trips() {
+    let conn = rust_lib_olivier::db::open(":memory:").unwrap();
+    let snap = QueueSnapshot {
+        paths: vec!["/a.flac".into(), "/b.mp3".into(), "/c.opus".into()],
+        current_index: 1,
+        position_ms: 42_000,
+        shuffle: true,
+    };
+    save_queue(&conn, &snap).unwrap();
+    assert_eq!(load_queue(&conn).unwrap(), Some(snap));
 }

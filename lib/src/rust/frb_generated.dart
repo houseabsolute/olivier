@@ -3,10 +3,12 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/queue.dart';
 import 'api/simple.dart';
 import 'api/tags.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'db.dart';
 import 'frb_generated.dart';
 import 'frb_generated.io.dart'
     if (dart.library.js_interop) 'frb_generated.web.dart';
@@ -72,7 +74,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 144748529;
+  int get rustContentHash => -1537545349;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -86,9 +88,14 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 abstract class RustLibApi extends BaseApi {
   Future<void> crateApiSimpleInitApp();
 
+  Future<QueueSnapshot?> crateApiQueueLoadQueue({required String dbPath});
+
   String crateApiSimpleOlivierVersion();
 
   Future<TrackTags> crateApiTagsReadTrackTags({required String path});
+
+  Future<void> crateApiQueueSaveQueue(
+      {required String dbPath, required QueueSnapshot snapshot});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -123,11 +130,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<QueueSnapshot?> crateApiQueueLoadQueue({required String dbPath}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(dbPath, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 2, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_opt_box_autoadd_queue_snapshot,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiQueueLoadQueueConstMeta,
+      argValues: [dbPath],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiQueueLoadQueueConstMeta => const TaskConstMeta(
+        debugName: "load_queue",
+        argNames: ["dbPath"],
+      );
+
+  @override
   String crateApiSimpleOlivierVersion() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -152,7 +183,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(path, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 3, port: port_);
+            funcId: 4, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_track_tags,
@@ -167,6 +198,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiTagsReadTrackTagsConstMeta => const TaskConstMeta(
         debugName: "read_track_tags",
         argNames: ["path"],
+      );
+
+  @override
+  Future<void> crateApiQueueSaveQueue(
+      {required String dbPath, required QueueSnapshot snapshot}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(dbPath, serializer);
+        sse_encode_box_autoadd_queue_snapshot(snapshot, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 5, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiQueueSaveQueueConstMeta,
+      argValues: [dbPath, snapshot],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiQueueSaveQueueConstMeta => const TaskConstMeta(
+        debugName: "save_queue",
+        argNames: ["dbPath", "snapshot"],
       );
 
   @protected
@@ -188,9 +245,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QueueSnapshot dco_decode_box_autoadd_queue_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_queue_snapshot(raw);
+  }
+
+  @protected
   int dco_decode_box_autoadd_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
+  }
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_String).toList();
   }
 
   @protected
@@ -206,9 +275,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QueueSnapshot? dco_decode_opt_box_autoadd_queue_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_queue_snapshot(raw);
+  }
+
+  @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
+  }
+
+  @protected
+  QueueSnapshot dco_decode_queue_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return QueueSnapshot(
+      paths: dco_decode_list_String(arr[0]),
+      currentIndex: dco_decode_u_32(arr[1]),
+      positionMs: dco_decode_u_64(arr[2]),
+      shuffle: dco_decode_bool(arr[3]),
+    );
   }
 
   @protected
@@ -284,9 +373,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QueueSnapshot sse_decode_box_autoadd_queue_snapshot(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_queue_snapshot(deserializer));
+  }
+
+  @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_u_32(deserializer));
+  }
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <String>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
   }
 
   @protected
@@ -308,6 +416,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QueueSnapshot? sse_decode_opt_box_autoadd_queue_snapshot(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_queue_snapshot(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -316,6 +436,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     } else {
       return null;
     }
+  }
+
+  @protected
+  QueueSnapshot sse_decode_queue_snapshot(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_paths = sse_decode_list_String(deserializer);
+    var var_currentIndex = sse_decode_u_32(deserializer);
+    var var_positionMs = sse_decode_u_64(deserializer);
+    var var_shuffle = sse_decode_bool(deserializer);
+    return QueueSnapshot(
+        paths: var_paths,
+        currentIndex: var_currentIndex,
+        positionMs: var_positionMs,
+        shuffle: var_shuffle);
   }
 
   @protected
@@ -409,9 +543,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_queue_snapshot(
+      QueueSnapshot self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_queue_snapshot(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self, serializer);
+  }
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_String(item, serializer);
+    }
   }
 
   @protected
@@ -433,6 +583,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_queue_snapshot(
+      QueueSnapshot? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_queue_snapshot(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -440,6 +601,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (self != null) {
       sse_encode_box_autoadd_u_32(self, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_queue_snapshot(QueueSnapshot self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_String(self.paths, serializer);
+    sse_encode_u_32(self.currentIndex, serializer);
+    sse_encode_u_64(self.positionMs, serializer);
+    sse_encode_bool(self.shuffle, serializer);
   }
 
   @protected

@@ -1,10 +1,13 @@
 import 'package:just_audio/just_audio.dart';
+import 'package:olivier/src/rust/api/queue.dart';
+import 'package:olivier/src/rust/db.dart';
 
 /// Holds the canonical ordered list and rebuilds the player's sources on
 /// shuffle (engine shuffle is ignored by the media_kit backend on Linux).
 class QueueController {
-  QueueController(this.player);
+  QueueController(this.player, {required this.dbPath});
   final AudioPlayer player;
+  final String dbPath;
 
   List<String> _orderedPaths = [];
   bool _shuffled = false;
@@ -13,11 +16,13 @@ class QueueController {
     _orderedPaths = List.of(paths);
     _shuffled = false;
     await _rebuild(initialIndex);
+    await _persist();
   }
 
   Future<void> setShuffle(bool on) async {
     _shuffled = on;
     await _rebuild(0);
+    await _persist();
   }
 
   Future<void> _rebuild(int initialIndex) async {
@@ -30,4 +35,24 @@ class QueueController {
       initialPosition: Duration.zero,
     );
   }
+
+  Future<void> _persist() async {
+    final snapshot = QueueSnapshot(
+      paths: List.of(_orderedPaths),
+      currentIndex: player.currentIndex ?? 0,
+      positionMs: BigInt.from(player.position.inMilliseconds),
+      shuffle: _shuffled,
+    );
+    await saveQueue(dbPath: dbPath, snapshot: snapshot);
+  }
+
+  /// Restore a previously saved snapshot without re-persisting.
+  Future<void> restoreFromSnapshot(QueueSnapshot snap) async {
+    _orderedPaths = List.of(snap.paths);
+    _shuffled = snap.shuffle;
+    await _rebuild(snap.currentIndex);
+  }
+
+  List<String> get orderedPaths => List.unmodifiable(_orderedPaths);
+  bool get shuffled => _shuffled;
 }

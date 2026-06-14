@@ -6,10 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:olivier/audio/audio_handler.dart';
 import 'package:olivier/audio/queue_controller.dart';
+import 'package:olivier/src/rust/api/queue.dart';
 import 'package:olivier/src/rust/api/simple.dart';
 import 'package:olivier/src/rust/frb_generated.dart';
+import 'package:path_provider/path_provider.dart';
 
 late final OlivierAudioHandler audioHandler;
+late final String dbPath;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +24,11 @@ Future<void> main() async {
     macOS: false,
   );
   await RustLib.init();
+
+  // Compute DB path once for the entire app lifetime.
+  final docsDir = await getApplicationDocumentsDirectory();
+  dbPath = '${docsDir.path}/olivier.db';
+
   if (Platform.isLinux) {
     AudioServiceMpris.init(
       dBusName: 'OlivierMusicPlayer',
@@ -64,8 +72,29 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  late final QueueController _queue = QueueController(audioHandler.player);
+  late final QueueController _queue =
+      QueueController(audioHandler.player, dbPath: dbPath);
   bool _shuffleOn = false;
+  bool _restored = false;
+  int _restoredCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _tryRestoreQueue();
+  }
+
+  Future<void> _tryRestoreQueue() async {
+    final snap = await loadQueue(dbPath: dbPath);
+    if (snap != null && snap.paths.isNotEmpty) {
+      await _queue.restoreFromSnapshot(snap);
+      setState(() {
+        _restored = true;
+        _restoredCount = snap.paths.length;
+        _shuffleOn = snap.shuffle;
+      });
+    }
+  }
 
   // --- spike: single-track play (Task 9) ---
   Future<void> _playTest() async {
@@ -84,6 +113,10 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _queueAndPlay() async {
     await _queue.setQueue(_fixtureQueue);
+    setState(() {
+      _restored = false;
+      _restoredCount = 0;
+    });
     await audioHandler.play();
   }
 
@@ -101,6 +134,15 @@ class _HomePageState extends State<HomePage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(olivierVersion()),
+            const SizedBox(height: 8),
+
+            // Task 12 — persisted-queue status
+            Text(
+              _restored
+                  ? 'queue: $_restoredCount tracks (restored)'
+                  : 'queue: ${_queue.orderedPaths.length} tracks',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
             const SizedBox(height: 16),
 
             // Task 9 — single-track smoke test

@@ -3,11 +3,13 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/queue.dart';
 import 'api/simple.dart';
 import 'api/tags.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
+import 'db.dart';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
 import 'tags.dart';
@@ -30,7 +32,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  QueueSnapshot dco_decode_box_autoadd_queue_snapshot(dynamic raw);
+
+  @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
@@ -39,7 +47,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  QueueSnapshot? dco_decode_opt_box_autoadd_queue_snapshot(dynamic raw);
+
+  @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  QueueSnapshot dco_decode_queue_snapshot(dynamic raw);
 
   @protected
   TrackTags dco_decode_track_tags(dynamic raw);
@@ -66,7 +80,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  QueueSnapshot sse_decode_box_autoadd_queue_snapshot(
+      SseDeserializer deserializer);
+
+  @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
@@ -75,7 +96,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  QueueSnapshot? sse_decode_opt_box_autoadd_queue_snapshot(
+      SseDeserializer deserializer);
+
+  @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  QueueSnapshot sse_decode_queue_snapshot(SseDeserializer deserializer);
 
   @protected
   TrackTags sse_decode_track_tags(SseDeserializer deserializer);
@@ -106,7 +134,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_queue_snapshot(
+      QueueSnapshot self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
@@ -116,7 +151,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_queue_snapshot(
+      QueueSnapshot? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_queue_snapshot(QueueSnapshot self, SseSerializer serializer);
 
   @protected
   void sse_encode_track_tags(TrackTags self, SseSerializer serializer);
