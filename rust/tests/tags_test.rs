@@ -42,3 +42,23 @@ fn reads_musicbrainz_ids_for_all_formats() {
                    Some("eeeeeeee-0000-0000-0000-000000000001"), "{name} releasetrack");
     }
 }
+
+const MP4_FILES: &[&str] = &["sample.m4a", "sample.alac.m4a"];
+
+#[test]
+fn reads_original_and_reissue_dates() {
+    for name in FILES {
+        let t = read_tags(&fixture(name)).unwrap();
+        // Reissue date (TDRC / DATE / ©day) is present in all six formats.
+        assert!(t.reissue_date.as_deref().unwrap_or("").starts_with("2008"),
+                "{name} reissue_date = {:?}", t.reissue_date);
+        if MP4_FILES.contains(name) {
+            // MP4/ALAC carry no standard original-date atom (Picard writes none);
+            // original year arrives via MusicBrainz enrichment in Phase 2.
+            assert_eq!(t.original_date, None, "{name} original_date should be None for MP4");
+        } else {
+            assert!(t.original_date.as_deref().unwrap_or("").starts_with("1999"),
+                    "{name} original_date = {:?}", t.original_date);
+        }
+    }
+}

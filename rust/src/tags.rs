@@ -140,6 +140,8 @@ pub fn read_tags(path: &Path) -> anyhow::Result<TrackTags> {
         out.disc_no = tag.disk();
         out.disc_total = tag.disk_total();
         out.has_cover = !tag.pictures().is_empty();
+        out.reissue_date = tag.get_string(ItemKey::RecordingDate).map(|s| s.to_string());
+        out.original_date = tag.get_string(ItemKey::OriginalReleaseDate).map(|s| s.to_string());
     }
 
     let ids = read_ids(path, ft)?;
