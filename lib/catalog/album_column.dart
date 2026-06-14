@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 
@@ -40,16 +41,37 @@ class _AlbumList extends ConsumerWidget {
         final label = year.isNotEmpty ? '${album.title} ($year)' : album.title;
         return InkWell(
           key: ValueKey(album.releaseMbid),
-          onTap: () => ref
-              .read(selectedAlbumProvider.notifier)
-              .select(album.releaseMbid),
+          onTap: () {
+            ref.read(selectedAlbumProvider.notifier).select(album.releaseMbid);
+            // Store the full album object so the track column can access title.
+            ref.read(selectedAlbumObjectProvider.notifier).select(album);
+          },
           child: Container(
             color: isSelected
                 ? Theme.of(context).colorScheme.primaryContainer
                 : null,
             alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: _RowLabel(text: label),
+            padding: const EdgeInsets.only(left: 12, right: 4),
+            child: Row(
+              children: [
+                Expanded(child: _RowLabel(text: label)),
+                IconButton(
+                  icon: const Icon(Icons.play_arrow, size: 20),
+                  tooltip: 'Play album',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  onPressed: () {
+                    ref.read(playbackControllerProvider).playAlbum(
+                          album.releaseMbid,
+                          album.title,
+                        );
+                  },
+                ),
+              ],
+            ),
           ),
         );
       },

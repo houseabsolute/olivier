@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 
@@ -18,38 +19,54 @@ class TrackColumn extends ConsumerWidget {
   }
 }
 
-class _TrackList extends StatelessWidget {
+class _TrackList extends ConsumerWidget {
   const _TrackList({required this.tracks});
 
   final List<Track> tracks;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (tracks.isEmpty) {
       return const Center(child: Text('Select an album'));
     }
+
+    // We need the currently selected album to get the releaseMbid and title.
+    final releaseMbid = ref.watch(selectedAlbumProvider);
+    final albumObj = ref.watch(selectedAlbumObjectProvider);
+    final albumTitle = albumObj?.title ?? '';
+
     return ListView.builder(
       itemCount: tracks.length,
       itemExtent: 48,
       scrollCacheExtent: const ScrollCacheExtent.pixels(600),
       itemBuilder: (context, index) {
         final track = tracks[index];
-        return Container(
+        return InkWell(
           key: ValueKey(track.id),
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: _RowLabel(
-                  text: '${track.position}. ${track.title}',
+          onTap: () {
+            if (releaseMbid == null) return;
+            ref.read(playbackControllerProvider).playTrack(
+                  releaseMbid,
+                  albumTitle,
+                  index,
+                );
+          },
+          child: Container(
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _RowLabel(
+                    text: '${track.position}. ${track.title}',
+                  ),
                 ),
-              ),
-              Text(
-                _formatLength(track.lengthMs),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+                Text(
+                  _formatLength(track.lengthMs),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
           ),
         );
       },

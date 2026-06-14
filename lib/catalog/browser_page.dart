@@ -5,8 +5,10 @@ import 'package:multi_split_view/multi_split_view.dart';
 import 'package:olivier/catalog/album_column.dart';
 import 'package:olivier/catalog/artist_column.dart';
 import 'package:olivier/catalog/track_column.dart';
+import 'package:olivier/main.dart' show audioHandler;
 import 'package:olivier/src/rust/api/catalog.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/widgets/now_playing_bar.dart';
 
 class BrowserPage extends ConsumerStatefulWidget {
   const BrowserPage({super.key});
@@ -83,6 +85,7 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
         ],
       ),
       body: MultiSplitView(controller: _splitController),
+      bottomNavigationBar: NowPlayingBar(audioHandler: audioHandler),
     );
   }
 }
