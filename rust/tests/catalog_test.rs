@@ -256,3 +256,20 @@ fn file_paths_for_album_ordered_by_disc_position() {
     let paths = file_paths_for_album(&conn, "rel-b").unwrap();
     assert_eq!(paths, vec!["/music/t1.flac", "/music/t2.flac"]);
 }
+
+#[test]
+fn scan_stores_embedded_sort_name() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::copy(
+        format!("{}/tests/fixtures/sample.flac", env!("CARGO_MANIFEST_DIR")),
+        dir.path().join("sample.flac"),
+    )
+    .unwrap();
+    let mut conn = open(":memory:").unwrap();
+    let root = dir.path().to_string_lossy().to_string();
+    scan_roots(&mut conn, std::slice::from_ref(&root), |_| {}).unwrap();
+    let sort: String = conn
+        .query_row("SELECT sort_name FROM artist LIMIT 1", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(sort, "Shiina, Ringo");
+}
