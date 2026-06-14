@@ -75,14 +75,17 @@ pub fn scan_roots(
                         rusqlite::params![epoch, path_str],
                     )?;
                     files_seen += 1;
-                    if files_seen.is_multiple_of(50) {
-                        on_progress(ScanProgress {
-                            files_seen,
-                            files_changed,
-                            current: path_str,
-                            done: false,
-                        });
-                    }
+                    // Emit on every file so the UI count updates continuously and small
+                    // libraries (<50 files) still show progress. Flutter coalesces the
+                    // setState per frame, so UI rebuilds stay bounded. If very large
+                    // all-cached rescans (>50k files) ever show bridge pressure, switch
+                    // to a time-based throttle (emit if >16ms since the last emission).
+                    on_progress(ScanProgress {
+                        files_seen,
+                        files_changed,
+                        current: path_str,
+                        done: false,
+                    });
                     continue;
                 }
             }
@@ -95,15 +98,12 @@ pub fn scan_roots(
 
             files_changed += 1;
             files_seen += 1;
-
-            if files_seen.is_multiple_of(50) {
-                on_progress(ScanProgress {
-                    files_seen,
-                    files_changed,
-                    current: path_str,
-                    done: false,
-                });
-            }
+            on_progress(ScanProgress {
+                files_seen,
+                files_changed,
+                current: path_str,
+                done: false,
+            });
         }
     }
 

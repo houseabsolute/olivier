@@ -19,6 +19,9 @@ class BrowserPage extends ConsumerStatefulWidget {
 
 class _BrowserPageState extends ConsumerState<BrowserPage> {
   late final MultiSplitViewController _splitController;
+  bool _scanning = false;
+  int _scanSeen = 0;
+  int _scanChanged = 0;
 
   @override
   void initState() {
@@ -43,32 +46,33 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
     if (dir == null || !mounted) return;
 
     final dbPath = ref.read(dbPathProvider);
-    int filesSeen = 0;
-
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    final snackController = messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Scanning…'),
-        duration: Duration(minutes: 10),
-      ),
-    );
+    setState(() {
+      _scanning = true;
+      _scanSeen = 0;
+      _scanChanged = 0;
+    });
 
     try {
       await for (final progress in scanLibrary(dbPath: dbPath, roots: [dir])) {
-        filesSeen = progress.filesSeen.toInt();
+        if (mounted) {
+          setState(() {
+            _scanSeen = progress.filesSeen.toInt();
+            _scanChanged = progress.filesChanged.toInt();
+          });
+        }
         if (progress.done) break;
       }
     } finally {
-      snackController.close();
       if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Scan complete — $filesSeen files seen')),
+        setState(() => _scanning = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text('Scan complete — $_scanSeen files, $_scanChanged new')),
         );
       }
+      ref.invalidate(artistsProvider);
     }
-
-    ref.invalidate(artistsProvider);
   }
 
   @override
@@ -80,9 +84,28 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
           IconButton(
             icon: const Icon(Icons.folder_open),
             tooltip: 'Scan folder',
-            onPressed: _scanFolder,
+            onPressed: _scanning ? null : _scanFolder,
           ),
         ],
+        bottom: _scanning
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(30),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                  child: Row(
+                    children: [
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 10),
+                      Text('Scanning… $_scanSeen files ($_scanChanged new)'),
+                    ],
+                  ),
+                ),
+              )
+            : null,
       ),
       body: MultiSplitView(controller: _splitController),
       bottomNavigationBar: NowPlayingBar(audioHandler: audioHandler),
