@@ -23,8 +23,9 @@ plan: [phase0-foundations](../plans/2026-06-14-olivier-phase0-foundations.md).
 
 ## libmpv codec coverage on Linux (the spike's key question)
 
-**PENDING manual check.** The fixtures are 1 s of silence (valid per-codec audio), so the build
-proves linking but not decode. To confirm libmpv decodes each codec on this machine:
+**Basic playback CONFIRMED working (2026-06-14).** Per-codec decode coverage still to tick off below.
+The fixtures are 1 s of silence (valid per-codec audio), so the build proves linking but not decode.
+To confirm libmpv decodes each codec on this machine:
 `mise exec -- flutter run -d linux`, then point the **Play** button's `_playTest()` at a real
 library file of each codec.
 
