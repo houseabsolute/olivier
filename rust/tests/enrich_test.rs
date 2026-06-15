@@ -13,8 +13,11 @@
 
 use rust_lib_olivier::db::open;
 use rust_lib_olivier::enrich::http::{MbHttp, MbResponse};
-use rust_lib_olivier::enrich::model::{Alias, Artist, Release};
-use rust_lib_olivier::enrich::select::select_transliteration;
+use rust_lib_olivier::enrich::model::{Alias, Artist, Release, TextRepresentation};
+use rust_lib_olivier::enrich::select::{
+    classify_alt, classify_pseudo, pseudo_release_targets, select_transliteration, AltKind,
+    TRANSL_TRACKLISTING_TYPE_ID,
+};
 
 fn fixture(name: &str) -> String {
     std::fs::read_to_string(format!(
@@ -285,5 +288,103 @@ fn selection_is_deterministic_and_order_independent() {
     assert_eq!(
         select_transliteration(&a_forward).unwrap().name,
         chosen_forward.name
+    );
+}
+
+// ── Pseudo-release discovery tests (Task 9) ───────────────────────────────
+
+#[test]
+fn finds_transl_tracklisting_targets() {
+    let r: Release = serde_json::from_str(&fixture("release_muzai.json")).unwrap();
+    let targets = pseudo_release_targets(&r);
+    assert!(
+        !targets.is_empty(),
+        "expected at least one pseudo-release link"
+    );
+    // Each target MBID is non-empty.
+    assert!(targets.iter().all(|id| !id.is_empty()));
+}
+
+#[test]
+fn ignores_non_transl_relations() {
+    let json = r#"{
+      "id":"rel-x","title":"X",
+      "relations":[
+        {"type-id":"00000000-0000-0000-0000-000000000000","release":{"id":"other"}},
+        {"type-id":"fc399d47-23a7-4c28-bfcf-0607a562b644","release":{"id":"pseudo"}}
+      ],
+      "media":[]
+    }"#;
+    let r: Release = serde_json::from_str(json).unwrap();
+    assert_eq!(pseudo_release_targets(&r), vec!["pseudo".to_string()]);
+}
+
+#[test]
+fn type_id_constant_matches_spec() {
+    assert_eq!(
+        TRANSL_TRACKLISTING_TYPE_ID,
+        "fc399d47-23a7-4c28-bfcf-0607a562b644"
+    );
+}
+
+// ── Alt-kind classification tests (Task 9) ────────────────────────────────
+
+fn pseudo_with_text_rep(title: &str, script: Option<&str>, language: Option<&str>) -> Release {
+    Release {
+        id: "p".into(),
+        title: title.into(),
+        date: None,
+        text_representation: Some(TextRepresentation {
+            script: script.map(str::to_string),
+            language: language.map(str::to_string),
+        }),
+        release_group: None,
+        media: vec![],
+        relations: vec![],
+    }
+}
+
+#[test]
+fn classify_uses_text_representation_when_present() {
+    // Latn script (romaji) => translit.
+    assert_eq!(
+        classify_pseudo(
+            "無罪モラトリアム",
+            &pseudo_with_text_rep("Muzai Moratorium", Some("Latn"), Some("jpn"))
+        ),
+        AltKind::Translit
+    );
+    // English language => translate even though script is Latn.
+    assert_eq!(
+        classify_pseudo(
+            "無罪モラトリアム",
+            &pseudo_with_text_rep("Innocence Moratorium", Some("Latn"), Some("eng"))
+        ),
+        AltKind::Translate
+    );
+    // Non-Latn script => translate.
+    assert_eq!(
+        classify_pseudo(
+            "無罪モラトリアム",
+            &pseudo_with_text_rep("무죄 모라토리엄", Some("Hang"), Some("kor"))
+        ),
+        AltKind::Translate
+    );
+}
+
+#[test]
+fn classify_falls_back_to_title_heuristic_without_text_representation() {
+    // text-representation absent (None) => deterministic title-pair fallback.
+    let mut p = pseudo_with_text_rep("Muzai Moratorium", None, None);
+    p.text_representation = None;
+    assert_eq!(classify_pseudo("無罪モラトリアム", &p), AltKind::Translit);
+    // 無罪モラトリアム -> "Muzai Moratorium" (translit), "Innocence Moratorium" (translate).
+    assert_eq!(
+        classify_alt("無罪モラトリアム", "Muzai Moratorium"),
+        AltKind::Translit
+    );
+    assert_eq!(
+        classify_alt("無罪モラトリアム", "Innocence Moratorium"),
+        AltKind::Translate
     );
 }
