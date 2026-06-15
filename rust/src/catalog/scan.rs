@@ -120,6 +120,10 @@ pub fn scan_roots(
             rusqlite::params![epoch, prefix.chars().count() as i64, prefix],
         )?;
     }
+    // Files missing a MusicBrainz album-artist ID get a synthetic key; merge them
+    // into a real same-name artist so an album-artist tagged inconsistently across
+    // its albums shows up once, not twice.
+    reconcile_album_artists(conn)?;
     prune_orphans(conn)?;
 
     on_progress(ScanProgress {
@@ -157,6 +161,39 @@ pub(crate) fn prune_orphans(conn: &Connection) -> anyhow::Result<()> {
         "DELETE FROM artist WHERE mbid NOT IN (SELECT album_artist_mbid FROM release WHERE album_artist_mbid IS NOT NULL)",
         [],
     )?;
+    Ok(())
+}
+
+/// Merge synthetic album-artists into a real (MBID-keyed) artist of the same
+/// name. A file lacking a MusicBrainz album-artist ID gets a `synth:aa:<name>`
+/// key; if other files by the same artist *were* tagged with the real MBID, the
+/// artist would otherwise appear twice in the browse list. For each real artist
+/// we recompute the synthetic key it *would* own — using the exact same
+/// lowercase + whitespace-collapse the scanner uses — and re-point any release
+/// still keyed that way onto the real MBID. The now-unreferenced synth artist is
+/// dropped by the following orphan sweep. Matching on the recomputed key (rather
+/// than a SQL name comparison) means case/whitespace tagging differences can't
+/// cause a missed merge, and a synth release with no real counterpart is simply
+/// never touched.
+pub fn reconcile_album_artists(conn: &Connection) -> anyhow::Result<()> {
+    let mut reals: Vec<(String, String)> = Vec::new();
+    {
+        let mut stmt =
+            conn.prepare("SELECT mbid, name FROM artist WHERE mbid NOT LIKE 'synth:%'")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        for row in rows {
+            reals.push(row?);
+        }
+    }
+    let tx = conn.unchecked_transaction()?;
+    for (mbid, name) in &reals {
+        let synth_key = format!("synth:aa:{}", ids::normalize(name));
+        tx.execute(
+            "UPDATE release SET album_artist_mbid = ?1 WHERE album_artist_mbid = ?2",
+            rusqlite::params![mbid, synth_key],
+        )?;
+    }
+    tx.commit()?;
     Ok(())
 }
 

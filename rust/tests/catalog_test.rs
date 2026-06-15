@@ -3,7 +3,7 @@ use rust_lib_olivier::catalog::query::{
     albums_for_artist, artists_page, file_paths_for_album, record_play, tracks_for_album,
 };
 use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
-use rust_lib_olivier::catalog::scan::scan_roots;
+use rust_lib_olivier::catalog::scan::{reconcile_album_artists, scan_roots};
 use rust_lib_olivier::db::open;
 
 #[test]
@@ -642,4 +642,72 @@ fn remove_root_keeps_files_still_covered_by_another_root() {
         1,
         "file still covered by parent root A must survive removing nested root B"
     );
+}
+
+#[test]
+fn reconcile_merges_synth_album_artist_into_real() {
+    let conn = open(":memory:").unwrap();
+    // Same artist two ways: one album tagged with the real MBID (sort-cased
+    // "Anohni"), one album missing the album-artist MBID so it got a synth key
+    // (upper-cased "ANOHNI"). The names match case-insensitively.
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('real-anohni', 'Anohni', 'Anohni')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('synth:aa:anohni', 'ANOHNI', 'ANOHNI')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('rel-real', 'real-anohni', 'HOPELESSNESS')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('synth:rel:x', 'synth:aa:anohni', 'paradise')",
+        [],
+    )
+    .unwrap();
+
+    reconcile_album_artists(&conn).unwrap();
+
+    // artists_page filters to artists referenced by a release, so re-pointing the
+    // release is enough for the synth row to vanish from the browse list here
+    // (the dead row is later removed by prune_orphans during a real scan).
+    let page = artists_page(&conn, None, 50).unwrap();
+    assert_eq!(page.len(), 1);
+    assert_eq!(page[0].mbid, "real-anohni");
+    // ...and both albums now belong to the real artist.
+    let albums = albums_for_artist(&conn, "real-anohni").unwrap();
+    assert_eq!(albums.len(), 2);
+}
+
+#[test]
+fn reconcile_leaves_synth_only_artist_untouched() {
+    let conn = open(":memory:").unwrap();
+    // An album-artist with NO real-MBID counterpart must keep its synth key
+    // (the EXISTS guard must not null out its album_artist_mbid).
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('synth:aa:nobody', 'Nobody', 'Nobody')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('synth:rel:n', 'synth:aa:nobody', 'Demo')",
+        [],
+    )
+    .unwrap();
+
+    reconcile_album_artists(&conn).unwrap();
+
+    let aa: Option<String> = conn
+        .query_row(
+            "SELECT album_artist_mbid FROM release WHERE mbid = 'synth:rel:n'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(aa.as_deref(), Some("synth:aa:nobody"));
 }
