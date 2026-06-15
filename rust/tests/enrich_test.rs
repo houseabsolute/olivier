@@ -378,13 +378,28 @@ fn classify_falls_back_to_title_heuristic_without_text_representation() {
     let mut p = pseudo_with_text_rep("Muzai Moratorium", None, None);
     p.text_representation = None;
     assert_eq!(classify_pseudo("無罪モラトリアム", &p), AltKind::Translit);
-    // 無罪モラトリアム -> "Muzai Moratorium" (translit), "Innocence Moratorium" (translate).
+    // Fallback: all-ASCII pseudo + non-ASCII original => Translit.
+    // Note: the fallback cannot distinguish romanizations from English translations
+    // when both are all-ASCII; "Innocence Moratorium" is also all-ASCII, so the
+    // fallback classifies it as Translit too. The correct Translate classification
+    // for an English-language title is handled by the primary text-representation
+    // path (script=Latn, language=eng => Translate) in classify_pseudo.
     assert_eq!(
         classify_alt("無罪モラトリアム", "Muzai Moratorium"),
         AltKind::Translit
     );
     assert_eq!(
         classify_alt("無罪モラトリアム", "Innocence Moratorium"),
+        AltKind::Translit
+    );
+    // Non-ASCII pseudo => Translate (e.g. Korean rendering of Japanese original).
+    assert_eq!(
+        classify_alt("無罪モラトリアム", "무죄 모라토리엄"),
+        AltKind::Translate
+    );
+    // ASCII original with ASCII pseudo => Translate (no script inference possible).
+    assert_eq!(
+        classify_alt("Muzai Moratorium", "Innocence Moratorium"),
         AltKind::Translate
     );
 }

@@ -113,53 +113,24 @@ fn classify_from_text_representation(tr: Option<&TextRepresentation>) -> Option<
 
 /// Deterministic title-pair fallback (no MB metadata available).
 ///
-/// Classification rule: the pseudo title is treated as a transliteration if it
-/// is all-ASCII (no non-Latin characters) AND contains no two consecutive
-/// consonants when only its alphabetic characters are considered. Japanese
-/// romaji follows a strict CV (consonant-vowel) syllable structure and almost
-/// never produces consecutive consonants, while English words frequently do
-/// (e.g. "nn", "nc" in "Innocence"). The `original_title` parameter is
-/// accepted for symmetry but is not consulted by this heuristic (it is only
-/// available when `text-representation` is absent, so the pair cannot be
-/// semantically compared).
-pub fn classify_alt(_original_title: &str, pseudo_title: &str) -> AltKind {
-    fn is_consonant(c: char) -> bool {
-        matches!(
-            c.to_ascii_lowercase(),
-            'b' | 'c'
-                | 'd'
-                | 'f'
-                | 'g'
-                | 'h'
-                | 'j'
-                | 'k'
-                | 'l'
-                | 'm'
-                | 'n'
-                | 'p'
-                | 'q'
-                | 'r'
-                | 's'
-                | 't'
-                | 'v'
-                | 'w'
-                | 'x'
-                | 'z'
-        )
-    }
-    let all_ascii = pseudo_title
-        .chars()
-        .all(|c| c.is_ascii() || c.is_whitespace());
-    if !all_ascii {
-        return AltKind::Translate;
-    }
-    let letters: Vec<char> = pseudo_title.chars().filter(|c| c.is_alphabetic()).collect();
-    let has_consecutive_consonants = letters
-        .windows(2)
-        .any(|w| is_consonant(w[0]) && is_consonant(w[1]));
-    if has_consecutive_consonants {
-        AltKind::Translate
-    } else {
+/// Classification rule: if the pseudo title is all-ASCII **and** the original
+/// title contains at least one non-ASCII character (i.e. the original is a
+/// CJK/non-Latin script), we treat the pseudo title as a Latin romanization
+/// (transliteration). Otherwise we classify it as a translation.
+///
+/// Limitation: this fallback cannot distinguish a romanization from an English
+/// semantic translation when both are all-ASCII and the original is non-ASCII
+/// (e.g. "Muzai Moratorium" and "Innocence Moratorium" look identical from
+/// character-class data alone). In practice this situation is rare because
+/// modern MusicBrainz releases include `text-representation` metadata that
+/// takes the primary classification path in `classify_from_text_representation`
+/// before this fallback is reached.
+pub fn classify_alt(original_title: &str, pseudo_title: &str) -> AltKind {
+    let all_ascii = pseudo_title.is_ascii();
+    let original_has_nonascii = !original_title.is_ascii();
+    if all_ascii && original_has_nonascii {
         AltKind::Translit
+    } else {
+        AltKind::Translate
     }
 }
