@@ -8,6 +8,7 @@
 
 import 'api/catalog.dart';
 import 'api/queue.dart';
+import 'api/settings.dart';
 import 'api/simple.dart';
 import 'api/tags.dart';
 import 'catalog/scan.dart';
