@@ -118,7 +118,8 @@ class ScanController extends Notifier<ScanState> {
       roots: state.roots.where((r) => r != dir).toList(),
       queued: _queue.length,
     );
-    ref.invalidate(artistsProvider);
+    _invalidateBrowse();
+    await _reconcileSelection();
   }
 
   void _enqueue(String dir) {
@@ -160,12 +161,35 @@ class ScanController extends Notifier<ScanState> {
           state = state.copyWith(lastError: '$e');
         }
         if (_disposed) return;
-        // New music may have appeared — refresh the browser's artist list.
-        ref.invalidate(artistsProvider);
+        // New music may have appeared — refresh the displayed columns.
+        _invalidateBrowse();
       }
+      // Reconcile once after the whole drain — the per-folder _invalidateBrowse()
+      // above already refreshed artistsProvider, and the selection can only be
+      // stale once the batch has finished merging/removing artists.
+      await _reconcileSelection();
     } finally {
       _draining = false;
       if (!_disposed) state = state.copyWith(scanning: false, queued: 0);
+    }
+  }
+
+  void _invalidateBrowse() {
+    ref.invalidate(artistsProvider);
+    ref.invalidate(albumsProvider);
+    ref.invalidate(tracksProvider);
+  }
+
+  /// If a rescan merged or removed the selected artist (e.g. a synth album-artist
+  /// reconciled into a real one), clear the now-dangling selection so the album
+  /// and track columns don't show an empty dead end.
+  Future<void> _reconcileSelection() async {
+    final selected = ref.read(selectedArtistProvider);
+    if (selected == null) return;
+    final artists = await ref.read(artistsProvider.future);
+    if (_disposed) return;
+    if (!artists.any((a) => a.mbid == selected)) {
+      ref.read(selectedArtistProvider.notifier).select(null);
     }
   }
 }

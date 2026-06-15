@@ -82,8 +82,12 @@ class PlaybackController {
     List<Track> tracks,
     String albumTitle,
   ) {
+    // file_paths_for_album returns one path per track, so these line up 1:1; the
+    // min() is belt-and-suspenders so a transient mismatch degrades instead of
+    // throwing a RangeError mid-playback.
+    final n = paths.length < tracks.length ? paths.length : tracks.length;
     return [
-      for (var i = 0; i < paths.length; i++)
+      for (var i = 0; i < n; i++)
         MediaItem(
           id: paths[i],
           title: tracks[i].title,

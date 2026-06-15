@@ -77,6 +77,11 @@ pub fn open(path: &str) -> anyhow::Result<Connection> {
     if path != ":memory:" {
         // WAL only applies to file-backed DBs; it's a silent no-op for :memory:.
         conn.pragma_update(None, "journal_mode", "WAL")?;
+        // Each FFI call opens its own connection; SQLite allows one writer at a
+        // time. Wait for the lock instead of failing immediately when a scan,
+        // queue save, and play-tracking write contend (e.g. playing while
+        // scanning), so a contended write retries rather than erroring.
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
     }
     MIGRATIONS.to_latest(&mut conn)?;
     Ok(conn)

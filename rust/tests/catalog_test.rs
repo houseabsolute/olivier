@@ -323,6 +323,48 @@ fn file_paths_for_album_ordered_by_disc_position() {
 }
 
 #[test]
+fn file_paths_for_album_is_one_per_track() {
+    // A track with several files (e.g. the same album ripped to two formats)
+    // must yield ONE path, so the play queue stays 1:1 with tracks_for_album —
+    // the playback controller zips the two lists by index.
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('m', 'A', 'A')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('rel', 'm', 'Album')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (1, 'rel', 1, 1, 'T1')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (2, 'rel', 1, 2, 'T2')",
+        [],
+    )
+    .unwrap();
+    // T1 has two files (flac + m4a copies), T2 has one.
+    for (path, tid) in [("/m/a1.flac", 1), ("/m/a1.m4a", 1), ("/m/a2.flac", 2)] {
+        conn.execute(
+            "INSERT INTO file(path, mtime, size, track_id, added_at) VALUES (?1, 0, 0, ?2, 0)",
+            rusqlite::params![path, tid],
+        )
+        .unwrap();
+    }
+
+    let paths = file_paths_for_album(&conn, "rel").unwrap();
+    let tracks = tracks_for_album(&conn, "rel").unwrap();
+    assert_eq!(paths.len(), tracks.len(), "queue must be 1:1 with tracks");
+    // MIN(path) picks the lexically-first file per track.
+    assert_eq!(paths, vec!["/m/a1.flac", "/m/a2.flac"]);
+}
+
+#[test]
 fn scan_stores_embedded_sort_name() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::copy(

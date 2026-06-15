@@ -102,12 +102,18 @@ pub fn record_play(conn: &Connection, track_id: i64, played_at: i64) -> anyhow::
     Ok(())
 }
 
-/// Absolute file paths for an album in track order (for building the play queue).
+/// One absolute file path per track, in disc/position order — the play queue for
+/// an album. Returns exactly one path per track (the lexically-first file when a
+/// track has several, e.g. the same rip in two formats) so the queue lines up
+/// 1:1 with `tracks_for_album`, which the caller zips it against. Uses an INNER
+/// join, so a track with no files is omitted — a post-scan DB never has one (the
+/// orphan sweep removes file-less tracks); the caller's `min()` guard is the
+/// backstop if that invariant is ever broken.
 pub fn file_paths_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Result<Vec<String>> {
     let mut out = Vec::new();
     let mut stmt = conn.prepare(
-        "SELECT f.path FROM track t JOIN file f ON f.track_id = t.id
-         WHERE t.release_mbid = ?1 ORDER BY t.disc, t.position",
+        "SELECT MIN(f.path) FROM track t JOIN file f ON f.track_id = t.id
+         WHERE t.release_mbid = ?1 GROUP BY t.id ORDER BY t.disc, t.position",
     )?;
     let rows = stmt.query_map([release_mbid], |r| r.get::<_, String>(0))?;
     for r in rows {
