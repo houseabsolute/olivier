@@ -17,6 +17,11 @@ pub struct Alias {
     #[serde(rename = "sort-name")]
     pub sort_name: Option<String>,
     pub locale: Option<String>,
+    /// `Option<bool>` instead of the spec's `#[serde(default)] bool` because
+    /// the real MB fixture contains JSON `null` for this field on some aliases,
+    /// which would cause a serde error if the type were plain `bool`.
+    /// Task 8 callers should use `primary: Some(true)` in test helpers and
+    /// `a.primary.unwrap_or(false)` in filter predicates.
     pub primary: Option<bool>,
     #[serde(rename = "type")]
     pub alias_type: Option<String>,
