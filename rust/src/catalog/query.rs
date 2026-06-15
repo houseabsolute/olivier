@@ -1,8 +1,8 @@
 use crate::catalog::schema::{Album, Artist, Track};
 use rusqlite::Connection;
 
-/// Keyset page of album-artists ordered by sort_name. Pass the previous page's
-/// last sort_name as `after` (None for the first page).
+/// Keyset page of album-artists ordered by sort_name (case-insensitive). Pass
+/// the previous page's last sort_name as `after` (None for the first page).
 pub fn artists_page(
     conn: &Connection,
     after: Option<&str>,
@@ -12,8 +12,8 @@ pub fn artists_page(
     let mut stmt = conn.prepare(
         "SELECT a.mbid, a.name, a.sort_name FROM artist a
          WHERE a.mbid IN (SELECT DISTINCT album_artist_mbid FROM release)
-           AND (?1 IS NULL OR a.sort_name > ?1)
-         ORDER BY a.sort_name LIMIT ?2",
+           AND (?1 IS NULL OR a.sort_name > ?1 COLLATE NOCASE)
+         ORDER BY a.sort_name COLLATE NOCASE LIMIT ?2",
     )?;
     let rows = stmt.query_map(rusqlite::params![after, limit], |r| {
         Ok(Artist {
@@ -28,7 +28,8 @@ pub fn artists_page(
     Ok(out)
 }
 
-/// Albums for one album-artist, ordered by original year then title (spec §6.1).
+/// Albums for one album-artist, ordered by original year then title
+/// (case-insensitive; spec §6.1).
 pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::Result<Vec<Album>> {
     let mut out = Vec::new();
     let mut stmt = conn.prepare(
@@ -37,7 +38,7 @@ pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::
          JOIN artist a ON a.mbid = r.album_artist_mbid
          LEFT JOIN release_group rg ON rg.mbid = r.release_group_mbid
          WHERE r.album_artist_mbid = ?1
-         ORDER BY COALESCE(rg.first_release_date, r.date, '9999'), r.title",
+         ORDER BY COALESCE(rg.first_release_date, r.date, '9999'), r.title COLLATE NOCASE",
     )?;
     let rows = stmt.query_map([album_artist_mbid], |r| {
         Ok(Album {

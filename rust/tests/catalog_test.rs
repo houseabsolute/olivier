@@ -123,6 +123,43 @@ fn artists_page_ordered_and_keyset() {
 }
 
 #[test]
+fn artists_page_sorts_case_insensitively() {
+    let conn = open(":memory:").unwrap();
+    // Lowercase 'abba' must sort before 'Beatles'. BINARY collation would put
+    // uppercase 'B' (66) ahead of lowercase 'a' (97) and get this backwards.
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('m-b', 'Beatles', 'Beatles')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('m-a', 'abba', 'abba')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('r-b', 'm-b', 'X')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('r-a', 'm-a', 'Y')",
+        [],
+    )
+    .unwrap();
+
+    let page = artists_page(&conn, None, 50).unwrap();
+    assert_eq!(page.len(), 2);
+    assert_eq!(page[0].sort_name, "abba");
+    assert_eq!(page[1].sort_name, "Beatles");
+
+    // Keyset must stay consistent with the case-insensitive order.
+    let page2 = artists_page(&conn, Some("abba"), 50).unwrap();
+    assert_eq!(page2.len(), 1);
+    assert_eq!(page2[0].sort_name, "Beatles");
+}
+
+#[test]
 fn artists_page_limit() {
     let conn = open(":memory:").unwrap();
     seed_artists_page_db(&conn);
@@ -176,6 +213,33 @@ fn albums_for_artist_ordered_by_year() {
     // Years must be 4-char strings, not full dates.
     assert_eq!(albums[0].original_year, Some("1999".to_string()));
     assert_eq!(albums[1].original_year, Some("2000".to_string()));
+}
+
+#[test]
+fn albums_for_artist_title_tiebreak_is_case_insensitive() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('m', 'Artist', 'Artist')",
+        [],
+    )
+    .unwrap();
+    // Same year, so the title decides the order: lowercase 'apple' must precede
+    // 'Banana' (BINARY collation would order 'Banana' first).
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title, date) VALUES ('r1', 'm', 'Banana', '2000')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title, date) VALUES ('r2', 'm', 'apple', '2000')",
+        [],
+    )
+    .unwrap();
+
+    let albums = albums_for_artist(&conn, "m").unwrap();
+    assert_eq!(albums.len(), 2);
+    assert_eq!(albums[0].title, "apple");
+    assert_eq!(albums[1].title, "Banana");
 }
 
 #[test]
