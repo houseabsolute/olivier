@@ -1,7 +1,7 @@
 use crate::catalog::query;
 use crate::catalog::roots;
 use crate::catalog::scan::{self, ScanProgress};
-use crate::catalog::schema::{Album, Artist, Track};
+use crate::catalog::schema::{Album, Artist, QueueTrack, Track};
 use crate::db;
 use crate::frb_generated::StreamSink;
 
@@ -34,6 +34,10 @@ pub fn list_tracks(db_path: String, release_mbid: String) -> anyhow::Result<Vec<
 
 pub fn album_file_paths(db_path: String, release_mbid: String) -> anyhow::Result<Vec<String>> {
     query::file_paths_for_album(&db::open(&db_path)?, &release_mbid)
+}
+
+pub fn tracks_for_paths(db_path: String, paths: Vec<String>) -> anyhow::Result<Vec<QueueTrack>> {
+    query::tracks_for_paths(&db::open(&db_path)?, &paths)
 }
 
 pub fn record_play(db_path: String, track_id: i64, played_at: i64) -> anyhow::Result<()> {

@@ -13,6 +13,9 @@ class QueueController {
   final String dbPath;
 
   List<String> _orderedPaths = [];
+  // The actual order the player's sources are in (shuffled or canonical), so the
+  // now-playing items can be built to line up 1:1 with the player by index.
+  List<String> _playOrder = [];
   bool _shuffled = false;
 
   Future<void> setQueue(List<String> paths, {int initialIndex = 0}) async {
@@ -34,6 +37,7 @@ class QueueController {
   }) async {
     final order =
         _shuffled ? (List.of(_orderedPaths)..shuffle()) : _orderedPaths;
+    _playOrder = List.of(order);
     await player.setAudioSources(
       [for (final p in order) AudioSource.file(p)],
       initialIndex:
@@ -84,5 +88,9 @@ class QueueController {
   }
 
   List<String> get orderedPaths => List.unmodifiable(_orderedPaths);
+
+  /// The current player source order (shuffled or canonical) — index-aligned
+  /// with what the player is playing.
+  List<String> get playOrder => List.unmodifiable(_playOrder);
   bool get shuffled => _shuffled;
 }

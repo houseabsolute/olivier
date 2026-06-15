@@ -77,7 +77,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1410219245;
+  int get rustContentHash => 1352555454;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -130,6 +130,9 @@ abstract class RustLibApi extends BaseApi {
 
   Stream<ScanProgress> crateApiCatalogScanLibrary(
       {required String dbPath, required List<String> roots});
+
+  Future<List<QueueTrack>> crateApiCatalogTracksForPaths(
+      {required String dbPath, required List<String> paths});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -526,6 +529,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: ["dbPath", "roots", "sink"],
       );
 
+  @override
+  Future<List<QueueTrack>> crateApiCatalogTracksForPaths(
+      {required String dbPath, required List<String> paths}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(dbPath, serializer);
+        sse_encode_list_String(paths, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 16, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_queue_track,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCatalogTracksForPathsConstMeta,
+      argValues: [dbPath, paths],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCatalogTracksForPathsConstMeta =>
+      const TaskConstMeta(
+        debugName: "tracks_for_paths",
+        argNames: ["dbPath", "paths"],
+      );
+
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -634,6 +664,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<QueueTrack> dco_decode_list_queue_track(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_queue_track).toList();
+  }
+
+  @protected
   List<Track> dco_decode_list_track(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_track).toList();
@@ -680,6 +716,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       currentIndex: dco_decode_u_32(arr[1]),
       positionMs: dco_decode_u_64(arr[2]),
       shuffle: dco_decode_bool(arr[3]),
+    );
+  }
+
+  @protected
+  QueueTrack dco_decode_queue_track(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return QueueTrack(
+      path: dco_decode_String(arr[0]),
+      trackId: dco_decode_opt_box_autoadd_i_64(arr[1]),
+      title: dco_decode_String(arr[2]),
+      artist: dco_decode_opt_String(arr[3]),
+      album: dco_decode_String(arr[4]),
+      lengthMs: dco_decode_opt_box_autoadd_u_64(arr[5]),
     );
   }
 
@@ -897,6 +949,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<QueueTrack> sse_decode_list_queue_track(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <QueueTrack>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_queue_track(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<Track> sse_decode_list_track(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -976,6 +1040,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         currentIndex: var_currentIndex,
         positionMs: var_positionMs,
         shuffle: var_shuffle);
+  }
+
+  @protected
+  QueueTrack sse_decode_queue_track(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_path = sse_decode_String(deserializer);
+    var var_trackId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_artist = sse_decode_opt_String(deserializer);
+    var var_album = sse_decode_String(deserializer);
+    var var_lengthMs = sse_decode_opt_box_autoadd_u_64(deserializer);
+    return QueueTrack(
+        path: var_path,
+        trackId: var_trackId,
+        title: var_title,
+        artist: var_artist,
+        album: var_album,
+        lengthMs: var_lengthMs);
   }
 
   @protected
@@ -1209,6 +1291,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_queue_track(
+      List<QueueTrack> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_queue_track(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_track(List<Track> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
@@ -1276,6 +1368,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.currentIndex, serializer);
     sse_encode_u_64(self.positionMs, serializer);
     sse_encode_bool(self.shuffle, serializer);
+  }
+
+  @protected
+  void sse_encode_queue_track(QueueTrack self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.path, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.trackId, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_opt_String(self.artist, serializer);
+    sse_encode_String(self.album, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.lengthMs, serializer);
   }
 
   @protected

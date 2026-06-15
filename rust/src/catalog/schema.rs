@@ -25,3 +25,16 @@ pub struct Track {
     pub last_played: Option<i64>,
     pub added_at: i64,
 }
+
+/// A queue entry paired with its catalog metadata, keyed by file path — used to
+/// rebuild the now-playing items for a restored session. `track_id` is None when
+/// the path is no longer in the catalog (then `title` falls back to the filename).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueueTrack {
+    pub path: String,
+    pub track_id: Option<i64>,
+    pub title: String,
+    pub artist: Option<String>,
+    pub album: String,
+    pub length_ms: Option<u64>,
+}

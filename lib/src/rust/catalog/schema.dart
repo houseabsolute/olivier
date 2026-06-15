@@ -65,6 +65,48 @@ class Artist {
           sortName == other.sortName;
 }
 
+/// A queue entry paired with its catalog metadata, keyed by file path — used to
+/// rebuild the now-playing items for a restored session. `track_id` is None when
+/// the path is no longer in the catalog (then `title` falls back to the filename).
+class QueueTrack {
+  final String path;
+  final PlatformInt64? trackId;
+  final String title;
+  final String? artist;
+  final String album;
+  final BigInt? lengthMs;
+
+  const QueueTrack({
+    required this.path,
+    this.trackId,
+    required this.title,
+    this.artist,
+    required this.album,
+    this.lengthMs,
+  });
+
+  @override
+  int get hashCode =>
+      path.hashCode ^
+      trackId.hashCode ^
+      title.hashCode ^
+      artist.hashCode ^
+      album.hashCode ^
+      lengthMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QueueTrack &&
+          runtimeType == other.runtimeType &&
+          path == other.path &&
+          trackId == other.trackId &&
+          title == other.title &&
+          artist == other.artist &&
+          album == other.album &&
+          lengthMs == other.lengthMs;
+}
+
 class Track {
   final PlatformInt64 id;
   final int disc;

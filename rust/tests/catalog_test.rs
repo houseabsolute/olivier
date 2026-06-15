@@ -1,6 +1,7 @@
 use rust_lib_olivier::catalog::ids::{album_artist_key, sort_name};
 use rust_lib_olivier::catalog::query::{
     albums_for_artist, artists_page, file_paths_for_album, record_play, tracks_for_album,
+    tracks_for_paths,
 };
 use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
 use rust_lib_olivier::catalog::scan::{reconcile_album_artists, scan_roots};
@@ -362,6 +363,53 @@ fn file_paths_for_album_is_one_per_track() {
     assert_eq!(paths.len(), tracks.len(), "queue must be 1:1 with tracks");
     // MIN(path) picks the lexically-first file per track.
     assert_eq!(paths, vec!["/m/a1.flac", "/m/a2.flac"]);
+}
+
+#[test]
+fn tracks_for_paths_preserves_order_with_placeholder() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('m', 'A', 'A')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('rel', 'm', 'Album')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title, artist, length_ms)
+         VALUES (1, 'rel', 1, 1, 'Song', 'Art', 1000)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path, mtime, size, track_id, added_at) VALUES ('/m/a.flac', 0, 0, 1, 0)",
+        [],
+    )
+    .unwrap();
+
+    // Query in a specific order, with a path that isn't in the catalog first.
+    let paths = vec!["/m/missing.mp3".to_string(), "/m/a.flac".to_string()];
+    let got = tracks_for_paths(&conn, &paths).unwrap();
+    assert_eq!(got.len(), 2, "one entry per input path, in order");
+
+    // Placeholder for the catalog-missing path: filename as title, no track id.
+    assert_eq!(got[0].path, "/m/missing.mp3");
+    assert_eq!(got[0].track_id, None);
+    assert_eq!(got[0].title, "missing.mp3");
+
+    // Real metadata for the catalogued path.
+    assert_eq!(got[1].path, "/m/a.flac");
+    assert_eq!(got[1].track_id, Some(1));
+    assert_eq!(got[1].title, "Song");
+    assert_eq!(got[1].artist.as_deref(), Some("Art"));
+    assert_eq!(got[1].album, "Album");
+    assert_eq!(got[1].length_ms, Some(1000));
+
+    // Empty input → empty output.
+    assert!(tracks_for_paths(&conn, &[]).unwrap().is_empty());
 }
 
 #[test]

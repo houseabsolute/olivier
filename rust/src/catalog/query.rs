@@ -1,5 +1,5 @@
-use crate::catalog::schema::{Album, Artist, Track};
-use rusqlite::Connection;
+use crate::catalog::schema::{Album, Artist, QueueTrack, Track};
+use rusqlite::{Connection, OptionalExtension};
 
 /// Keyset page of album-artists ordered by sort_name (case-insensitive). Pass
 /// the previous page's last sort_name as `after` (None for the first page).
@@ -118,6 +118,44 @@ pub fn file_paths_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Re
     let rows = stmt.query_map([release_mbid], |r| r.get::<_, String>(0))?;
     for r in rows {
         out.push(r?);
+    }
+    Ok(out)
+}
+
+/// Track metadata for an explicit, ordered list of file paths — used to rebuild
+/// the now-playing items for a restored queue. Returns exactly one entry per
+/// input path, in the same order; a path no longer in the catalog gets a
+/// placeholder (filename as title, no track id) so the result still lines up 1:1
+/// with the player's restored sources.
+pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<Vec<QueueTrack>> {
+    let mut stmt = conn.prepare(
+        "SELECT t.id, t.title, t.artist, t.length_ms, r.title
+         FROM file f JOIN track t ON t.id = f.track_id
+         JOIN release r ON r.mbid = t.release_mbid
+         WHERE f.path = ?1",
+    )?;
+    let mut out = Vec::with_capacity(paths.len());
+    for path in paths {
+        let found = stmt
+            .query_row([path], |r| {
+                Ok(QueueTrack {
+                    path: path.clone(),
+                    track_id: Some(r.get(0)?),
+                    title: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                    artist: r.get(2)?,
+                    album: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
+                    length_ms: r.get::<_, Option<i64>>(3)?.map(|v| v as u64),
+                })
+            })
+            .optional()?;
+        out.push(found.unwrap_or_else(|| QueueTrack {
+            path: path.clone(),
+            track_id: None,
+            title: path.rsplit('/').next().unwrap_or(path).to_string(),
+            artist: None,
+            album: String::new(),
+            length_ms: None,
+        }));
     }
     Ok(out)
 }

@@ -76,6 +76,38 @@ class PlaybackController {
     await audioHandler.play();
   }
 
+  /// Rebuild now-playing metadata for a queue restored from disk on startup.
+  /// The queue controller has already rebuilt the player's sources; this seeds
+  /// `_currentItems`, the audio_service queue, and the current media item (in
+  /// the player's actual order) so the now-playing bar, MPRIS, and play tracking
+  /// work for a restored session — not just after a fresh play.
+  Future<void> restoreNowPlaying() async {
+    final order = queueController.playOrder;
+    if (order.isEmpty) return;
+
+    final queueTracks = await tracksForPaths(dbPath: dbPath, paths: order);
+    final items = [
+      for (final qt in queueTracks)
+        MediaItem(
+          id: qt.path,
+          title: qt.title,
+          artist: qt.artist,
+          album: qt.album.isEmpty ? null : qt.album,
+          duration: qt.lengthMs == null
+              ? null
+              : Duration(milliseconds: qt.lengthMs!.toInt()),
+          extras: qt.trackId == null ? null : {'trackId': qt.trackId},
+        ),
+    ];
+
+    _currentItems = items;
+    audioHandler.queue.add(items);
+    final i =
+        (audioHandler.player.currentIndex ?? 0).clamp(0, items.length - 1);
+    audioHandler.mediaItem.add(items[i]);
+    _enrichWithCoverArt(i, items[i]);
+  }
+
   // -------------------------------------------------------------------------
   // Internal helpers
   // -------------------------------------------------------------------------
@@ -206,8 +238,10 @@ class PlaybackController {
     if (index == null || index >= _currentItems.length) return;
 
     final item = _currentItems[index];
+    // PlatformInt64 is `int` on the native targets; a null/placeholder track
+    // (a queued file no longer in the catalog) has none and is skipped.
     final trackId = item.extras?['trackId'];
-    if (trackId == null) return;
+    if (trackId is! int) return;
 
     if (forceRecord) {
       _doRecord(trackId);
@@ -232,7 +266,7 @@ class PlaybackController {
     }
   }
 
-  void _doRecord(dynamic trackId) {
+  void _doRecord(int trackId) {
     _recordedForCurrentTrack = true;
     final playedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     recordPlay(

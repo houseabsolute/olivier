@@ -66,6 +66,7 @@ Future<void> main() async {
   final snap = await loadQueue(dbPath: dbPath);
   if (snap != null && snap.paths.isNotEmpty) {
     await queueController.restoreFromSnapshot(snap);
+    await playbackController.restoreNowPlaying();
   }
 
   runApp(
