@@ -1,4 +1,4 @@
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_service_mpris/audio_service_mpris.dart';
@@ -30,9 +30,10 @@ Future<void> main() async {
   );
   await RustLib.init();
 
-  // Compute DB path once for the entire app lifetime.
-  final docsDir = await getApplicationDocumentsDirectory();
-  dbPath = '${docsDir.path}/olivier.db';
+  // Compute DB path once for the entire app lifetime. Stored under the XDG data
+  // dir (~/.local/share/olivier on Linux), migrating any DB from the old
+  // documents-dir location on first run.
+  dbPath = await _resolveDbPath();
 
   if (Platform.isLinux) {
     AudioServiceMpris.init(
@@ -76,6 +77,74 @@ Future<void> main() async {
       child: const OlivierApp(),
     ),
   );
+}
+
+/// Resolve the database path under the XDG data directory (`$XDG_DATA_HOME`,
+/// default `~/.local/share`) in an `olivier` subdir, creating the directory and
+/// migrating any DB from the previous (documents-dir) location.
+Future<String> _resolveDbPath() async {
+  final String dir;
+  if (Platform.isLinux) {
+    final xdg = Platform.environment['XDG_DATA_HOME'];
+    final home = Platform.environment['HOME'];
+    if (xdg != null && xdg.isNotEmpty) {
+      dir = '$xdg/olivier';
+    } else if (home != null && home.isNotEmpty) {
+      dir = '$home/.local/share/olivier';
+    } else {
+      dir = (await getApplicationSupportDirectory()).path;
+    }
+  } else {
+    // Android and others: the platform's app-support directory.
+    dir = (await getApplicationSupportDirectory()).path;
+  }
+  await Directory(dir).create(recursive: true);
+  final dbFile = '$dir/olivier.db';
+  await _migrateLegacyDb(dbFile);
+  return dbFile;
+}
+
+/// One-time move of the database (and its WAL log) from the old documents-dir
+/// location into [newDbPath] when the new location has none yet, so an existing
+/// catalog, roots, play stats, and queue survive the relocation.
+Future<void> _migrateLegacyDb(String newDbPath) async {
+  if (await File(newDbPath).exists()) return;
+  final String oldDir;
+  try {
+    oldDir = (await getApplicationDocumentsDirectory()).path;
+  } catch (_) {
+    return;
+  }
+  final oldDbPath = '$oldDir/olivier.db';
+  if (!await File(oldDbPath).exists()) return;
+
+  // Move the WAL log first and the database itself last: the `newDbPath` exists
+  // check above is the migration's commit point, so the .db must only arrive
+  // once its WAL is already beside it (a crash mid-move just retries next run).
+  for (final suffix in ['-wal', '']) {
+    final src = File('$oldDbPath$suffix');
+    if (!await src.exists()) continue;
+    final dest = '$newDbPath$suffix';
+    try {
+      await src.rename(dest);
+    } catch (_) {
+      // Cross-filesystem move: copy to a temp sibling on the destination fs,
+      // atomically rename it into place, then remove the source — so a crash can
+      // never delete the source before the destination is complete.
+      final tmp = '$dest.tmp';
+      await src.copy(tmp);
+      await File(tmp).rename(dest);
+      await src.delete();
+    }
+  }
+
+  // -shm is shared-memory scratch SQLite rebuilds on open; drop the stale one.
+  final oldShm = File('$oldDbPath-shm');
+  if (await oldShm.exists()) {
+    try {
+      await oldShm.delete();
+    } catch (_) {}
+  }
 }
 
 class OlivierApp extends StatelessWidget {
