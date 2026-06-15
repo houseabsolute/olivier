@@ -10,3 +10,11 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 /// FFI-facing tag read. Returns the typed DTO straight to Dart.
 Future<TrackTags> readTrackTags({required String path}) =>
     RustLib.instance.api.crateApiTagsReadTrackTags(path: path);
+
+/// Extract the first embedded cover picture from `file_path` and cache it
+/// under `cache_dir`.  Returns the path of the cached image file, or `None`
+/// if the audio file has no embedded art.
+Future<String?> extractCover(
+        {required String filePath, required String cacheDir}) =>
+    RustLib.instance.api
+        .crateApiTagsExtractCover(filePath: filePath, cacheDir: cacheDir);

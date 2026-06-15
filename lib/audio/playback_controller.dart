@@ -6,7 +6,9 @@ import 'package:just_audio/just_audio.dart';
 import 'package:olivier/audio/audio_handler.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/src/rust/api/catalog.dart';
+import 'package:olivier/src/rust/api/tags.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
+import 'package:path_provider/path_provider.dart';
 
 class PlaybackController {
   PlaybackController({
@@ -24,6 +26,13 @@ class PlaybackController {
 
   // Mirrors the current queue's MediaItems so we can look up by index.
   List<MediaItem> _currentItems = [];
+
+  // Lazily resolved application cache directory (memoised Future).
+  Future<String>? _cacheDirFuture;
+
+  // Per-file cover path cache so we don't re-call the FFI on repeated plays.
+  // A null value means "we already tried and the file has no embedded art".
+  final Map<String, String?> _coverCache = {};
 
   // Play-tracking state.
   int? _trackedIndex;
@@ -106,10 +115,55 @@ class PlaybackController {
 
   void _subscribeIndex() {
     audioHandler.player.currentIndexStream.listen((i) {
-      if (i != null && i < _currentItems.length) {
-        audioHandler.mediaItem.add(_currentItems[i]);
-      }
+      if (i == null || i >= _currentItems.length) return;
+
+      final item = _currentItems[i];
+
+      // Emit the base item immediately so MPRIS has metadata right away.
+      audioHandler.mediaItem.add(item);
+
+      // Then enrich with cover art asynchronously.
+      _enrichWithCoverArt(i, item);
     });
+  }
+
+  /// Fetches the cover art for [item] and, if found, re-emits the media item
+  /// with [artUri] populated — but only if the current track hasn't changed
+  /// in the meantime (race-guard via index + path comparison).
+  Future<void> _enrichWithCoverArt(int expectedIndex, MediaItem item) async {
+    final filePath = item.id;
+
+    // Check in-memory cache first (avoids FFI round-trip for repeated plays).
+    String? coverPath;
+    if (_coverCache.containsKey(filePath)) {
+      coverPath = _coverCache[filePath];
+    } else {
+      try {
+        final cacheDir = await _resolveCacheDir();
+        coverPath = await extractCover(filePath: filePath, cacheDir: cacheDir);
+      } catch (_) {
+        // Cover extraction failure must never break playback.
+        coverPath = null;
+      }
+      _coverCache[filePath] = coverPath;
+    }
+
+    if (coverPath == null) return;
+
+    // Race-guard: only apply if this track is still the current one.
+    final currentIndex = audioHandler.player.currentIndex;
+    if (currentIndex == null || currentIndex != expectedIndex) return;
+    if (_currentItems.isEmpty || _currentItems[currentIndex].id != filePath) {
+      return;
+    }
+
+    audioHandler.mediaItem.add(item.copyWith(artUri: Uri.file(coverPath)));
+  }
+
+  /// Returns (and lazily creates) the application cache directory path.
+  Future<String> _resolveCacheDir() {
+    _cacheDirFuture ??= getApplicationCacheDirectory().then((d) => d.path);
+    return _cacheDirFuture!;
   }
 
   // -------------------------------------------------------------------------

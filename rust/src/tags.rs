@@ -1,8 +1,12 @@
 use std::borrow::Cow;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::Path;
 
 use lofty::config::ParseOptions;
+use lofty::file::TaggedFileExt;
 use lofty::file::{AudioFile, FileType};
+use lofty::picture::MimeType;
 use lofty::prelude::{Accessor, ItemKey};
 use lofty::probe::Probe;
 use lofty::tag::Tag;
@@ -231,4 +235,90 @@ pub fn read_tags(path: &Path) -> anyhow::Result<TrackTags> {
     }
 
     Ok(out)
+}
+
+/// Extract the first embedded cover picture from `path` and write it to a
+/// stable cache file under `cache_dir`.  Returns the path of the cached file,
+/// or `None` if the audio file contains no embedded pictures.
+///
+/// The cache key is a per-build hex hash of the source file path, so repeated
+/// calls for the same file are cheap (a quick `Path::exists` check and
+/// return).  `DefaultHasher` is not guaranteed stable across Rust toolchain
+/// versions, but a cache miss after an upgrade is harmless — the file is just
+/// re-extracted (any stale cache file is simply left behind).
+pub fn extract_cover_to(path: &str, cache_dir: &str) -> anyhow::Result<Option<String>> {
+    // ------------------------------------------------------------------
+    // 1. Open the file and read all tags (pictures included).
+    // ------------------------------------------------------------------
+    let audio_path = Path::new(path);
+    let tagged_file = Probe::open(audio_path)
+        .map_err(|e| anyhow::anyhow!("failed to open {:?}: {}", audio_path, e))?
+        .read()
+        .map_err(|e| anyhow::anyhow!("failed to read tags from {:?}: {}", audio_path, e))?;
+
+    // Get the primary tag (first tag in the file, whichever type it is).
+    let tag = match tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag())
+    {
+        Some(t) => t,
+        None => return Ok(None),
+    };
+
+    let picture = match tag.pictures().first() {
+        Some(p) => p,
+        None => return Ok(None),
+    };
+
+    // A zero-byte PICTURE block would otherwise be written as an empty file and
+    // then returned forever as a cache hit, handing MPRIS a broken file:// URI.
+    if picture.data().is_empty() {
+        return Ok(None);
+    }
+
+    // ------------------------------------------------------------------
+    // 2. Determine file extension from MIME type.
+    // ------------------------------------------------------------------
+    let ext = match picture.mime_type() {
+        Some(MimeType::Png) => "png",
+        Some(MimeType::Jpeg) => "jpg",
+        _ => "jpg", // sensible default for unknown / missing MIME
+    };
+
+    // ------------------------------------------------------------------
+    // 3. Build a stable cache path.
+    // ------------------------------------------------------------------
+    let mut hasher = DefaultHasher::new();
+    path.hash(&mut hasher);
+    let hash = hasher.finish();
+
+    let cache_path = Path::new(cache_dir).join(format!("olivier-cover-{:016x}.{}", hash, ext));
+
+    // ------------------------------------------------------------------
+    // 4. Return cached file if it already exists (cache hit).
+    // ------------------------------------------------------------------
+    if cache_path.exists() {
+        return Ok(Some(
+            cache_path
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("cache path is not valid UTF-8"))?
+                .to_owned(),
+        ));
+    }
+
+    // ------------------------------------------------------------------
+    // 5. Write bytes to cache file (create dir if needed).
+    // ------------------------------------------------------------------
+    std::fs::create_dir_all(cache_dir)
+        .map_err(|e| anyhow::anyhow!("failed to create cache dir {:?}: {}", cache_dir, e))?;
+
+    std::fs::write(&cache_path, picture.data())
+        .map_err(|e| anyhow::anyhow!("failed to write cover to {:?}: {}", cache_path, e))?;
+
+    Ok(Some(
+        cache_path
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("cache path is not valid UTF-8"))?
+            .to_owned(),
+    ))
 }
