@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 // ── artist?inc=aliases ──────────────────────────────────────────────────
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Artist {
     pub id: String,
     pub name: String,
@@ -11,7 +11,7 @@ pub struct Artist {
     pub aliases: Vec<Alias>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Alias {
     pub name: String,
     #[serde(rename = "sort-name")]

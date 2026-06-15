@@ -13,7 +13,8 @@
 
 use rust_lib_olivier::db::open;
 use rust_lib_olivier::enrich::http::{MbHttp, MbResponse};
-use rust_lib_olivier::enrich::model::{Artist, Release};
+use rust_lib_olivier::enrich::model::{Alias, Artist, Release};
+use rust_lib_olivier::enrich::select::select_transliteration;
 
 fn fixture(name: &str) -> String {
     std::fs::read_to_string(format!(
@@ -118,4 +119,171 @@ fn migration_creates_enrichment_tables() {
         )
         .unwrap();
     assert_eq!(cols, 2);
+}
+
+// ── §5.1 artist-alias selection tests ────────────────────────────────────
+
+fn alias(name: &str, sort: &str, locale: Option<&str>, primary: bool, ty: &str) -> Alias {
+    Alias {
+        name: name.into(),
+        sort_name: Some(sort.into()),
+        locale: locale.map(str::to_string),
+        primary: Some(primary),
+        alias_type: Some(ty.into()),
+    }
+}
+
+fn artist_with(sort: &str, aliases: Vec<Alias>) -> Artist {
+    Artist {
+        id: "x".into(),
+        name: "椎名林檎".into(),
+        sort_name: sort.into(),
+        aliases,
+    }
+}
+
+#[test]
+fn prefers_en_primary_artist_name() {
+    let a = artist_with(
+        "Sheena, Ringo",
+        vec![
+            alias(
+                "Sheena Ringo",
+                "Sheena, Ringo",
+                Some("en"),
+                false,
+                "Artist name",
+            ),
+            alias(
+                "Ringo Sheena",
+                "Sheena, Ringo",
+                Some("en"),
+                true,
+                "Artist name",
+            ),
+            alias("椎名林檎", "椎名林檎", Some("ja"), true, "Artist name"),
+        ],
+    );
+    let chosen = select_transliteration(&a).unwrap();
+    assert_eq!(chosen.name, "Ringo Sheena");
+    assert_eq!(chosen.sort_name, "Sheena, Ringo");
+}
+
+#[test]
+fn skips_legal_name_and_search_hint() {
+    let a = artist_with(
+        "Sheena, Ringo",
+        vec![
+            alias(
+                "Yumiko Shiina",
+                "Shiina, Yumiko",
+                Some("en"),
+                true,
+                "Legal name",
+            ),
+            alias("Ringo", "Ringo", Some("en"), false, "Search hint"),
+            alias(
+                "Ringo Sheena",
+                "Sheena, Ringo",
+                Some("en"),
+                false,
+                "Artist name",
+            ),
+        ],
+    );
+    assert_eq!(select_transliteration(&a).unwrap().name, "Ringo Sheena");
+}
+
+#[test]
+fn tie_break_by_name_ascending() {
+    // Two en+primary "Artist name" candidates -> name asc picks "Ringo Sheena".
+    let a = artist_with(
+        "Sheena, Ringo",
+        vec![
+            alias(
+                "Sheena Ringo",
+                "Sheena, Ringo",
+                Some("en"),
+                true,
+                "Artist name",
+            ),
+            alias(
+                "Ringo Sheena",
+                "Sheena, Ringo",
+                Some("en"),
+                true,
+                "Artist name",
+            ),
+        ],
+    );
+    assert_eq!(select_transliteration(&a).unwrap().name, "Ringo Sheena");
+}
+
+#[test]
+fn falls_back_to_any_en_then_entity_sort_name() {
+    // No primary -> any en "Artist name".
+    let a1 = artist_with(
+        "Sheena, Ringo",
+        vec![alias(
+            "Ringo Sheena",
+            "Sheena, Ringo",
+            Some("en"),
+            false,
+            "Artist name",
+        )],
+    );
+    assert_eq!(select_transliteration(&a1).unwrap().name, "Ringo Sheena");
+
+    // No en alias at all -> entity sort-name, name == sort-name.
+    let a2 = artist_with(
+        "Sheena, Ringo",
+        vec![alias(
+            "椎名林檎",
+            "椎名林檎",
+            Some("ja"),
+            true,
+            "Artist name",
+        )],
+    );
+    let chosen = select_transliteration(&a2).unwrap();
+    assert_eq!(chosen.name, "Sheena, Ringo");
+    assert_eq!(chosen.sort_name, "Sheena, Ringo");
+    assert!(chosen.from_entity_sort_name);
+}
+
+#[test]
+fn selection_is_deterministic_and_order_independent() {
+    // Property: reversing alias order doesn't change the chosen name.
+    let aliases = vec![
+        alias(
+            "Sheena Ringo",
+            "Sheena, Ringo",
+            Some("en"),
+            true,
+            "Artist name",
+        ),
+        alias(
+            "Ringo Sheena",
+            "Sheena, Ringo",
+            Some("en"),
+            true,
+            "Artist name",
+        ),
+        alias("椎名林檎", "椎名林檎", Some("ja"), true, "Artist name"),
+    ];
+    let a_forward = artist_with("Sheena, Ringo", aliases.clone());
+    let mut reversed = aliases;
+    reversed.reverse();
+    let a_reversed = artist_with("Sheena, Ringo", reversed);
+
+    let chosen_forward = select_transliteration(&a_forward).unwrap();
+    let chosen_reversed = select_transliteration(&a_reversed).unwrap();
+
+    assert_eq!(chosen_forward.name, chosen_reversed.name);
+    assert_eq!(chosen_forward.sort_name, chosen_reversed.sort_name);
+    // Calling twice on same artist is also consistent.
+    assert_eq!(
+        select_transliteration(&a_forward).unwrap().name,
+        chosen_forward.name
+    );
 }
