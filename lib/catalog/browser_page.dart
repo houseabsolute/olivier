@@ -1,4 +1,3 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:multi_split_view/multi_split_view.dart';
@@ -6,6 +5,7 @@ import 'package:olivier/catalog/album_column.dart';
 import 'package:olivier/catalog/artist_column.dart';
 import 'package:olivier/catalog/track_column.dart';
 import 'package:olivier/main.dart' show audioHandler;
+import 'package:olivier/settings/settings_page.dart';
 import 'package:olivier/state/scan_controller.dart';
 import 'package:olivier/widgets/now_playing_bar.dart';
 
@@ -39,13 +39,6 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
   void dispose() {
     _splitController.dispose();
     super.dispose();
-  }
-
-  Future<void> _addFolder() async {
-    final dir = await FilePicker.platform.getDirectoryPath();
-    if (dir == null) return;
-    // Fire-and-forget: the controller queues and scans; the AppBar shows progress.
-    await ref.read(scanControllerProvider.notifier).addFolder(dir);
   }
 
   @override
@@ -82,9 +75,11 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
         title: const Text('Olivier'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.create_new_folder_outlined),
-            tooltip: 'Add music folder',
-            onPressed: _addFolder,
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
+            ),
           ),
         ],
         bottom: scan.scanning ? _scanProgressBar(scan) : null,
