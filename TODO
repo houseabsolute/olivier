@@ -1,0 +1,18 @@
+Redo layout to put albums and tracks in a different layout?
+
+Record a log of all decisions made during imports - de-dupe, etc. - viewable in app via menu
+
+Ability to delete tracks so they can be re-imported
+
+Tighter layout to show more text vertically
+
+Can't see album art in UI anywhere
+
+I want to see more info for albums:
+  - date added
+  - album art
+And for tracks:
+  - last played
+  - length
+
+Clicking on a track shouldn't start playing
