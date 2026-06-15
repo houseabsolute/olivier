@@ -68,6 +68,7 @@ const MIGRATION_SLICE: &[M<'_>] = &[
          CREATE INDEX idx_artist_sort ON artist(sort_name);
          CREATE INDEX idx_file_track ON file(track_id);",
     ),
+    M::up("CREATE TABLE root (path TEXT PRIMARY KEY NOT NULL);"),
 ];
 const MIGRATIONS: Migrations<'_> = Migrations::from_slice(MIGRATION_SLICE);
 

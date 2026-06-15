@@ -2,6 +2,7 @@ use rust_lib_olivier::catalog::ids::{album_artist_key, sort_name};
 use rust_lib_olivier::catalog::query::{
     albums_for_artist, artists_page, file_paths_for_album, record_play, tracks_for_album,
 };
+use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
 use rust_lib_olivier::catalog::scan::scan_roots;
 use rust_lib_olivier::db::open;
 
@@ -347,4 +348,234 @@ fn rescan_removes_orphaned_rows() {
             .unwrap();
         assert_eq!(n, 0, "{table} not pruned");
     }
+}
+
+#[test]
+fn scoped_scan_preserves_other_roots() {
+    // Regression: scanning one root must not delete files that live under a
+    // different root. The deletion sweep used to be global, so scanning a second
+    // folder wiped the first.
+    let dir_a = tempfile::tempdir().unwrap();
+    let dir_b = tempfile::tempdir().unwrap();
+    std::fs::copy(
+        format!("{}/tests/fixtures/sample.flac", env!("CARGO_MANIFEST_DIR")),
+        dir_a.path().join("sample.flac"),
+    )
+    .unwrap();
+    std::fs::copy(
+        format!("{}/tests/fixtures/sample.mp3", env!("CARGO_MANIFEST_DIR")),
+        dir_b.path().join("sample.mp3"),
+    )
+    .unwrap();
+    let mut conn = open(":memory:").unwrap();
+    let root_a = dir_a.path().to_string_lossy().to_string();
+    let root_b = dir_b.path().to_string_lossy().to_string();
+
+    // Scan A by itself.
+    scan_roots(&mut conn, std::slice::from_ref(&root_a), |_| {}).unwrap();
+    assert_eq!(
+        conn.query_row("SELECT count(*) FROM file", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+
+    // Scan B by itself — A's file must survive (old global sweep would delete it).
+    scan_roots(&mut conn, std::slice::from_ref(&root_b), |_| {}).unwrap();
+    assert_eq!(
+        conn.query_row("SELECT count(*) FROM file", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        2,
+        "scanning B wiped A"
+    );
+    let a_present: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM file WHERE path = ?1",
+            [format!("{root_a}/sample.flac")],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(a_present, 1, "A's file was deleted by scanning B");
+}
+
+#[test]
+fn roots_add_list_remove() {
+    let conn = open(":memory:").unwrap();
+    add_root(&conn, "/music/a").unwrap();
+    add_root(&conn, "/music/b/").unwrap(); // trailing slash trimmed
+    add_root(&conn, "/music/a").unwrap(); // idempotent — no duplicate
+    assert_eq!(
+        list_roots(&conn).unwrap(),
+        vec!["/music/a".to_string(), "/music/b".to_string()]
+    );
+    remove_root(&conn, "/music/a").unwrap();
+    assert_eq!(list_roots(&conn).unwrap(), vec!["/music/b".to_string()]);
+}
+
+#[test]
+fn remove_root_prunes_files_beneath_it() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::copy(
+        format!("{}/tests/fixtures/sample.flac", env!("CARGO_MANIFEST_DIR")),
+        dir.path().join("sample.flac"),
+    )
+    .unwrap();
+    let mut conn = open(":memory:").unwrap();
+    let root = dir.path().to_string_lossy().to_string();
+    add_root(&conn, &root).unwrap();
+    scan_roots(&mut conn, std::slice::from_ref(&root), |_| {}).unwrap();
+    assert_eq!(
+        conn.query_row("SELECT count(*) FROM file", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+
+    // Forgetting the root drops its files and every catalog row they anchored.
+    remove_root(&conn, &root).unwrap();
+    for table in [
+        "file",
+        "track_stats",
+        "track",
+        "release",
+        "release_group",
+        "artist",
+    ] {
+        let n: i64 = conn
+            .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 0, "{table} not pruned by remove_root");
+    }
+}
+
+fn count(conn: &rusqlite::Connection, table: &str) -> i64 {
+    conn.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+        .unwrap()
+}
+
+#[test]
+fn scoped_scan_preserves_shared_parent_rows() {
+    // Two roots whose files resolve to the SAME artist/release (identical MBID
+    // tags). Scanning one must not let the global orphan cascade drop the shared
+    // artist/release that the other root's file still references.
+    let dir_a = tempfile::tempdir().unwrap();
+    let dir_b = tempfile::tempdir().unwrap();
+    for d in [&dir_a, &dir_b] {
+        std::fs::copy(
+            format!("{}/tests/fixtures/sample.flac", env!("CARGO_MANIFEST_DIR")),
+            d.path().join("sample.flac"),
+        )
+        .unwrap();
+    }
+    let mut conn = open(":memory:").unwrap();
+    let root_a = dir_a.path().to_string_lossy().to_string();
+    let root_b = dir_b.path().to_string_lossy().to_string();
+
+    scan_roots(&mut conn, std::slice::from_ref(&root_a), |_| {}).unwrap();
+    scan_roots(&mut conn, std::slice::from_ref(&root_b), |_| {}).unwrap();
+
+    // Both files survive, and the shared catalog rows stay intact (1, not 0).
+    assert_eq!(count(&conn, "file"), 2);
+    assert_eq!(count(&conn, "artist"), 1);
+    assert_eq!(count(&conn, "release"), 1);
+    assert_eq!(count(&conn, "track"), 1);
+}
+
+#[test]
+fn scoped_sweep_handles_multibyte_root_paths() {
+    // The sweep computes a char-counted prefix; exercise it with a non-ASCII
+    // (Japanese) directory component so a regression in the substr() code-point
+    // math would surface as a missed prune.
+    let base = tempfile::tempdir().unwrap();
+    let music = base.path().join("音楽");
+    std::fs::create_dir(&music).unwrap();
+    std::fs::copy(
+        format!("{}/tests/fixtures/sample.flac", env!("CARGO_MANIFEST_DIR")),
+        music.join("sample.flac"),
+    )
+    .unwrap();
+    let mut conn = open(":memory:").unwrap();
+    let root = music.to_string_lossy().to_string();
+    scan_roots(&mut conn, std::slice::from_ref(&root), |_| {}).unwrap();
+    assert_eq!(count(&conn, "file"), 1);
+
+    // Remove the file and rescan: the multibyte-prefixed sweep must prune it.
+    std::fs::remove_file(music.join("sample.flac")).unwrap();
+    scan_roots(&mut conn, std::slice::from_ref(&root), |_| {}).unwrap();
+    assert_eq!(count(&conn, "file"), 0);
+}
+
+#[test]
+fn remove_root_keeps_files_under_nested_root() {
+    // Roots A=<base> and B=<base>/inner are both registered. Removing A must not
+    // delete B's files even though they sit under A's prefix.
+    let base = tempfile::tempdir().unwrap();
+    let inner = base.path().join("inner");
+    std::fs::create_dir(&inner).unwrap();
+    std::fs::copy(
+        format!("{}/tests/fixtures/sample.flac", env!("CARGO_MANIFEST_DIR")),
+        base.path().join("outer.flac"),
+    )
+    .unwrap();
+    std::fs::copy(
+        format!("{}/tests/fixtures/sample.flac", env!("CARGO_MANIFEST_DIR")),
+        inner.join("nested.flac"),
+    )
+    .unwrap();
+    let mut conn = open(":memory:").unwrap();
+    let root_a = base.path().to_string_lossy().to_string();
+    let root_b = inner.to_string_lossy().to_string();
+    add_root(&conn, &root_a).unwrap();
+    add_root(&conn, &root_b).unwrap();
+    // Scanning A covers both files, since B is nested under A.
+    scan_roots(&mut conn, std::slice::from_ref(&root_a), |_| {}).unwrap();
+    assert_eq!(count(&conn, "file"), 2);
+
+    remove_root(&conn, &root_a).unwrap();
+    let nested_present: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM file WHERE path = ?1",
+            [format!("{root_b}/nested.flac")],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        nested_present, 1,
+        "nested root B's file was wrongly deleted"
+    );
+    let outer_present: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM file WHERE path = ?1",
+            [format!("{root_a}/outer.flac")],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(outer_present, 0, "A's own file should be gone");
+}
+
+#[test]
+fn remove_root_keeps_files_still_covered_by_another_root() {
+    // The reverse of the test above: removing the NESTED root B while the parent
+    // root A is still registered must NOT delete the file, because A still covers
+    // it. Removal only evicts music no longer under any registered root.
+    let base = tempfile::tempdir().unwrap();
+    let inner = base.path().join("inner");
+    std::fs::create_dir(&inner).unwrap();
+    std::fs::copy(
+        format!("{}/tests/fixtures/sample.flac", env!("CARGO_MANIFEST_DIR")),
+        inner.join("nested.flac"),
+    )
+    .unwrap();
+    let mut conn = open(":memory:").unwrap();
+    let root_a = base.path().to_string_lossy().to_string();
+    let root_b = inner.to_string_lossy().to_string();
+    add_root(&conn, &root_a).unwrap();
+    add_root(&conn, &root_b).unwrap();
+    scan_roots(&mut conn, std::slice::from_ref(&root_a), |_| {}).unwrap();
+    assert_eq!(count(&conn, "file"), 1);
+
+    remove_root(&conn, &root_b).unwrap();
+    assert_eq!(
+        count(&conn, "file"),
+        1,
+        "file still covered by parent root A must survive removing nested root B"
+    );
 }

@@ -6,8 +6,7 @@ import 'package:olivier/catalog/album_column.dart';
 import 'package:olivier/catalog/artist_column.dart';
 import 'package:olivier/catalog/track_column.dart';
 import 'package:olivier/main.dart' show audioHandler;
-import 'package:olivier/src/rust/api/catalog.dart';
-import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/scan_controller.dart';
 import 'package:olivier/widgets/now_playing_bar.dart';
 
 class BrowserPage extends ConsumerStatefulWidget {
@@ -19,9 +18,6 @@ class BrowserPage extends ConsumerStatefulWidget {
 
 class _BrowserPageState extends ConsumerState<BrowserPage> {
   late final MultiSplitViewController _splitController;
-  bool _scanning = false;
-  int _scanSeen = 0;
-  int _scanChanged = 0;
 
   @override
   void initState() {
@@ -33,6 +29,10 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
         Area(min: 240, builder: (ctx, area) => const TrackColumn()),
       ],
     );
+    // Hydrate persisted root folders after the first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(scanControllerProvider.notifier).loadRoots();
+    });
   }
 
   @override
@@ -41,74 +41,79 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
     super.dispose();
   }
 
-  Future<void> _scanFolder() async {
+  Future<void> _addFolder() async {
     final dir = await FilePicker.platform.getDirectoryPath();
-    if (dir == null || !mounted) return;
-
-    final dbPath = ref.read(dbPathProvider);
-    setState(() {
-      _scanning = true;
-      _scanSeen = 0;
-      _scanChanged = 0;
-    });
-
-    try {
-      await for (final progress in scanLibrary(dbPath: dbPath, roots: [dir])) {
-        if (mounted) {
-          setState(() {
-            _scanSeen = progress.filesSeen.toInt();
-            _scanChanged = progress.filesChanged.toInt();
-          });
-        }
-        if (progress.done) break;
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _scanning = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content:
-                  Text('Scan complete — $_scanSeen files, $_scanChanged new')),
-        );
-      }
-      ref.invalidate(artistsProvider);
-    }
+    if (dir == null) return;
+    // Fire-and-forget: the controller queues and scans; the AppBar shows progress.
+    await ref.read(scanControllerProvider.notifier).addFolder(dir);
   }
 
   @override
   Widget build(BuildContext context) {
+    final scan = ref.watch(scanControllerProvider);
+
+    // One-shot completion / error message. Clearing first avoids the
+    // ScaffoldMessenger assertion that overlapping snackbars trigger.
+    ref.listen<ScanState>(scanControllerProvider, (prev, next) {
+      final messenger = ScaffoldMessenger.of(context);
+      if (next.lastError != null && next.lastError != prev?.lastError) {
+        messenger
+          ..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(content: Text('Scan failed — ${next.lastError}')),
+          );
+      } else if ((prev?.scanning ?? false) &&
+          !next.scanning &&
+          next.lastError == null) {
+        messenger
+          ..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                'Scan complete — ${next.filesSeen} files, ${next.filesChanged} new',
+              ),
+            ),
+          );
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Olivier'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.folder_open),
-            tooltip: 'Scan folder',
-            onPressed: _scanning ? null : _scanFolder,
+            icon: const Icon(Icons.create_new_folder_outlined),
+            tooltip: 'Add music folder',
+            onPressed: _addFolder,
           ),
         ],
-        bottom: _scanning
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(30),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-                  child: Row(
-                    children: [
-                      const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 10),
-                      Text('Scanning… $_scanSeen files ($_scanChanged new)'),
-                    ],
-                  ),
-                ),
-              )
-            : null,
+        bottom: scan.scanning ? _scanProgressBar(scan) : null,
       ),
       body: MultiSplitView(controller: _splitController),
       bottomNavigationBar: NowPlayingBar(audioHandler: audioHandler),
+    );
+  }
+
+  PreferredSizeWidget _scanProgressBar(ScanState scan) {
+    final queued = scan.queued > 0 ? ' · ${scan.queued} queued' : '';
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(30),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Scanning… ${scan.filesSeen} files (${scan.filesChanged} new)$queued',
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

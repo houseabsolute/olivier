@@ -107,14 +107,36 @@ pub fn scan_roots(
         }
     }
 
-    // Deletion sweep — child-first
-    conn.execute(
-        "DELETE FROM file WHERE scan_epoch != ?1",
-        rusqlite::params![epoch],
-    )?;
-    // track_stats references track, so it must be deleted BEFORE the track — FKs ARE
-    // enforced here (libsqlite3-sys bundles SQLite with SQLITE_DEFAULT_FOREIGN_KEYS=1).
-    // Key both off `file` so an orphaned (no-file) track and its stats go together.
+    // Deletion sweep — only prune files under the roots we actually scanned, so
+    // scanning one root never deletes files that belong to another root. A file is
+    // "under" a root when its path begins with `<root>/`; the trailing '/' stops a
+    // root like `/m/Rock` from also matching a sibling `/m/RockAndRoll`, and the
+    // char-counted substr keeps the prefix match correct for non-ASCII (e.g.
+    // Japanese) paths.
+    for root in roots {
+        let prefix = format!("{}/", root.trim_end_matches('/'));
+        conn.execute(
+            "DELETE FROM file WHERE scan_epoch != ?1 AND substr(path, 1, ?2) = ?3",
+            rusqlite::params![epoch, prefix.chars().count() as i64, prefix],
+        )?;
+    }
+    prune_orphans(conn)?;
+
+    on_progress(ScanProgress {
+        files_seen,
+        files_changed,
+        current: String::new(),
+        done: true,
+    });
+
+    Ok(())
+}
+
+/// Remove catalog rows orphaned by file deletions, child-first. track_stats
+/// references track, so it must be deleted BEFORE the track — FKs ARE enforced
+/// here (libsqlite3-sys bundles SQLite with SQLITE_DEFAULT_FOREIGN_KEYS=1). Keying
+/// each level off the level below drops a whole orphaned album/artist together.
+pub(crate) fn prune_orphans(conn: &Connection) -> anyhow::Result<()> {
     conn.execute(
         "DELETE FROM track_stats WHERE track_id NOT IN (SELECT track_id FROM file)",
         [],
@@ -135,14 +157,6 @@ pub fn scan_roots(
         "DELETE FROM artist WHERE mbid NOT IN (SELECT album_artist_mbid FROM release WHERE album_artist_mbid IS NOT NULL)",
         [],
     )?;
-
-    on_progress(ScanProgress {
-        files_seen,
-        files_changed,
-        current: String::new(),
-        done: true,
-    });
-
     Ok(())
 }
 

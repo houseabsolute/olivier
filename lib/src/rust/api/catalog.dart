@@ -39,3 +39,12 @@ Future<void> recordPlay(
         required PlatformInt64 playedAt}) =>
     RustLib.instance.api.crateApiCatalogRecordPlay(
         dbPath: dbPath, trackId: trackId, playedAt: playedAt);
+
+Future<void> addRoot({required String dbPath, required String path}) =>
+    RustLib.instance.api.crateApiCatalogAddRoot(dbPath: dbPath, path: path);
+
+Future<void> removeRoot({required String dbPath, required String path}) =>
+    RustLib.instance.api.crateApiCatalogRemoveRoot(dbPath: dbPath, path: path);
+
+Future<List<String>> listRoots({required String dbPath}) =>
+    RustLib.instance.api.crateApiCatalogListRoots(dbPath: dbPath);
