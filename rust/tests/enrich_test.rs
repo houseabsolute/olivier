@@ -12,6 +12,50 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 use rust_lib_olivier::db::open;
+use rust_lib_olivier::enrich::http::{MbHttp, MbResponse};
+
+/// Test double: serves canned bodies by URL, records the calls made.
+struct FakeHttp {
+    responses: std::collections::HashMap<String, MbResponse>,
+    calls: std::cell::RefCell<Vec<String>>,
+}
+impl FakeHttp {
+    fn new() -> Self {
+        Self {
+            responses: Default::default(),
+            calls: Default::default(),
+        }
+    }
+    fn with(mut self, url: &str, status: u16, body: &str) -> Self {
+        self.responses.insert(
+            url.to_string(),
+            MbResponse {
+                status,
+                body: body.to_string(),
+            },
+        );
+        self
+    }
+}
+#[async_trait::async_trait(?Send)]
+impl MbHttp for FakeHttp {
+    async fn get(&self, url: &str) -> anyhow::Result<MbResponse> {
+        self.calls.borrow_mut().push(url.to_string());
+        self.responses
+            .get(url)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("no canned response for {url}"))
+    }
+}
+
+#[tokio::test]
+async fn fake_http_serves_canned_body() {
+    let http = FakeHttp::new().with("http://x/a", 200, "{\"ok\":true}");
+    let resp = http.get("http://x/a").await.unwrap();
+    assert_eq!(resp.status, 200);
+    assert_eq!(resp.body, "{\"ok\":true}");
+    assert_eq!(http.calls.borrow().as_slice(), ["http://x/a"]);
+}
 
 #[test]
 fn migration_creates_enrichment_tables() {
