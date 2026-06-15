@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stamp Picard-equivalent MusicBrainz tags onto the fixture audio files."""
 from pathlib import Path
-from mutagen.id3 import ID3, TIT2, TPE1, TALB, TPE2, TRCK, TPOS, TDOR, TDRC, TXXX, UFID
+from mutagen.id3 import ID3, TIT2, TPE1, TALB, TPE2, TRCK, TPOS, TDOR, TDRC, TXXX, UFID, TSOP, TSO2
 from mutagen.flac import FLAC
 from mutagen.oggvorbis import OggVorbis
 from mutagen.oggopus import OggOpus
@@ -32,6 +32,8 @@ def tag_id3(path):
                       ("MusicBrainz Album Artist Id", AART),
                       ("MusicBrainz Release Track Id", RTRK)]:
         t.add(TXXX(encoding=3, desc=desc, text=val))
+    t.add(TSOP(encoding=3, text="Shiina, Ringo"))
+    t.add(TSO2(encoding=3, text="Shiina, Ringo"))
     t.save(path)
 
 def tag_vorbis(obj):
@@ -41,6 +43,7 @@ def tag_vorbis(obj):
     obj["MUSICBRAINZ_TRACKID"]=REC; obj["MUSICBRAINZ_ALBUMID"]=ALB
     obj["MUSICBRAINZ_RELEASEGROUPID"]=RG; obj["MUSICBRAINZ_ARTISTID"]=ART
     obj["MUSICBRAINZ_ALBUMARTISTID"]=AART; obj["MUSICBRAINZ_RELEASETRACKID"]=RTRK
+    obj["ARTISTSORT"]="Shiina, Ringo"; obj["ALBUMARTISTSORT"]="Shiina, Ringo"
     obj.save()
 
 def tag_mp4(path):
@@ -51,6 +54,7 @@ def tag_mp4(path):
     ff("MusicBrainz Track Id", REC); ff("MusicBrainz Album Id", ALB)
     ff("MusicBrainz Release Group Id", RG); ff("MusicBrainz Artist Id", ART)
     ff("MusicBrainz Album Artist Id", AART); ff("MusicBrainz Release Track Id", RTRK)
+    m["soar"]=["Shiina, Ringo"]; m["soaa"]=["Shiina, Ringo"]
     # NB: Picard writes NO original-date atom for MP4/ALAC, so we don't either —
     # original year for these formats comes from MusicBrainz enrichment (Phase 2).
     m.save()

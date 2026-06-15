@@ -1,0 +1,123 @@
+use crate::catalog::schema::{Album, Artist, Track};
+use rusqlite::Connection;
+
+/// Keyset page of album-artists ordered by sort_name (case-insensitive). Pass
+/// the previous page's last sort_name as `after` (None for the first page).
+pub fn artists_page(
+    conn: &Connection,
+    after: Option<&str>,
+    limit: u32,
+) -> anyhow::Result<Vec<Artist>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT a.mbid, a.name, a.sort_name FROM artist a
+         WHERE a.mbid IN (SELECT DISTINCT album_artist_mbid FROM release)
+           AND (?1 IS NULL OR a.sort_name > ?1 COLLATE NOCASE)
+         ORDER BY a.sort_name COLLATE NOCASE LIMIT ?2",
+    )?;
+    let rows = stmt.query_map(rusqlite::params![after, limit], |r| {
+        Ok(Artist {
+            mbid: r.get(0)?,
+            name: r.get(1)?,
+            sort_name: r.get(2)?,
+        })
+    })?;
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
+/// Albums for one album-artist, ordered by original year then title
+/// (case-insensitive; spec §6.1).
+pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::Result<Vec<Album>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT r.mbid, r.title, a.name, substr(rg.first_release_date, 1, 4), substr(r.date, 1, 4)
+         FROM release r
+         JOIN artist a ON a.mbid = r.album_artist_mbid
+         LEFT JOIN release_group rg ON rg.mbid = r.release_group_mbid
+         WHERE r.album_artist_mbid = ?1
+         ORDER BY COALESCE(rg.first_release_date, r.date, '9999'), r.title COLLATE NOCASE",
+    )?;
+    let rows = stmt.query_map([album_artist_mbid], |r| {
+        Ok(Album {
+            release_mbid: r.get(0)?,
+            title: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+            album_artist: r.get(2)?,
+            original_year: r.get(3)?,
+            reissue_year: r.get(4)?,
+        })
+    })?;
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
+/// Tracks for one album (release), ordered by disc then position (spec §6.1).
+pub fn tracks_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Result<Vec<Track>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT t.id, t.disc, t.position, t.title, t.artist, t.length_ms,
+                s.last_played, MIN(f.added_at)
+         FROM track t
+         LEFT JOIN track_stats s ON s.track_id = t.id
+         LEFT JOIN file f ON f.track_id = t.id
+         WHERE t.release_mbid = ?1
+         GROUP BY t.id
+         ORDER BY t.disc, t.position",
+    )?;
+    let rows = stmt.query_map([release_mbid], |r| {
+        Ok(Track {
+            id: r.get(0)?,
+            disc: r.get::<_, i64>(1)? as u32,
+            position: r.get::<_, i64>(2)? as u32,
+            title: r.get::<_, Option<String>>(3)?.unwrap_or_default(),
+            artist: r.get(4)?,
+            length_ms: r.get::<_, Option<i64>>(5)?.map(|v| v as u64),
+            last_played: r.get(6)?,
+            added_at: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
+        })
+    })?;
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
+/// Record one qualifying play. The "what counts as a play" threshold is enforced
+/// Dart-side; this just bumps the aggregate. (Spec §4's per-play event table is
+/// deferred — Phase 1 keeps only the track_stats aggregate.)
+pub fn record_play(conn: &Connection, track_id: i64, played_at: i64) -> anyhow::Result<()> {
+    conn.execute(
+        "INSERT INTO track_stats(track_id, last_played, play_count, first_played)
+         VALUES (?1, ?2, 1, ?2)
+         ON CONFLICT(track_id) DO UPDATE SET
+             last_played  = excluded.last_played,
+             play_count   = play_count + 1,
+             first_played = COALESCE(first_played, excluded.first_played)",
+        rusqlite::params![track_id, played_at],
+    )?;
+    Ok(())
+}
+
+/// One absolute file path per track, in disc/position order — the play queue for
+/// an album. Returns exactly one path per track (the lexically-first file when a
+/// track has several, e.g. the same rip in two formats) so the queue lines up
+/// 1:1 with `tracks_for_album`, which the caller zips it against. Uses an INNER
+/// join, so a track with no files is omitted — a post-scan DB never has one (the
+/// orphan sweep removes file-less tracks); the caller's `min()` guard is the
+/// backstop if that invariant is ever broken.
+pub fn file_paths_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Result<Vec<String>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT MIN(f.path) FROM track t JOIN file f ON f.track_id = t.id
+         WHERE t.release_mbid = ?1 GROUP BY t.id ORDER BY t.disc, t.position",
+    )?;
+    let rows = stmt.query_map([release_mbid], |r| r.get::<_, String>(0))?;
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}

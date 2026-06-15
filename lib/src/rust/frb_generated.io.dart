@@ -3,9 +3,12 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/catalog.dart';
 import 'api/queue.dart';
 import 'api/simple.dart';
 import 'api/tags.dart';
+import 'catalog/scan.dart';
+import 'catalog/schema.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
@@ -26,10 +29,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
+  RustStreamSink<ScanProgress> dco_decode_StreamSink_scan_progress_Sse(
+      dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
+  Album dco_decode_album(dynamic raw);
+
+  @protected
+  Artist dco_decode_artist(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
   @protected
   QueueSnapshot dco_decode_box_autoadd_queue_snapshot(dynamic raw);
@@ -38,13 +54,31 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_box_autoadd_u_32(dynamic raw);
 
   @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<Album> dco_decode_list_album(dynamic raw);
+
+  @protected
+  List<Artist> dco_decode_list_artist(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<Track> dco_decode_list_track(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
 
   @protected
   QueueSnapshot? dco_decode_opt_box_autoadd_queue_snapshot(dynamic raw);
@@ -53,7 +87,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
   QueueSnapshot dco_decode_queue_snapshot(dynamic raw);
+
+  @protected
+  ScanProgress dco_decode_scan_progress(dynamic raw);
+
+  @protected
+  Track dco_decode_track(dynamic raw);
 
   @protected
   TrackTags dco_decode_track_tags(dynamic raw);
@@ -74,10 +117,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
+  RustStreamSink<ScanProgress> sse_decode_StreamSink_scan_progress_Sse(
+      SseDeserializer deserializer);
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  Album sse_decode_album(SseDeserializer deserializer);
+
+  @protected
+  Artist sse_decode_artist(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
   QueueSnapshot sse_decode_box_autoadd_queue_snapshot(
@@ -87,13 +143,31 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<Album> sse_decode_list_album(SseDeserializer deserializer);
+
+  @protected
+  List<Artist> sse_decode_list_artist(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<Track> sse_decode_list_track(SseDeserializer deserializer);
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
   QueueSnapshot? sse_decode_opt_box_autoadd_queue_snapshot(
@@ -103,7 +177,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
   QueueSnapshot sse_decode_queue_snapshot(SseDeserializer deserializer);
+
+  @protected
+  ScanProgress sse_decode_scan_progress(SseDeserializer deserializer);
+
+  @protected
+  Track sse_decode_track(SseDeserializer deserializer);
 
   @protected
   TrackTags sse_decode_track_tags(SseDeserializer deserializer);
@@ -128,10 +211,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       AnyhowException self, SseSerializer serializer);
 
   @protected
+  void sse_encode_StreamSink_scan_progress_Sse(
+      RustStreamSink<ScanProgress> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_album(Album self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_artist(Artist self, SseSerializer serializer);
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_i_64(
+      PlatformInt64 self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_queue_snapshot(
@@ -141,14 +238,33 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_album(List<Album> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_artist(List<Artist> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
       Uint8List self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_track(List<Track> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_64(
+      PlatformInt64? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_queue_snapshot(
@@ -158,7 +274,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_queue_snapshot(QueueSnapshot self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_scan_progress(ScanProgress self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_track(Track self, SseSerializer serializer);
 
   @protected
   void sse_encode_track_tags(TrackTags self, SseSerializer serializer);

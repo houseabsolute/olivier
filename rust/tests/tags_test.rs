@@ -1,5 +1,6 @@
-use rust_lib_olivier::tags::read_tags;
+use rust_lib_olivier::tags::{extract_cover_to, read_tags};
 use std::path::Path;
+use tempfile::TempDir;
 
 const FILES: &[&str] = &[
     "sample.mp3",
@@ -75,6 +76,18 @@ fn reads_musicbrainz_ids_for_all_formats() {
     }
 }
 
+#[test]
+fn reads_sort_names_for_all_formats() {
+    for name in FILES {
+        let t = read_tags(&fixture(name)).unwrap();
+        assert_eq!(
+            t.album_artist_sort.as_deref(),
+            Some("Shiina, Ringo"),
+            "{name} aa-sort"
+        );
+    }
+}
+
 const MP4_FILES: &[&str] = &["sample.m4a", "sample.alac.m4a"];
 
 #[test]
@@ -102,4 +115,61 @@ fn reads_original_and_reissue_dates() {
             );
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Cover extraction tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn extract_cover_returns_some_for_file_with_embedded_art() {
+    let tmp = TempDir::new().unwrap();
+    let src = fixture("sample-with-cover.flac");
+
+    // First call: extracts and caches.
+    let result = extract_cover_to(src.to_str().unwrap(), tmp.path().to_str().unwrap())
+        .expect("extract_cover_to should succeed");
+
+    let cover_path = result.expect("sample-with-cover.flac should have embedded art");
+    assert!(
+        std::path::Path::new(&cover_path).exists(),
+        "cached cover file should exist at {cover_path}"
+    );
+    assert!(
+        std::fs::metadata(&cover_path).unwrap().len() > 0,
+        "cached cover file should be non-empty"
+    );
+}
+
+#[test]
+fn extract_cover_returns_same_path_on_second_call() {
+    let tmp = TempDir::new().unwrap();
+    let src = fixture("sample-with-cover.flac");
+    let src_str = src.to_str().unwrap();
+    let cache_str = tmp.path().to_str().unwrap();
+
+    let path1 = extract_cover_to(src_str, cache_str)
+        .unwrap()
+        .expect("first call should return Some");
+
+    let path2 = extract_cover_to(src_str, cache_str)
+        .unwrap()
+        .expect("second call (cache hit) should return Some");
+
+    assert_eq!(
+        path1, path2,
+        "both calls should return the same cached path"
+    );
+}
+
+#[test]
+fn extract_cover_returns_none_for_file_without_art() {
+    let tmp = TempDir::new().unwrap();
+    // sample.flac has no embedded art (verified via ffprobe).
+    let src = fixture("sample.flac");
+
+    let result = extract_cover_to(src.to_str().unwrap(), tmp.path().to_str().unwrap())
+        .expect("extract_cover_to should succeed even for artless file");
+
+    assert!(result.is_none(), "sample.flac should not have embedded art");
 }

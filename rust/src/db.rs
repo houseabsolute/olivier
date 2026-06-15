@@ -16,6 +16,59 @@ const MIGRATION_SLICE: &[M<'_>] = &[
             shuffle INTEGER NOT NULL
          );",
     ),
+    M::up(
+        "CREATE TABLE artist (
+            mbid       TEXT PRIMARY KEY,
+            name       TEXT NOT NULL,
+            sort_name  TEXT NOT NULL
+         );
+         CREATE TABLE release_group (
+            mbid                TEXT PRIMARY KEY,
+            title               TEXT,
+            first_release_date  TEXT
+         );
+         CREATE TABLE release (
+            mbid                TEXT PRIMARY KEY,
+            release_group_mbid  TEXT REFERENCES release_group(mbid),
+            album_artist_mbid   TEXT REFERENCES artist(mbid),
+            title               TEXT,
+            date                TEXT
+         );
+         CREATE TABLE track (
+            id              INTEGER PRIMARY KEY,
+            release_mbid    TEXT NOT NULL REFERENCES release(mbid),
+            recording_mbid  TEXT,
+            artist          TEXT,
+            disc            INTEGER NOT NULL DEFAULT 1,
+            position        INTEGER NOT NULL DEFAULT 1,
+            title           TEXT,
+            length_ms       INTEGER,
+            UNIQUE(release_mbid, disc, position)
+         );
+         CREATE TABLE file (
+            id              INTEGER PRIMARY KEY,
+            path            TEXT UNIQUE NOT NULL,
+            mtime           INTEGER NOT NULL,
+            size            INTEGER NOT NULL,
+            codec           TEXT,
+            track_id        INTEGER NOT NULL REFERENCES track(id),
+            added_at        INTEGER NOT NULL,
+            has_cover       INTEGER NOT NULL DEFAULT 0,
+            enriched        INTEGER NOT NULL DEFAULT 0,
+            scan_epoch      INTEGER NOT NULL DEFAULT 0
+         );
+         CREATE TABLE track_stats (
+            track_id     INTEGER PRIMARY KEY REFERENCES track(id),
+            last_played  INTEGER,
+            play_count   INTEGER NOT NULL DEFAULT 0,
+            first_played INTEGER
+         );
+         CREATE INDEX idx_release_albumartist ON release(album_artist_mbid);
+         CREATE INDEX idx_track_release ON track(release_mbid);
+         CREATE INDEX idx_artist_sort ON artist(sort_name);
+         CREATE INDEX idx_file_track ON file(track_id);",
+    ),
+    M::up("CREATE TABLE root (path TEXT PRIMARY KEY NOT NULL);"),
 ];
 const MIGRATIONS: Migrations<'_> = Migrations::from_slice(MIGRATION_SLICE);
 
@@ -24,6 +77,11 @@ pub fn open(path: &str) -> anyhow::Result<Connection> {
     if path != ":memory:" {
         // WAL only applies to file-backed DBs; it's a silent no-op for :memory:.
         conn.pragma_update(None, "journal_mode", "WAL")?;
+        // Each FFI call opens its own connection; SQLite allows one writer at a
+        // time. Wait for the lock instead of failing immediately when a scan,
+        // queue save, and play-tracking write contend (e.g. playing while
+        // scanning), so a contended write retries rather than erroring.
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
     }
     MIGRATIONS.to_latest(&mut conn)?;
     Ok(conn)

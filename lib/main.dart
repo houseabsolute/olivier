@@ -1,18 +1,23 @@
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_service_mpris/audio_service_mpris.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:olivier/audio/audio_handler.dart';
+import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_controller.dart';
+import 'package:olivier/catalog/browser_page.dart';
 import 'package:olivier/src/rust/api/queue.dart';
-import 'package:olivier/src/rust/api/simple.dart';
 import 'package:olivier/src/rust/frb_generated.dart';
+import 'package:olivier/state/providers.dart';
 import 'package:path_provider/path_provider.dart';
 
 late final OlivierAudioHandler audioHandler;
 late final String dbPath;
+late final QueueController queueController;
+late final PlaybackController playbackController;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,16 +30,15 @@ Future<void> main() async {
   );
   await RustLib.init();
 
-  // Compute DB path once for the entire app lifetime.
-  final docsDir = await getApplicationDocumentsDirectory();
-  dbPath = '${docsDir.path}/olivier.db';
+  // Compute DB path once for the entire app lifetime. Stored under the XDG data
+  // dir (~/.local/share/olivier on Linux), migrating any DB from the old
+  // documents-dir location on first run.
+  dbPath = await _resolveDbPath();
 
   if (Platform.isLinux) {
     AudioServiceMpris.init(
       dBusName: 'OlivierMusicPlayer',
       identity: 'Olivier',
-      // Without these, MPRIS advertises no capabilities and playerctl / desktop
-      // controls are inert — which would defeat the point of this spike.
       canControl: true,
       canPlay: true,
       canPause: true,
@@ -50,7 +54,97 @@ Future<void> main() async {
       androidNotificationOngoing: true,
     ),
   );
-  runApp(const OlivierApp());
+
+  queueController = QueueController(audioHandler.player, dbPath: dbPath);
+  playbackController = PlaybackController(
+    audioHandler: audioHandler,
+    queueController: queueController,
+    dbPath: dbPath,
+  );
+
+  // Restore persisted queue from the last session if present.
+  final snap = await loadQueue(dbPath: dbPath);
+  if (snap != null && snap.paths.isNotEmpty) {
+    await queueController.restoreFromSnapshot(snap);
+  }
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        dbPathProvider.overrideWithValue(dbPath),
+        playbackControllerProvider.overrideWithValue(playbackController),
+      ],
+      child: const OlivierApp(),
+    ),
+  );
+}
+
+/// Resolve the database path under the XDG data directory (`$XDG_DATA_HOME`,
+/// default `~/.local/share`) in an `olivier` subdir, creating the directory and
+/// migrating any DB from the previous (documents-dir) location.
+Future<String> _resolveDbPath() async {
+  final String dir;
+  if (Platform.isLinux) {
+    final xdg = Platform.environment['XDG_DATA_HOME'];
+    final home = Platform.environment['HOME'];
+    if (xdg != null && xdg.isNotEmpty) {
+      dir = '$xdg/olivier';
+    } else if (home != null && home.isNotEmpty) {
+      dir = '$home/.local/share/olivier';
+    } else {
+      dir = (await getApplicationSupportDirectory()).path;
+    }
+  } else {
+    // Android and others: the platform's app-support directory.
+    dir = (await getApplicationSupportDirectory()).path;
+  }
+  await Directory(dir).create(recursive: true);
+  final dbFile = '$dir/olivier.db';
+  await _migrateLegacyDb(dbFile);
+  return dbFile;
+}
+
+/// One-time move of the database (and its WAL log) from the old documents-dir
+/// location into [newDbPath] when the new location has none yet, so an existing
+/// catalog, roots, play stats, and queue survive the relocation.
+Future<void> _migrateLegacyDb(String newDbPath) async {
+  if (await File(newDbPath).exists()) return;
+  final String oldDir;
+  try {
+    oldDir = (await getApplicationDocumentsDirectory()).path;
+  } catch (_) {
+    return;
+  }
+  final oldDbPath = '$oldDir/olivier.db';
+  if (!await File(oldDbPath).exists()) return;
+
+  // Move the WAL log first and the database itself last: the `newDbPath` exists
+  // check above is the migration's commit point, so the .db must only arrive
+  // once its WAL is already beside it (a crash mid-move just retries next run).
+  for (final suffix in ['-wal', '']) {
+    final src = File('$oldDbPath$suffix');
+    if (!await src.exists()) continue;
+    final dest = '$newDbPath$suffix';
+    try {
+      await src.rename(dest);
+    } catch (_) {
+      // Cross-filesystem move: copy to a temp sibling on the destination fs,
+      // atomically rename it into place, then remove the source — so a crash can
+      // never delete the source before the destination is complete.
+      final tmp = '$dest.tmp';
+      await src.copy(tmp);
+      await File(tmp).rename(dest);
+      await src.delete();
+    }
+  }
+
+  // -shm is shared-memory scratch SQLite rebuilds on open; drop the stale one.
+  final oldShm = File('$oldDbPath-shm');
+  if (await oldShm.exists()) {
+    try {
+      await oldShm.delete();
+    } catch (_) {}
+  }
 }
 
 class OlivierApp extends StatelessWidget {
@@ -59,124 +153,7 @@ class OlivierApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       title: 'Olivier',
-      home: HomePage(),
-    );
-  }
-}
-
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
-
-  @override
-  State<HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends State<HomePage> {
-  late final QueueController _queue =
-      QueueController(audioHandler.player, dbPath: dbPath);
-  bool _shuffleOn = false;
-  bool _restored = false;
-  int _restoredCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _tryRestoreQueue();
-  }
-
-  Future<void> _tryRestoreQueue() async {
-    final snap = await loadQueue(dbPath: dbPath);
-    if (snap != null && snap.paths.isNotEmpty) {
-      await _queue.restoreFromSnapshot(snap);
-      setState(() {
-        _restored = true;
-        _restoredCount = snap.paths.length;
-        _shuffleOn = snap.shuffle;
-      });
-    }
-  }
-
-  // --- spike: single-track play (Task 9) ---
-  Future<void> _playTest() async {
-    // Plays a bundled fixture to confirm the libmpv engine starts. Absolute path
-    // because `flutter run` launches with CWD=/tmp. For an AUDIBLE / per-codec test,
-    // point this at real library files (the fixtures are 1 s of silence).
-    await audioHandler.player.setFilePath(
-        '/home/autarch/mnt/music/Hitsujibungaku/12_hugs__like_butterflies_/01-Hug_m4a.mp3');
-    await audioHandler.play();
-  }
-
-  // --- spike: 3-track queue + shuffle (Task 10) ---
-  // Absolute paths: `flutter run` launches the app with CWD=/tmp, so relative
-  // fixture paths don't resolve. (Phase 1 plays real catalog paths instead.)
-  static const _fixtureDir =
-      '/home/autarch/projects/olivier/rust/tests/fixtures';
-  static const _fixtureQueue = [
-    '$_fixtureDir/sample.flac',
-    '$_fixtureDir/sample.mp3',
-    '$_fixtureDir/sample.opus',
-  ];
-
-  Future<void> _queueAndPlay() async {
-    await _queue.setQueue(_fixtureQueue);
-    setState(() {
-      _restored = false;
-      _restoredCount = 0;
-    });
-    await audioHandler.play();
-  }
-
-  Future<void> _toggleShuffle(bool on) async {
-    setState(() => _shuffleOn = on);
-    await _queue.setShuffle(on);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Olivier')),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(olivierVersion()),
-            const SizedBox(height: 8),
-
-            // Task 12 — persisted-queue status
-            Text(
-              _restored
-                  ? 'queue: $_restoredCount tracks (restored)'
-                  : 'queue: ${_queue.orderedPaths.length} tracks',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-
-            // Task 9 — single-track smoke test
-            ElevatedButton(
-              onPressed: _playTest,
-              child: const Text('Play'),
-            ),
-            const SizedBox(height: 8),
-
-            // Task 10 — queue + shuffle exerciser
-            ElevatedButton(
-              onPressed: _queueAndPlay,
-              child: const Text('Queue 3'),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Shuffle'),
-                Switch(
-                  value: _shuffleOn,
-                  onChanged: _toggleShuffle,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      home: BrowserPage(),
     );
   }
 }
