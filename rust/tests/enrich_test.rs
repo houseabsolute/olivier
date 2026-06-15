@@ -13,6 +13,15 @@
 
 use rust_lib_olivier::db::open;
 use rust_lib_olivier::enrich::http::{MbHttp, MbResponse};
+use rust_lib_olivier::enrich::model::{Artist, Release};
+
+fn fixture(name: &str) -> String {
+    std::fs::read_to_string(format!(
+        "{}/tests/fixtures/mb/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap()
+}
 
 /// Test double: serves canned bodies by URL, records the calls made.
 struct FakeHttp {
@@ -55,6 +64,35 @@ async fn fake_http_serves_canned_body() {
     assert_eq!(resp.status, 200);
     assert_eq!(resp.body, "{\"ok\":true}");
     assert_eq!(http.calls.borrow().as_slice(), ["http://x/a"]);
+}
+
+#[test]
+fn parses_artist_aliases_fixture() {
+    let a: Artist = serde_json::from_str(&fixture("artist_9e414497_aliases.json")).unwrap();
+    assert!(!a.aliases.is_empty());
+    assert!(a
+        .aliases
+        .iter()
+        .any(|al| al.alias_type.as_deref() == Some("Artist name")));
+}
+
+#[test]
+fn parses_release_fixture_with_recordings_and_rels() {
+    let r: Release = serde_json::from_str(&fixture("release_muzai.json")).unwrap();
+    // release-group first-release-date is present (original year source).
+    assert!(r
+        .release_group
+        .as_ref()
+        .and_then(|g| g.first_release_date.as_deref())
+        .is_some());
+    // recordings present on media tracks.
+    assert!(r
+        .media
+        .iter()
+        .flat_map(|m| &m.tracks)
+        .any(|t| t.recording.is_some()));
+    // at least one relation carrying a target release.
+    assert!(r.relations.iter().any(|rel| rel.release.is_some()));
 }
 
 #[test]
