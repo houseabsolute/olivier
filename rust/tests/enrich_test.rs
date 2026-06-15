@@ -375,31 +375,38 @@ fn classify_uses_text_representation_when_present() {
 #[test]
 fn classify_falls_back_to_title_heuristic_without_text_representation() {
     // text-representation absent (None) => deterministic title-pair fallback.
+    // Rule: all-ASCII pseudo AND same whitespace-token count as original => Translit,
+    // else Translate. The .max(1) on original count handles single-token CJK originals.
+    //
+    // "無罪モラトリアム" has 1 whitespace-separated token (no spaces).
+    // "Muzai Moratorium" has 2 tokens => 2 != 1 => Translate.
+    // "Innocence Moratorium" has 2 tokens => 2 != 1 => Translate.
+    // This correctly distinguishes both from a single-token romanization.
+
+    // classify_pseudo with no text-representation falls through to classify_alt.
     let mut p = pseudo_with_text_rep("Muzai Moratorium", None, None);
     p.text_representation = None;
-    assert_eq!(classify_pseudo("無罪モラトリアム", &p), AltKind::Translit);
-    // Fallback: all-ASCII pseudo + non-ASCII original => Translit.
-    // Note: the fallback cannot distinguish romanizations from English translations
-    // when both are all-ASCII; "Innocence Moratorium" is also all-ASCII, so the
-    // fallback classifies it as Translit too. The correct Translate classification
-    // for an English-language title is handled by the primary text-representation
-    // path (script=Latn, language=eng => Translate) in classify_pseudo.
+    assert_eq!(classify_pseudo("無罪モラトリアム", &p), AltKind::Translate);
+
+    // Muzai Moratorium: 2 tokens, original 1 token => different count => Translate.
     assert_eq!(
         classify_alt("無罪モラトリアム", "Muzai Moratorium"),
-        AltKind::Translit
+        AltKind::Translate
     );
+    // Innocence Moratorium: 2 tokens, original 1 token => Translate.
     assert_eq!(
         classify_alt("無罪モラトリアム", "Innocence Moratorium"),
-        AltKind::Translit
+        AltKind::Translate
     );
     // Non-ASCII pseudo => Translate (e.g. Korean rendering of Japanese original).
     assert_eq!(
         classify_alt("無罪モラトリアム", "무죄 모라토리엄"),
         AltKind::Translate
     );
-    // ASCII original with ASCII pseudo => Translate (no script inference possible).
+    // ASCII original with ASCII pseudo of same token count => Translit.
+    // "Muzai Moratorium" 2 tokens == "Innocence Moratorium" 2 tokens => Translit.
     assert_eq!(
         classify_alt("Muzai Moratorium", "Innocence Moratorium"),
-        AltKind::Translate
+        AltKind::Translit
     );
 }

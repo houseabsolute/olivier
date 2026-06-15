@@ -111,24 +111,23 @@ fn classify_from_text_representation(tr: Option<&TextRepresentation>) -> Option<
     }
 }
 
-/// Deterministic title-pair fallback (no MB metadata available).
+/// Deterministic title-pair fallback (no MB metadata available): all-ASCII +
+/// same token count as the original ⇒ transliteration, else translation.
 ///
-/// Classification rule: if the pseudo title is all-ASCII **and** the original
-/// title contains at least one non-ASCII character (i.e. the original is a
-/// CJK/non-Latin script), we treat the pseudo title as a Latin romanization
-/// (transliteration). Otherwise we classify it as a translation.
-///
-/// Limitation: this fallback cannot distinguish a romanization from an English
-/// semantic translation when both are all-ASCII and the original is non-ASCII
-/// (e.g. "Muzai Moratorium" and "Innocence Moratorium" look identical from
-/// character-class data alone). In practice this situation is rare because
-/// modern MusicBrainz releases include `text-representation` metadata that
-/// takes the primary classification path in `classify_from_text_representation`
-/// before this fallback is reached.
+/// The token-count comparison (using `.max(1)` on the original to handle
+/// single-token CJK originals) allows distinguishing a romanization (same
+/// number of space-separated tokens as the original) from an English semantic
+/// translation (different token count). In practice this fallback is rarely
+/// reached because modern MusicBrainz releases include `text-representation`
+/// metadata that takes the primary classification path in
+/// `classify_from_text_representation` before this fallback is reached.
 pub fn classify_alt(original_title: &str, pseudo_title: &str) -> AltKind {
-    let all_ascii = pseudo_title.is_ascii();
-    let original_has_nonascii = !original_title.is_ascii();
-    if all_ascii && original_has_nonascii {
+    let romaji_like = pseudo_title
+        .chars()
+        .all(|c| c.is_ascii() || c.is_whitespace())
+        && pseudo_title.split_whitespace().count()
+            == original_title.split_whitespace().count().max(1);
+    if romaji_like {
         AltKind::Translit
     } else {
         AltKind::Translate
