@@ -69,6 +69,35 @@ const MIGRATION_SLICE: &[M<'_>] = &[
          CREATE INDEX idx_file_track ON file(track_id);",
     ),
     M::up("CREATE TABLE root (path TEXT PRIMARY KEY NOT NULL);"),
+    // ── Phase 2a: enrichment ────────────────────────────────────────────
+    M::up(
+        "CREATE TABLE setting (
+            key   TEXT PRIMARY KEY NOT NULL,
+            value TEXT NOT NULL
+         );
+         CREATE TABLE mb_cache (
+            entity_type TEXT NOT NULL,
+            mbid        TEXT NOT NULL,
+            inc_set     TEXT NOT NULL,
+            json        TEXT NOT NULL,
+            fetched_at  INTEGER NOT NULL,
+            PRIMARY KEY (entity_type, mbid, inc_set)
+         );
+         CREATE TABLE release_title_alt (
+            release_mbid TEXT NOT NULL REFERENCES release(mbid),
+            kind         TEXT NOT NULL CHECK (kind IN ('translit','translate')),
+            title        TEXT NOT NULL,
+            PRIMARY KEY (release_mbid, kind)
+         );
+         CREATE TABLE track_title_alt (
+            recording_mbid TEXT NOT NULL,
+            kind           TEXT NOT NULL CHECK (kind IN ('translit','translate')),
+            title          TEXT NOT NULL,
+            PRIMARY KEY (recording_mbid, kind)
+         );
+         ALTER TABLE artist ADD COLUMN transliteration TEXT;
+         ALTER TABLE artist ADD COLUMN sort_name_embedded TEXT;",
+    ),
 ];
 const MIGRATIONS: Migrations<'_> = Migrations::from_slice(MIGRATION_SLICE);
 
