@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,7 @@ class PlaybackController {
   }) {
     _subscribeIndex();
     _subscribePlayTracking();
+    _subscribeErrors();
   }
 
   final OlivierAudioHandler audioHandler;
@@ -39,6 +41,7 @@ class PlaybackController {
   bool _recordedForCurrentTrack = false;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<PlayerState>? _playerStateSub;
+  StreamSubscription<PlayerException>? _errorSub;
 
   // -------------------------------------------------------------------------
   // Public API
@@ -239,9 +242,26 @@ class PlaybackController {
     );
   }
 
+  /// Log playback errors (e.g. a queued file that was deleted or whose drive is
+  /// unmounted) instead of letting them surface as an unhandled exception, so a
+  /// bad track is skipped/logged and the app keeps running.
+  void _subscribeErrors() {
+    // MPV / source-open failures (e.g. a queued file deleted mid-session, or a
+    // drive that unmounts) surface on errorStream as PlayerExceptions, not as
+    // stream errors on the event stream — log them so they don't go unhandled.
+    _errorSub = audioHandler.player.errorStream.listen((e) {
+      developer.log(
+        'playback error: ${e.message}',
+        name: 'olivier.player',
+        error: e,
+      );
+    });
+  }
+
   void dispose() {
     _positionSub?.cancel();
     _playerStateSub?.cancel();
+    _errorSub?.cancel();
   }
 }
 

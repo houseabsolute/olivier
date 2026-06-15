@@ -1,3 +1,6 @@
+import 'dart:developer' as developer;
+import 'dart:io';
+
 import 'package:just_audio/just_audio.dart';
 import 'package:olivier/src/rust/api/queue.dart';
 import 'package:olivier/src/rust/db.dart';
@@ -49,15 +52,33 @@ class QueueController {
     await saveQueue(dbPath: dbPath, snapshot: snapshot);
   }
 
-  /// Restore a previously saved snapshot without re-persisting.
+  /// Restore a previously saved snapshot without re-persisting. Files that no
+  /// longer exist on disk (e.g. a drive that isn't mounted, or a file deleted
+  /// since last run) are dropped and logged so the player never tries to open
+  /// them; the saved current track keeps pointing at the right song.
   Future<void> restoreFromSnapshot(QueueSnapshot snap) async {
-    _orderedPaths = List.of(snap.paths);
+    final kept = <String>[];
+    var currentIndex = 0;
+    for (var i = 0; i < snap.paths.length; i++) {
+      if (await File(snap.paths[i]).exists()) {
+        if (i <= snap.currentIndex) currentIndex = kept.length;
+        kept.add(snap.paths[i]);
+      } else {
+        developer.log(
+          'skipping missing queued file: ${snap.paths[i]}',
+          name: 'olivier.queue',
+        );
+      }
+    }
+    if (kept.isEmpty) return;
+
+    _orderedPaths = kept;
     _shuffled = snap.shuffle;
     // Seek back to the saved offset for the current track on restore.
     // (Throttled mid-track position write-back is deferred to Phase 3 — for
     // now position is only captured at structural changes, so it's typically 0.)
     await _rebuild(
-      snap.currentIndex,
+      currentIndex.clamp(0, kept.length - 1),
       initialPosition: Duration(milliseconds: snap.positionMs.toInt()),
     );
   }
