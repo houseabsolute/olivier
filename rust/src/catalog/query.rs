@@ -34,7 +34,12 @@ pub fn artists_page(
 pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::Result<Vec<Album>> {
     let mut out = Vec::new();
     let mut stmt = conn.prepare(
-        "SELECT r.mbid, r.title, a.name, substr(rg.first_release_date, 1, 4), substr(r.date, 1, 4)
+        "SELECT r.mbid, r.title, a.name,
+                substr(rg.first_release_date, 1, 4), substr(r.date, 1, 4),
+                (SELECT title FROM release_title_alt
+                   WHERE release_mbid = r.mbid AND kind = 'translit'),
+                (SELECT title FROM release_title_alt
+                   WHERE release_mbid = r.mbid AND kind = 'translate')
          FROM release r
          JOIN artist a ON a.mbid = r.album_artist_mbid
          LEFT JOIN release_group rg ON rg.mbid = r.release_group_mbid
@@ -48,6 +53,8 @@ pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::
             album_artist: r.get(2)?,
             original_year: r.get(3)?,
             reissue_year: r.get(4)?,
+            title_translit: r.get(5)?,
+            title_translate: r.get(6)?,
         })
     })?;
     for r in rows {

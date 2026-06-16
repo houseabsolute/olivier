@@ -827,12 +827,16 @@ impl SseDecode for crate::catalog::schema::Album {
         let mut var_albumArtist = <String>::sse_decode(deserializer);
         let mut var_originalYear = <Option<String>>::sse_decode(deserializer);
         let mut var_reissueYear = <Option<String>>::sse_decode(deserializer);
+        let mut var_titleTranslit = <Option<String>>::sse_decode(deserializer);
+        let mut var_titleTranslate = <Option<String>>::sse_decode(deserializer);
         return crate::catalog::schema::Album {
             release_mbid: var_releaseMbid,
             title: var_title,
             album_artist: var_albumArtist,
             original_year: var_originalYear,
             reissue_year: var_reissueYear,
+            title_translit: var_titleTranslit,
+            title_translate: var_titleTranslate,
         };
     }
 }
@@ -1227,6 +1231,8 @@ impl flutter_rust_bridge::IntoDart for crate::catalog::schema::Album {
             self.album_artist.into_into_dart().into_dart(),
             self.original_year.into_into_dart().into_dart(),
             self.reissue_year.into_into_dart().into_dart(),
+            self.title_translit.into_into_dart().into_dart(),
+            self.title_translate.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1454,6 +1460,8 @@ impl SseEncode for crate::catalog::schema::Album {
         <String>::sse_encode(self.album_artist, serializer);
         <Option<String>>::sse_encode(self.original_year, serializer);
         <Option<String>>::sse_encode(self.reissue_year, serializer);
+        <Option<String>>::sse_encode(self.title_translit, serializer);
+        <Option<String>>::sse_encode(self.title_translate, serializer);
     }
 }
 

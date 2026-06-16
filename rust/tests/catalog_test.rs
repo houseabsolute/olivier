@@ -810,6 +810,55 @@ fn reconcile_merges_synth_album_artist_into_real() {
 }
 
 #[test]
+fn albums_for_artist_returns_title_alts() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('m', 'Shiina', 'Shiina')",
+        [],
+    )
+    .unwrap();
+    // Album with both a romaji translit and an English translate.
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title, date) VALUES ('rel-jp', 'm', '無罪モラトリアム', '1999')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release_title_alt(release_mbid, kind, title) VALUES ('rel-jp', 'translit', 'Muzai Moratorium')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release_title_alt(release_mbid, kind, title) VALUES ('rel-jp', 'translate', 'Innocence Moratorium')",
+        [],
+    )
+    .unwrap();
+    // A Latin-only album, no alts, later year so it sorts second.
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title, date) VALUES ('rel-en', 'm', 'Sport', '2014')",
+        [],
+    )
+    .unwrap();
+
+    let albums = albums_for_artist(&conn, "m").unwrap();
+    assert_eq!(albums.len(), 2);
+    // 1999 album first (ordering unchanged), with both alts.
+    assert_eq!(albums[0].title, "無罪モラトリアム");
+    assert_eq!(
+        albums[0].title_translit,
+        Some("Muzai Moratorium".to_string())
+    );
+    assert_eq!(
+        albums[0].title_translate,
+        Some("Innocence Moratorium".to_string())
+    );
+    // Latin-only album: both alts null.
+    assert_eq!(albums[1].title, "Sport");
+    assert_eq!(albums[1].title_translit, None);
+    assert_eq!(albums[1].title_translate, None);
+}
+
+#[test]
 fn reconcile_leaves_synth_only_artist_untouched() {
     let conn = open(":memory:").unwrap();
     // An album-artist with NO real-MBID counterpart must keep its synth key

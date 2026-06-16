@@ -12,6 +12,8 @@ class Album {
   final String albumArtist;
   final String? originalYear;
   final String? reissueYear;
+  final String? titleTranslit;
+  final String? titleTranslate;
 
   const Album({
     required this.releaseMbid,
@@ -19,6 +21,8 @@ class Album {
     required this.albumArtist,
     this.originalYear,
     this.reissueYear,
+    this.titleTranslit,
+    this.titleTranslate,
   });
 
   @override
@@ -27,7 +31,9 @@ class Album {
       title.hashCode ^
       albumArtist.hashCode ^
       originalYear.hashCode ^
-      reissueYear.hashCode;
+      reissueYear.hashCode ^
+      titleTranslit.hashCode ^
+      titleTranslate.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -38,7 +44,9 @@ class Album {
           title == other.title &&
           albumArtist == other.albumArtist &&
           originalYear == other.originalYear &&
-          reissueYear == other.reissueYear;
+          reissueYear == other.reissueYear &&
+          titleTranslit == other.titleTranslit &&
+          titleTranslate == other.titleTranslate;
 }
 
 class Artist {
