@@ -291,6 +291,137 @@ fn selection_is_deterministic_and_order_independent() {
     );
 }
 
+// ── MbClient tests (Task 10) ─────────────────────────────────────────────
+
+/// Variant of FakeHttp that returns 503 for the first N calls to a URL,
+/// then 200 with the provided body.
+struct FlakyHttp {
+    url: String,
+    fail_count: u32,
+    success_body: String,
+    calls: std::cell::RefCell<u32>,
+}
+impl FlakyHttp {
+    fn new(url: &str, fail_count: u32, body: &str) -> Self {
+        Self {
+            url: url.to_string(),
+            fail_count,
+            success_body: body.to_string(),
+            calls: std::cell::RefCell::new(0),
+        }
+    }
+    fn call_count(&self) -> u32 {
+        *self.calls.borrow()
+    }
+}
+#[async_trait::async_trait(?Send)]
+impl MbHttp for FlakyHttp {
+    async fn get(&self, url: &str) -> anyhow::Result<MbResponse> {
+        assert_eq!(url, self.url);
+        let count = {
+            let mut c = self.calls.borrow_mut();
+            *c += 1;
+            *c
+        };
+        if count <= self.fail_count {
+            Ok(MbResponse {
+                status: 503,
+                body: "Service Unavailable".to_string(),
+            })
+        } else {
+            Ok(MbResponse {
+                status: 200,
+                body: self.success_body.clone(),
+            })
+        }
+    }
+}
+
+#[tokio::test]
+async fn fetch_reads_through_and_writes_cache() {
+    let conn = open(":memory:").unwrap();
+    let body = fixture("artist_9e414497_aliases.json");
+    let mbid = "9e414497-23b7-4ab7-9ec6-8ea9864c9e87";
+    let url = format!("https://musicbrainz.org/ws/2/artist/{mbid}?inc=aliases&fmt=json");
+    let http = FakeHttp::new().with(&url, 200, &body);
+
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+    let a = client.fetch_artist(&conn, mbid).await.unwrap();
+    assert!(!a.aliases.is_empty());
+
+    // Cached: a SECOND fetch makes no new HTTP call.
+    let _ = client.fetch_artist(&conn, mbid).await.unwrap();
+    assert_eq!(
+        client.http().calls.borrow().len(),
+        1,
+        "second fetch must hit cache"
+    );
+
+    // mb_cache row exists.
+    let n: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM mb_cache WHERE entity_type='artist'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(n, 1);
+}
+
+#[tokio::test]
+async fn retries_on_503_then_succeeds() {
+    let conn = open(":memory:").unwrap();
+    let url = "https://musicbrainz.org/ws/2/artist/abc?inc=aliases&fmt=json";
+    // FlakyHttp returns 503 the first 2 calls, then 200.
+    let http = FlakyHttp::new(url, 2, &fixture("artist_9e414497_aliases.json"));
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+    let a = client.fetch_artist(&conn, "abc").await.unwrap();
+    assert!(!a.aliases.is_empty());
+    assert_eq!(client.http().call_count(), 3); // 2 failures + 1 success
+}
+
+#[tokio::test]
+async fn url_contains_expected_inc_params() {
+    let artist_mbid = "9e414497-23b7-4ab7-9ec6-8ea9864c9e87";
+    let release_mbid = "5588dfca-c011-4f66-9899-dcaa5f4efed5";
+
+    // Check artist URL contains inc=aliases&fmt=json.
+    let conn = open(":memory:").unwrap();
+    let artist_url =
+        format!("https://musicbrainz.org/ws/2/artist/{artist_mbid}?inc=aliases&fmt=json");
+    let http = FakeHttp::new().with(&artist_url, 200, &fixture("artist_9e414497_aliases.json"));
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+    let _ = client.fetch_artist(&conn, artist_mbid).await.unwrap();
+    // Clone the URL string out of the borrow before any later await.
+    let artist_call = client.http().calls.borrow()[0].clone();
+    assert!(
+        artist_call.contains("inc=aliases"),
+        "artist URL must contain inc=aliases"
+    );
+    assert!(
+        artist_call.contains("fmt=json"),
+        "artist URL must contain fmt=json"
+    );
+
+    // Check release URL contains recordings+release-rels bundle.
+    let conn2 = open(":memory:").unwrap();
+    let release_url = format!(
+        "https://musicbrainz.org/ws/2/release/{release_mbid}?inc=recordings+release-rels+release-groups+artist-credits&fmt=json"
+    );
+    let http2 = FakeHttp::new().with(&release_url, 200, &fixture("release_muzai.json"));
+    let client2 = rust_lib_olivier::enrich::client::MbClient::new(http2);
+    let _ = client2.fetch_release(&conn2, release_mbid).await.unwrap();
+    let release_call = client2.http().calls.borrow()[0].clone();
+    assert!(
+        release_call.contains("recordings"),
+        "release URL must contain recordings"
+    );
+    assert!(
+        release_call.contains("release-rels"),
+        "release URL must contain release-rels"
+    );
+}
+
 // ── Pseudo-release discovery tests (Task 9) ───────────────────────────────
 
 #[test]
