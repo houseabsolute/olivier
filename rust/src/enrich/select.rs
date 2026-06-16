@@ -1,4 +1,4 @@
-use crate::enrich::model::{Alias, Artist, Release, TextRepresentation};
+use crate::enrich::model::{MbAlias, MbArtist, MbRelease, MbTextRepresentation};
 
 /// The chosen display transliteration for an artist (§5.1).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,8 +14,8 @@ pub struct ChosenAlias {
 /// 1. keep type == "Artist name"
 /// 2. prefer locale=="en" && primary; else any locale=="en"; else entity sort-name
 /// 3. tie-break: name ascending, take first (deterministic).
-pub fn select_transliteration(artist: &Artist) -> Option<ChosenAlias> {
-    let artist_names: Vec<&Alias> = artist
+pub fn select_transliteration(artist: &MbArtist) -> Option<ChosenAlias> {
+    let artist_names: Vec<&MbAlias> = artist
         .aliases
         .iter()
         .filter(|a| a.alias_type.as_deref() == Some("Artist name"))
@@ -42,15 +42,15 @@ pub fn select_transliteration(artist: &Artist) -> Option<ChosenAlias> {
     })
 }
 
-fn is_en(a: &Alias) -> bool {
+fn is_en(a: &MbAlias) -> bool {
     a.locale.as_deref() == Some("en")
 }
 
-fn pick_min_by_name<'a>(it: impl Iterator<Item = &'a Alias>) -> Option<&'a Alias> {
+fn pick_min_by_name<'a>(it: impl Iterator<Item = &'a MbAlias>) -> Option<&'a MbAlias> {
     it.min_by(|x, y| x.name.cmp(&y.name))
 }
 
-fn chosen(a: &Alias) -> ChosenAlias {
+fn chosen(a: &MbAlias) -> ChosenAlias {
     ChosenAlias {
         name: a.name.clone(),
         // An alias may omit sort-name; fall back to its display name.
@@ -65,7 +65,7 @@ fn chosen(a: &Alias) -> ChosenAlias {
 pub const TRANSL_TRACKLISTING_TYPE_ID: &str = "fc399d47-23a7-4c28-bfcf-0607a562b644";
 
 /// Pseudo-release target MBIDs linked from `release` via `transl-tracklisting`.
-pub fn pseudo_release_targets(release: &Release) -> Vec<String> {
+pub fn pseudo_release_targets(release: &MbRelease) -> Vec<String> {
     release
         .relations
         .iter()
@@ -88,7 +88,7 @@ pub enum AltKind {
 /// Classify a pseudo-release using its `text-representation` (preferred), or
 /// the title-pair fallback when that metadata is absent. `original_title` is
 /// only consulted by the fallback.
-pub fn classify_pseudo(original_title: &str, pseudo: &Release) -> AltKind {
+pub fn classify_pseudo(original_title: &str, pseudo: &MbRelease) -> AltKind {
     if let Some(kind) = classify_from_text_representation(pseudo.text_representation.as_ref()) {
         return kind;
     }
@@ -98,7 +98,7 @@ pub fn classify_pseudo(original_title: &str, pseudo: &Release) -> AltKind {
 
 /// Returns `None` when `text-representation` carries no script and no language
 /// (caller then falls back to the title heuristic).
-fn classify_from_text_representation(tr: Option<&TextRepresentation>) -> Option<AltKind> {
+fn classify_from_text_representation(tr: Option<&MbTextRepresentation>) -> Option<AltKind> {
     let tr = tr?;
     // English-language title is a translation regardless of script.
     if tr.language.as_deref() == Some("eng") {

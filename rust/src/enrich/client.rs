@@ -3,7 +3,7 @@ use std::time::Duration;
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::enrich::http::MbHttp;
-use crate::enrich::model::{Artist, Release, ReleaseBrowse};
+use crate::enrich::model::{MbArtist, MbRelease, MbReleaseBrowse};
 
 const BASE: &str = "https://musicbrainz.org/ws/2";
 const ARTIST_INC: &str = "aliases";
@@ -84,7 +84,7 @@ impl<H: MbHttp, P: Pacer> MbClient<H, P> {
         &self.http
     }
 
-    pub async fn fetch_artist(&self, conn: &Connection, mbid: &str) -> anyhow::Result<Artist> {
+    pub async fn fetch_artist(&self, conn: &Connection, mbid: &str) -> anyhow::Result<MbArtist> {
         let url = format!("{BASE}/artist/{mbid}?inc={ARTIST_INC}&fmt=json");
         let body = self
             .get_cached(conn, "artist", mbid, ARTIST_INC, &url)
@@ -92,7 +92,7 @@ impl<H: MbHttp, P: Pacer> MbClient<H, P> {
         Ok(serde_json::from_str(&body)?)
     }
 
-    pub async fn fetch_release(&self, conn: &Connection, mbid: &str) -> anyhow::Result<Release> {
+    pub async fn fetch_release(&self, conn: &Connection, mbid: &str) -> anyhow::Result<MbRelease> {
         let url = format!("{BASE}/release/{mbid}?inc={RELEASE_INC}&fmt=json");
         let body = self
             .get_cached(conn, "release", mbid, RELEASE_INC, &url)
@@ -104,7 +104,7 @@ impl<H: MbHttp, P: Pacer> MbClient<H, P> {
         &self,
         conn: &Connection,
         mbid: &str,
-    ) -> anyhow::Result<Release> {
+    ) -> anyhow::Result<MbRelease> {
         let url = format!("{BASE}/release/{mbid}?inc={PSEUDO_INC}&fmt=json");
         let body = self
             .get_cached(conn, "release", mbid, PSEUDO_INC, &url)
@@ -117,7 +117,7 @@ impl<H: MbHttp, P: Pacer> MbClient<H, P> {
         conn: &Connection,
         rg_mbid: &str,
         offset: u32,
-    ) -> anyhow::Result<ReleaseBrowse> {
+    ) -> anyhow::Result<MbReleaseBrowse> {
         let inc = format!("release-rels:offset={offset}");
         let url = format!(
             "{BASE}/release?release-group={rg_mbid}&inc=release-rels&limit=100&offset={offset}&fmt=json"

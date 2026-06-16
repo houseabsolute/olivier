@@ -2,7 +2,7 @@ use rusqlite::Connection;
 
 use crate::enrich::client::{MbClient, Pacer};
 use crate::enrich::http::MbHttp;
-use crate::enrich::model::Release;
+use crate::enrich::model::MbRelease;
 use crate::enrich::progress::EnrichProgress;
 use crate::enrich::select::{classify_pseudo, pseudo_release_targets, select_transliteration};
 use crate::enrich::store;
@@ -171,7 +171,7 @@ fn apply_pseudo_alts(
     conn: &Connection,
     release_mbid: &str,
     original_title: &str,
-    pseudo: &Release,
+    pseudo: &MbRelease,
 ) -> anyhow::Result<()> {
     // Authoritative: the pseudo-release's text-representation (script/language);
     // falls back to the title-pair heuristic only when that metadata is absent.

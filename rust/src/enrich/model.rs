@@ -2,17 +2,17 @@ use serde::Deserialize;
 
 // ── artist?inc=aliases ──────────────────────────────────────────────────
 #[derive(Debug, Clone, Deserialize)]
-pub struct Artist {
+pub struct MbArtist {
     pub id: String,
     pub name: String,
     #[serde(rename = "sort-name")]
     pub sort_name: String,
     #[serde(default)]
-    pub aliases: Vec<Alias>,
+    pub aliases: Vec<MbAlias>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Alias {
+pub struct MbAlias {
     pub name: String,
     #[serde(rename = "sort-name")]
     pub sort_name: Option<String>,
@@ -29,7 +29,7 @@ pub struct Alias {
 
 // ── release?inc=recordings+release-rels+release-groups+artist-credits ────
 #[derive(Debug, Deserialize)]
-pub struct Release {
+pub struct MbRelease {
     pub id: String,
     pub title: String,
     pub date: Option<String>,
@@ -37,32 +37,32 @@ pub struct Release {
     /// translate classification (Task 9): `script == "Latn"` ⇒ transliteration;
     /// a non-Latn script, or `language == "eng"`, ⇒ translation.
     #[serde(rename = "text-representation")]
-    pub text_representation: Option<TextRepresentation>,
+    pub text_representation: Option<MbTextRepresentation>,
     #[serde(rename = "release-group")]
-    pub release_group: Option<ReleaseGroup>,
+    pub release_group: Option<MbReleaseGroup>,
     #[serde(default)]
-    pub media: Vec<Medium>,
+    pub media: Vec<MbMedium>,
     #[serde(default)]
-    pub relations: Vec<Relation>,
+    pub relations: Vec<MbRelation>,
 }
 
 /// MB `text-representation`: the script the titles are written in and the
 /// language they are in. Both fields are optional in MB's data.
 #[derive(Debug, Deserialize)]
-pub struct TextRepresentation {
+pub struct MbTextRepresentation {
     pub script: Option<String>,
     pub language: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ReleaseGroup {
+pub struct MbReleaseGroup {
     pub id: String,
     #[serde(rename = "first-release-date")]
     pub first_release_date: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Medium {
+pub struct MbMedium {
     #[serde(default)]
     pub tracks: Vec<MbTrack>,
 }
@@ -70,31 +70,31 @@ pub struct Medium {
 #[derive(Debug, Deserialize)]
 pub struct MbTrack {
     pub title: String,
-    pub recording: Option<Recording>,
+    pub recording: Option<MbRecording>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Recording {
+pub struct MbRecording {
     pub id: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Relation {
+pub struct MbRelation {
     #[serde(rename = "type-id")]
     pub type_id: Option<String>,
-    pub release: Option<RelationRelease>,
+    pub release: Option<MbRelationRelease>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct RelationRelease {
+pub struct MbRelationRelease {
     pub id: String,
 }
 
 // ── release?release-group=<mbid>&inc=release-rels (browse fallback) ──────
 #[derive(Debug, Deserialize)]
-pub struct ReleaseBrowse {
+pub struct MbReleaseBrowse {
     #[serde(default)]
-    pub releases: Vec<Release>,
+    pub releases: Vec<MbRelease>,
     #[serde(rename = "release-count", default)]
     pub release_count: u32,
 }

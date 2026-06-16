@@ -13,7 +13,7 @@
 
 use rust_lib_olivier::db::open;
 use rust_lib_olivier::enrich::http::{MbHttp, MbResponse};
-use rust_lib_olivier::enrich::model::{Alias, Artist, Release, TextRepresentation};
+use rust_lib_olivier::enrich::model::{MbAlias, MbArtist, MbRelease, MbTextRepresentation};
 use rust_lib_olivier::enrich::run::enrich;
 use rust_lib_olivier::enrich::select::{
     classify_alt, classify_pseudo, pseudo_release_targets, select_transliteration, AltKind,
@@ -74,7 +74,7 @@ async fn fake_http_serves_canned_body() {
 
 #[test]
 fn parses_artist_aliases_fixture() {
-    let a: Artist = serde_json::from_str(&fixture("artist_9e414497_aliases.json")).unwrap();
+    let a: MbArtist = serde_json::from_str(&fixture("artist_9e414497_aliases.json")).unwrap();
     assert!(!a.aliases.is_empty());
     assert!(a
         .aliases
@@ -84,7 +84,7 @@ fn parses_artist_aliases_fixture() {
 
 #[test]
 fn parses_release_fixture_with_recordings_and_rels() {
-    let r: Release = serde_json::from_str(&fixture("release_muzai.json")).unwrap();
+    let r: MbRelease = serde_json::from_str(&fixture("release_muzai.json")).unwrap();
     // release-group first-release-date is present (original year source).
     assert!(r
         .release_group
@@ -128,8 +128,8 @@ fn migration_creates_enrichment_tables() {
 
 // ── §5.1 artist-alias selection tests ────────────────────────────────────
 
-fn alias(name: &str, sort: &str, locale: Option<&str>, primary: bool, ty: &str) -> Alias {
-    Alias {
+fn alias(name: &str, sort: &str, locale: Option<&str>, primary: bool, ty: &str) -> MbAlias {
+    MbAlias {
         name: name.into(),
         sort_name: Some(sort.into()),
         locale: locale.map(str::to_string),
@@ -138,8 +138,8 @@ fn alias(name: &str, sort: &str, locale: Option<&str>, primary: bool, ty: &str) 
     }
 }
 
-fn artist_with(sort: &str, aliases: Vec<Alias>) -> Artist {
-    Artist {
+fn artist_with(sort: &str, aliases: Vec<MbAlias>) -> MbArtist {
+    MbArtist {
         id: "x".into(),
         name: "椎名林檎".into(),
         sort_name: sort.into(),
@@ -428,7 +428,7 @@ async fn url_contains_expected_inc_params() {
 
 #[test]
 fn finds_transl_tracklisting_targets() {
-    let r: Release = serde_json::from_str(&fixture("release_muzai.json")).unwrap();
+    let r: MbRelease = serde_json::from_str(&fixture("release_muzai.json")).unwrap();
     let targets = pseudo_release_targets(&r);
     assert!(
         !targets.is_empty(),
@@ -448,7 +448,7 @@ fn ignores_non_transl_relations() {
       ],
       "media":[]
     }"#;
-    let r: Release = serde_json::from_str(json).unwrap();
+    let r: MbRelease = serde_json::from_str(json).unwrap();
     assert_eq!(pseudo_release_targets(&r), vec!["pseudo".to_string()]);
 }
 
@@ -462,12 +462,12 @@ fn type_id_constant_matches_spec() {
 
 // ── Alt-kind classification tests (Task 9) ────────────────────────────────
 
-fn pseudo_with_text_rep(title: &str, script: Option<&str>, language: Option<&str>) -> Release {
-    Release {
+fn pseudo_with_text_rep(title: &str, script: Option<&str>, language: Option<&str>) -> MbRelease {
+    MbRelease {
         id: "p".into(),
         title: title.into(),
         date: None,
-        text_representation: Some(TextRepresentation {
+        text_representation: Some(MbTextRepresentation {
             script: script.map(str::to_string),
             language: language.map(str::to_string),
         }),
