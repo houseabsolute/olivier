@@ -948,3 +948,83 @@ async fn synthetic_mbids_are_skipped() {
         .unwrap();
     assert_eq!(e, 0);
 }
+
+// ── Task 15: post-scan enrich contract ───────────────────────────────────
+
+/// The audio fixtures carry synthetic-looking fake MBIDs
+/// (e.g. `dddddddd-0000-0000-0000-000000000001`) that are NOT prefixed with
+/// `synth:`, so the enrich logic treats them as real MBIDs and will fetch them.
+/// We provide canned responses using the recorded Shiina Ringo fixtures so that
+/// the post-scan enrich call completes without error.  The key contract verified
+/// here is that calling `enrich_library` right after a scan is SAFE and
+/// idempotent: it completes, emits `done`, and does not crash or leave the DB
+/// in a broken state.
+#[tokio::test]
+async fn enrich_after_scan_is_safe_noop_for_untagged_fixtures() {
+    const BASE_URL: &str = "https://musicbrainz.org/ws/2";
+    // MBIDs embedded in the fixture audio files (sample.flac / sample.mp3):
+    // MUSICBRAINZ_ALBUMARTISTID = dddddddd-0000-0000-0000-000000000001
+    // MUSICBRAINZ_ALBUMID       = bbbbbbbb-0000-0000-0000-000000000001
+    let fake_artist_mbid = "dddddddd-0000-0000-0000-000000000001";
+    let fake_release_mbid = "bbbbbbbb-0000-0000-0000-000000000001";
+    let artist_url = format!("{BASE_URL}/artist/{fake_artist_mbid}?inc=aliases&fmt=json");
+    let release_url = format!(
+        "{BASE_URL}/release/{fake_release_mbid}?inc=recordings+release-rels+release-groups+artist-credits&fmt=json"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    for f in ["sample.mp3", "sample.flac"] {
+        std::fs::copy(
+            format!("{}/tests/fixtures/{f}", env!("CARGO_MANIFEST_DIR")),
+            dir.path().join(f),
+        )
+        .unwrap();
+    }
+    let mut conn = open(":memory:").unwrap();
+    let root = dir.path().to_string_lossy().to_string();
+    rust_lib_olivier::catalog::scan::scan_roots(&mut conn, std::slice::from_ref(&root), |_| {})
+        .unwrap();
+
+    // Provide canned responses for the fake MBIDs so enrich can complete.
+    // The release_muzai.json fixture carries transl-tracklisting rels, so we
+    // also provide responses for the pseudo-release MBIDs it references.
+    let http = FakeHttp::new()
+        .with(&artist_url, 200, &fixture("artist_9e414497_aliases.json"))
+        .with(&release_url, 200, &fixture("release_muzai.json"))
+        .with(
+            &translit_url(),
+            200,
+            &fixture("release_muzai_translit.json"),
+        )
+        .with(
+            &translate_url(),
+            200,
+            &fixture("release_muzai_translate.json"),
+        );
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+
+    let mut saw_done = false;
+    enrich(&conn, &client, false, |p| {
+        saw_done |= p.done;
+        true
+    })
+    .await
+    .unwrap();
+    assert!(saw_done, "enrich must emit a done=true progress event");
+    // The post-scan call must complete without error — this is the contract.
+    // (A second call with the same conn is idempotent: files are now enriched.)
+    let mut saw_done2 = false;
+    let client2 = rust_lib_olivier::enrich::client::MbClient::new(FakeHttp::new());
+    enrich(&conn, &client2, false, |p| {
+        saw_done2 |= p.done;
+        true
+    })
+    .await
+    .unwrap();
+    assert!(saw_done2, "second call must also emit done");
+    assert_eq!(
+        client2.http().calls.borrow().len(),
+        0,
+        "second call must make no HTTP requests (already enriched)"
+    );
+}
