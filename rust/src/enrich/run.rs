@@ -52,14 +52,14 @@ fn releases_to_enrich(
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
-/// Orchestrate enrichment. `on_progress` is called after each entity is
-/// processed. The FFI wrapper checks `sink.add()` to detect cancellation;
-/// the internal callback here is `()` for simplicity.
+/// Orchestrate enrichment. `on_progress` returns `false` to request cancellation;
+/// the FFI wrapper checks `sink.add()` and returns `false` when the Dart side
+/// drops the stream, propagating cooperative cancellation into this loop.
 pub async fn enrich<H: MbHttp, P: Pacer>(
     conn: &Connection,
     client: &MbClient<H, P>,
     force: bool,
-    mut on_progress: impl FnMut(EnrichProgress),
+    mut on_progress: impl FnMut(EnrichProgress) -> bool,
 ) -> anyhow::Result<()> {
     let artists = artists_to_enrich(conn, force)?;
     let releases = releases_to_enrich(conn, force)?;
@@ -76,12 +76,14 @@ pub async fn enrich<H: MbHttp, P: Pacer>(
             store::apply_artist_transliteration(conn, artist_mbid, &chosen)?;
         }
         done += 1;
-        on_progress(EnrichProgress {
+        if !on_progress(EnrichProgress {
             entities_done: done,
             entities_total: total,
             current: mb.name.clone(),
             done: false,
-        });
+        }) {
+            return Ok(()); // cancelled
+        }
     }
 
     // ── releases ──
@@ -138,12 +140,14 @@ pub async fn enrich<H: MbHttp, P: Pacer>(
         tx.commit()?;
 
         done += 1;
-        on_progress(EnrichProgress {
+        if !on_progress(EnrichProgress {
             entities_done: done,
             entities_total: total,
             current: title.clone(),
             done: false,
-        });
+        }) {
+            return Ok(()); // cancelled
+        }
     }
 
     on_progress(EnrichProgress {

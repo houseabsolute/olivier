@@ -835,6 +835,7 @@ async fn enriches_catalog_end_to_end() {
     let mut last: Option<rust_lib_olivier::enrich::progress::EnrichProgress> = None;
     enrich(&conn, &client, false, |p| {
         last = Some(p.clone());
+        true
     })
     .await
     .unwrap();
@@ -902,7 +903,7 @@ async fn resumes_skipping_already_enriched_and_cached() {
     conn.execute("UPDATE file SET enriched = 1", []).unwrap();
     // FakeHttp with NO responses: if enrich tried to fetch anything it would error.
     let client = rust_lib_olivier::enrich::client::MbClient::new(FakeHttp::new());
-    enrich(&conn, &client, false, |_| {}).await.unwrap();
+    enrich(&conn, &client, false, |_| true).await.unwrap();
     assert_eq!(
         client.http().calls.borrow().len(),
         0,
@@ -935,7 +936,7 @@ async fn synthetic_mbids_are_skipped() {
     )
     .unwrap();
     let client = rust_lib_olivier::enrich::client::MbClient::new(FakeHttp::new());
-    enrich(&conn, &client, false, |_| {}).await.unwrap();
+    enrich(&conn, &client, false, |_| true).await.unwrap();
     assert_eq!(client.http().calls.borrow().len(), 0);
     // Synthetic file stays unenriched (correctly — no MB data exists).
     let e: i64 = conn
