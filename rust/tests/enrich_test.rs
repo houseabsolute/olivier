@@ -18,6 +18,7 @@ use rust_lib_olivier::enrich::select::{
     classify_alt, classify_pseudo, pseudo_release_targets, select_transliteration, AltKind,
     TRANSL_TRACKLISTING_TYPE_ID,
 };
+use rust_lib_olivier::enrich::store;
 
 fn fixture(name: &str) -> String {
     std::fs::read_to_string(format!(
@@ -538,4 +539,203 @@ fn classify_falls_back_to_title_heuristic_without_text_representation() {
         classify_alt("Muzai Moratorium", "Innocence Moratorium"),
         AltKind::Translate
     );
+}
+
+// ── store.rs tests (Task 11) ──────────────────────────────────────────────
+
+fn seed_one_release(conn: &rusqlite::Connection) {
+    conn.execute(
+        "INSERT INTO artist(mbid,name,sort_name) VALUES ('art1','椎名林檎','椎名林檎')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release_group(mbid,title,first_release_date) VALUES ('rg1','無罪モラトリアム',NULL)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid,release_group_mbid,album_artist_mbid,title,date) VALUES ('rel1','rg1','art1','無罪モラトリアム',NULL)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(release_mbid,recording_mbid,disc,position,title) VALUES ('rel1','rec1',1,1,'歌舞伎町の女王')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path,mtime,size,track_id,added_at) VALUES ('/m/a.flac',0,0,1,0)",
+        [],
+    )
+    .unwrap();
+}
+
+#[test]
+fn applies_artist_transliteration_and_sort_key() {
+    let conn = open(":memory:").unwrap();
+    seed_one_release(&conn);
+    // Seeded sort_name is the embedded albumartistsort value "椎名林檎".
+    store::apply_artist_transliteration(
+        &conn,
+        "art1",
+        &rust_lib_olivier::enrich::select::ChosenAlias {
+            name: "Ringo Sheena".into(),
+            sort_name: "Sheena, Ringo".into(),
+            from_entity_sort_name: false,
+        },
+    )
+    .unwrap();
+    let (translit, sort, embedded): (Option<String>, String, Option<String>) = conn
+        .query_row(
+            "SELECT transliteration, sort_name, sort_name_embedded FROM artist WHERE mbid='art1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(translit.as_deref(), Some("Ringo Sheena"));
+    assert_eq!(sort, "Sheena, Ringo");
+    // The pre-enrichment embedded sort_name is preserved for the §6.1 tier-3 fallback.
+    assert_eq!(embedded.as_deref(), Some("椎名林檎"));
+
+    // A re-enrich must NOT clobber the preserved embedded value.
+    store::apply_artist_transliteration(
+        &conn,
+        "art1",
+        &rust_lib_olivier::enrich::select::ChosenAlias {
+            name: "Ringo Sheena".into(),
+            sort_name: "Sheena, Ringo".into(),
+            from_entity_sort_name: false,
+        },
+    )
+    .unwrap();
+    let embedded2: Option<String> = conn
+        .query_row(
+            "SELECT sort_name_embedded FROM artist WHERE mbid='art1'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(embedded2.as_deref(), Some("椎名林檎"));
+}
+
+#[test]
+fn applies_dates_from_release_and_group() {
+    let conn = open(":memory:").unwrap();
+    seed_one_release(&conn);
+    store::apply_dates(
+        &conn,
+        "rel1",
+        "rg1",
+        "無罪モラトリアム",
+        Some("1999-02-24"),
+        Some("1999-02-24"),
+    )
+    .unwrap();
+    let (orig, reissue): (Option<String>, Option<String>) = conn
+        .query_row(
+            "SELECT rg.first_release_date, r.date FROM release r JOIN release_group rg ON rg.mbid=r.release_group_mbid WHERE r.mbid='rel1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(orig.as_deref(), Some("1999-02-24"));
+    assert_eq!(reissue.as_deref(), Some("1999-02-24"));
+}
+
+#[test]
+fn original_year_lands_on_real_rg_when_catalog_rg_is_synthetic() {
+    // The catalog release points at a synth:rg:… key (file tags lacked the RG
+    // MBID). apply_dates must write the original year to the REAL RG from the
+    // MB JSON and re-point the release, not to the synth key.
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid,name,sort_name) VALUES ('art1','椎名林檎','椎名林檎')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release_group(mbid,title) VALUES ('synth:rg:art1|無罪モラトリアム','無罪モラトリアム')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid,release_group_mbid,album_artist_mbid,title,date) VALUES ('rel1','synth:rg:art1|無罪モラトリアム','art1','無罪モラトリアム',NULL)",
+        [],
+    )
+    .unwrap();
+
+    store::apply_dates(
+        &conn,
+        "rel1",
+        "realrg1",
+        "無罪モラトリアム",
+        Some("1999-02-24"),
+        Some("1999-02-24"),
+    )
+    .unwrap();
+
+    // The release now points at the real RG, and the original year lives there.
+    let (rg_mbid, orig): (String, Option<String>) = conn
+        .query_row(
+            "SELECT rg.mbid, rg.first_release_date
+           FROM release r JOIN release_group rg ON rg.mbid = r.release_group_mbid
+           WHERE r.mbid='rel1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(rg_mbid, "realrg1");
+    assert_eq!(orig.as_deref(), Some("1999-02-24"));
+    // The synthetic RG did NOT receive the original year.
+    let synth_date: Option<String> = conn
+        .query_row(
+            "SELECT first_release_date FROM release_group WHERE mbid='synth:rg:art1|無罪モラトリアム'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(synth_date, None);
+}
+
+#[test]
+fn upserts_release_and_track_alts() {
+    let conn = open(":memory:").unwrap();
+    seed_one_release(&conn);
+    store::upsert_release_alt(&conn, "rel1", AltKind::Translit, "Muzai Moratorium").unwrap();
+    store::upsert_release_alt(&conn, "rel1", AltKind::Translate, "Innocence Moratorium").unwrap();
+    store::upsert_track_alt(&conn, "rec1", AltKind::Translit, "Kabukichou no Joou").unwrap();
+    let n: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM release_title_alt WHERE release_mbid='rel1'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(n, 2);
+    // Re-applying the same kind overwrites, not duplicates.
+    store::upsert_release_alt(&conn, "rel1", AltKind::Translit, "Muzai Moratorium 2").unwrap();
+    let title: String = conn
+        .query_row(
+            "SELECT title FROM release_title_alt WHERE release_mbid='rel1' AND kind='translit'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(title, "Muzai Moratorium 2");
+}
+
+#[test]
+fn marks_files_enriched_for_release() {
+    let conn = open(":memory:").unwrap();
+    seed_one_release(&conn);
+    store::mark_release_files_enriched(&conn, "rel1").unwrap();
+    let enriched: i64 = conn
+        .query_row(
+            "SELECT enriched FROM file WHERE path='/m/a.flac'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(enriched, 1);
 }
