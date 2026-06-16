@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/widgets/bilingual_text.dart';
 
 class AlbumColumn extends ConsumerWidget {
   const AlbumColumn({super.key});
@@ -27,6 +28,7 @@ class _AlbumList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selected = ref.watch(selectedAlbumProvider);
+    final leads = ref.watch(languageLeadsProvider);
     if (albums.isEmpty) {
       return const Center(child: Text('Select an artist'));
     }
@@ -38,7 +40,6 @@ class _AlbumList extends ConsumerWidget {
         final album = albums[index];
         final isSelected = selected == album.releaseMbid;
         final year = album.originalYear ?? album.reissueYear ?? '';
-        final label = year.isNotEmpty ? '${album.title} ($year)' : album.title;
         return InkWell(
           key: ValueKey(album.releaseMbid),
           onTap: () {
@@ -54,7 +55,15 @@ class _AlbumList extends ConsumerWidget {
             padding: const EdgeInsets.only(left: 12, right: 4),
             child: Row(
               children: [
-                Expanded(child: _RowLabel(text: label)),
+                Expanded(
+                  child: BilingualText(
+                    original: album.title,
+                    translit: album.titleTranslit,
+                    translate: album.titleTranslate,
+                    leads: leads,
+                    suffix: year.isNotEmpty ? ' ($year)' : null,
+                  ),
+                ),
                 IconButton(
                   icon: const Icon(Icons.play_arrow, size: 20),
                   tooltip: 'Play album',
@@ -75,19 +84,6 @@ class _AlbumList extends ConsumerWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class _RowLabel extends StatelessWidget {
-  const _RowLabel({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      overflow: TextOverflow.ellipsis,
     );
   }
 }
