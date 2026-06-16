@@ -1041,6 +1041,8 @@ impl SseDecode for crate::catalog::schema::QueueTrack {
         let mut var_artist = <Option<String>>::sse_decode(deserializer);
         let mut var_album = <String>::sse_decode(deserializer);
         let mut var_lengthMs = <Option<u64>>::sse_decode(deserializer);
+        let mut var_titleTranslit = <Option<String>>::sse_decode(deserializer);
+        let mut var_titleTranslate = <Option<String>>::sse_decode(deserializer);
         return crate::catalog::schema::QueueTrack {
             path: var_path,
             track_id: var_trackId,
@@ -1048,6 +1050,8 @@ impl SseDecode for crate::catalog::schema::QueueTrack {
             artist: var_artist,
             album: var_album,
             length_ms: var_lengthMs,
+            title_translit: var_titleTranslit,
+            title_translate: var_titleTranslate,
         };
     }
 }
@@ -1323,6 +1327,8 @@ impl flutter_rust_bridge::IntoDart for crate::catalog::schema::QueueTrack {
             self.artist.into_into_dart().into_dart(),
             self.album.into_into_dart().into_dart(),
             self.length_ms.into_into_dart().into_dart(),
+            self.title_translit.into_into_dart().into_dart(),
+            self.title_translate.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1634,6 +1640,8 @@ impl SseEncode for crate::catalog::schema::QueueTrack {
         <Option<String>>::sse_encode(self.artist, serializer);
         <String>::sse_encode(self.album, serializer);
         <Option<u64>>::sse_encode(self.length_ms, serializer);
+        <Option<String>>::sse_encode(self.title_translit, serializer);
+        <Option<String>>::sse_encode(self.title_translate, serializer);
     }
 }
 

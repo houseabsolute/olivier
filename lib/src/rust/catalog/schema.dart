@@ -90,6 +90,8 @@ class QueueTrack {
   final String? artist;
   final String album;
   final BigInt? lengthMs;
+  final String? titleTranslit;
+  final String? titleTranslate;
 
   const QueueTrack({
     required this.path,
@@ -98,6 +100,8 @@ class QueueTrack {
     this.artist,
     required this.album,
     this.lengthMs,
+    this.titleTranslit,
+    this.titleTranslate,
   });
 
   @override
@@ -107,7 +111,9 @@ class QueueTrack {
       title.hashCode ^
       artist.hashCode ^
       album.hashCode ^
-      lengthMs.hashCode;
+      lengthMs.hashCode ^
+      titleTranslit.hashCode ^
+      titleTranslate.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -119,7 +125,9 @@ class QueueTrack {
           title == other.title &&
           artist == other.artist &&
           album == other.album &&
-          lengthMs == other.lengthMs;
+          lengthMs == other.lengthMs &&
+          titleTranslit == other.titleTranslit &&
+          titleTranslate == other.titleTranslate;
 }
 
 class Track {

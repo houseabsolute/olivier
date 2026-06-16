@@ -910,6 +910,45 @@ fn tracks_for_album_returns_title_alts_one_row_per_track() {
 }
 
 #[test]
+fn tracks_for_paths_returns_title_alts() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('m', 'A', 'A')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('rel', 'm', 'Album')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, recording_mbid, disc, position, title)
+         VALUES (1, 'rel', 'rec-1', 1, 1, '正しい街')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track_title_alt(recording_mbid, kind, title) VALUES ('rec-1', 'translit', 'Tadashii Machi')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path, mtime, size, track_id, added_at) VALUES ('/m/a.flac', 0, 0, 1, 0)",
+        [],
+    )
+    .unwrap();
+
+    let paths = vec!["/m/a.flac".to_string(), "/m/missing.mp3".to_string()];
+    let got = tracks_for_paths(&conn, &paths).unwrap();
+    assert_eq!(got[0].title_translit, Some("Tadashii Machi".to_string()));
+    assert_eq!(got[0].title_translate, None);
+    // Placeholder has no alts.
+    assert_eq!(got[1].title_translit, None);
+    assert_eq!(got[1].title_translate, None);
+}
+
+#[test]
 fn reconcile_leaves_synth_only_artist_untouched() {
     let conn = open(":memory:").unwrap();
     // An album-artist with NO real-MBID counterpart must keep its synth key

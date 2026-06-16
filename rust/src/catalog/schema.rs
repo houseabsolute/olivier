@@ -42,4 +42,6 @@ pub struct QueueTrack {
     pub artist: Option<String>,
     pub album: String,
     pub length_ms: Option<u64>,
+    pub title_translit: Option<String>,
+    pub title_translate: Option<String>,
 }

@@ -142,7 +142,11 @@ pub fn file_paths_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Re
 /// with the player's restored sources.
 pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<Vec<QueueTrack>> {
     let mut stmt = conn.prepare(
-        "SELECT t.id, t.title, t.artist, t.length_ms, r.title
+        "SELECT t.id, t.title, t.artist, t.length_ms, r.title,
+                (SELECT title FROM track_title_alt
+                   WHERE recording_mbid = t.recording_mbid AND kind = 'translit'),
+                (SELECT title FROM track_title_alt
+                   WHERE recording_mbid = t.recording_mbid AND kind = 'translate')
          FROM file f JOIN track t ON t.id = f.track_id
          JOIN release r ON r.mbid = t.release_mbid
          WHERE f.path = ?1",
@@ -158,6 +162,8 @@ pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<V
                     artist: r.get(2)?,
                     album: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
                     length_ms: r.get::<_, Option<i64>>(3)?.map(|v| v as u64),
+                    title_translit: r.get(5)?,
+                    title_translate: r.get(6)?,
                 })
             })
             .optional()?;
@@ -168,6 +174,8 @@ pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<V
             artist: None,
             album: String::new(),
             length_ms: None,
+            title_translit: None,
+            title_translate: None,
         }));
     }
     Ok(out)
