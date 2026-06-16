@@ -111,22 +111,19 @@ fn classify_from_text_representation(tr: Option<&TextRepresentation>) -> Option<
     }
 }
 
-/// Deterministic title-pair fallback (no MB metadata available): all-ASCII +
-/// same token count as the original ⇒ transliteration, else translation.
+/// Deterministic title-pair fallback (no MB metadata available): an all-ASCII
+/// pseudo title whose original contains non-ASCII characters is a romanization
+/// ⇒ transliteration; otherwise ⇒ translation. A genuine English semantic
+/// translation reaches `Translate` via the primary `text-representation`
+/// `language=eng` path (`classify_from_text_representation`), not this fallback —
+/// which cannot distinguish a romanization from a translation without metadata.
 ///
-/// The token-count comparison (using `.max(1)` on the original to handle
-/// single-token CJK originals) allows distinguishing a romanization (same
-/// number of space-separated tokens as the original) from an English semantic
-/// translation (different token count). In practice this fallback is rarely
-/// reached because modern MusicBrainz releases include `text-representation`
-/// metadata that takes the primary classification path in
-/// `classify_from_text_representation` before this fallback is reached.
+/// In practice this fallback is rarely reached because modern MusicBrainz
+/// releases include `text-representation` metadata that takes the primary path
+/// first.
 pub fn classify_alt(original_title: &str, pseudo_title: &str) -> AltKind {
-    let romaji_like = pseudo_title
-        .chars()
-        .all(|c| c.is_ascii() || c.is_whitespace())
-        && pseudo_title.split_whitespace().count()
-            == original_title.split_whitespace().count().max(1);
+    // A romanization: the pseudo is plain ASCII while the original is not.
+    let romaji_like = pseudo_title.is_ascii() && !original_title.is_ascii();
     if romaji_like {
         AltKind::Translit
     } else {
