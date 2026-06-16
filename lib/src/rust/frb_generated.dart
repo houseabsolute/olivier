@@ -898,8 +898,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Track dco_decode_track(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return Track(
       id: dco_decode_i_64(arr[0]),
       disc: dco_decode_u_32(arr[1]),
@@ -909,6 +909,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       lengthMs: dco_decode_opt_box_autoadd_u_64(arr[5]),
       lastPlayed: dco_decode_opt_box_autoadd_i_64(arr[6]),
       addedAt: dco_decode_i_64(arr[7]),
+      titleTranslit: dco_decode_opt_String(arr[8]),
+      titleTranslate: dco_decode_opt_String(arr[9]),
     );
   }
 
@@ -1260,6 +1262,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_lengthMs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_lastPlayed = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_addedAt = sse_decode_i_64(deserializer);
+    var var_titleTranslit = sse_decode_opt_String(deserializer);
+    var var_titleTranslate = sse_decode_opt_String(deserializer);
     return Track(
         id: var_id,
         disc: var_disc,
@@ -1268,7 +1272,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         artist: var_artist,
         lengthMs: var_lengthMs,
         lastPlayed: var_lastPlayed,
-        addedAt: var_addedAt);
+        addedAt: var_addedAt,
+        titleTranslit: var_titleTranslit,
+        titleTranslate: var_titleTranslate);
   }
 
   @protected
@@ -1602,6 +1608,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_u_64(self.lengthMs, serializer);
     sse_encode_opt_box_autoadd_i_64(self.lastPlayed, serializer);
     sse_encode_i_64(self.addedAt, serializer);
+    sse_encode_opt_String(self.titleTranslit, serializer);
+    sse_encode_opt_String(self.titleTranslate, serializer);
   }
 
   @protected
