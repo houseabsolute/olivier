@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/widgets/bilingual_text.dart';
 
 class ArtistColumn extends ConsumerWidget {
   const ArtistColumn({super.key});
@@ -26,6 +27,7 @@ class _ArtistList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selected = ref.watch(selectedArtistProvider);
+    final leads = ref.watch(languageLeadsProvider);
     if (artists.isEmpty) {
       return const Center(child: Text('No artists — scan a folder first'));
     }
@@ -46,23 +48,15 @@ class _ArtistList extends ConsumerWidget {
                 : null,
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: _RowLabel(text: artist.name),
+            child: BilingualText(
+              original: artist.name,
+              translit: artist.transliteration,
+              translate: null, // names get a reading only (spec §6)
+              leads: leads,
+            ),
           ),
         );
       },
-    );
-  }
-}
-
-class _RowLabel extends StatelessWidget {
-  const _RowLabel({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      overflow: TextOverflow.ellipsis,
     );
   }
 }
