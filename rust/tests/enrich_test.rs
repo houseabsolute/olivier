@@ -14,6 +14,7 @@
 use rust_lib_olivier::db::open;
 use rust_lib_olivier::enrich::http::{MbHttp, MbResponse};
 use rust_lib_olivier::enrich::model::{Alias, Artist, Release, TextRepresentation};
+use rust_lib_olivier::enrich::run::enrich;
 use rust_lib_olivier::enrich::select::{
     classify_alt, classify_pseudo, pseudo_release_targets, select_transliteration, AltKind,
     TRANSL_TRACKLISTING_TYPE_ID,
@@ -738,4 +739,211 @@ fn marks_files_enriched_for_release() {
         )
         .unwrap();
     assert_eq!(enriched, 1);
+}
+
+// ── Task 13: end-to-end orchestration tests ───────────────────────────────
+
+// Real MBIDs from the recorded fixtures:
+const ARTIST_MBID: &str = "9e414497-23b7-4ab7-9ec6-8ea9864c9e87";
+const RELEASE_MBID: &str = "5588dfca-c011-4f66-9899-dcaa5f4efed5";
+const RELEASE_GROUP_MBID: &str = "923db16c-6620-3e44-ba00-a20745c6a957";
+// pseudo release MBIDs (direct transl-tracklisting rels on the main release)
+const TRANSLIT_PSEUDO_MBID: &str = "3e88897d-8c4f-4895-a28b-ccb933336c1b";
+const TRANSLATE_PSEUDO_MBID: &str = "9cda9af0-f295-4f20-a470-8b7d2ce0c4b8";
+// recording MBID of 歌舞伎町の女王 (track 2 in the fixture)
+const REC_KABUKI: &str = "4dd9d08d-376c-42b2-8b44-e3322ed657b7";
+
+// URL patterns matching client.rs
+const BASE: &str = "https://musicbrainz.org/ws/2";
+
+fn artist_url() -> String {
+    format!("{BASE}/artist/{ARTIST_MBID}?inc=aliases&fmt=json")
+}
+fn release_url() -> String {
+    format!("{BASE}/release/{RELEASE_MBID}?inc=recordings+release-rels+release-groups+artist-credits&fmt=json")
+}
+fn translit_url() -> String {
+    format!("{BASE}/release/{TRANSLIT_PSEUDO_MBID}?inc=recordings&fmt=json")
+}
+fn translate_url() -> String {
+    format!("{BASE}/release/{TRANSLATE_PSEUDO_MBID}?inc=recordings&fmt=json")
+}
+
+fn seed_taggable_catalog(conn: &rusqlite::Connection) {
+    conn.execute(
+        &format!(
+            "INSERT INTO artist(mbid,name,sort_name) VALUES ('{}','椎名林檎','椎名林檎')",
+            ARTIST_MBID
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!(
+            "INSERT INTO release_group(mbid,title) VALUES ('{}','無罪モラトリアム')",
+            RELEASE_GROUP_MBID
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!(
+            "INSERT INTO release(mbid,release_group_mbid,album_artist_mbid,title) VALUES ('{}','{}','{}','無罪モラトリアム')",
+            RELEASE_MBID, RELEASE_GROUP_MBID, ARTIST_MBID
+        ),
+        [],
+    )
+    .unwrap();
+    // 歌舞伎町の女王 with its actual recording MBID from the fixture.
+    conn.execute(
+        &format!(
+            "INSERT INTO track(release_mbid,recording_mbid,disc,position,title) VALUES ('{}','{}',1,1,'歌舞伎町の女王')",
+            RELEASE_MBID, REC_KABUKI
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path,mtime,size,track_id,added_at,enriched) VALUES ('/m/a.flac',0,0,1,0,0)",
+        [],
+    )
+    .unwrap();
+}
+
+#[tokio::test]
+async fn enriches_catalog_end_to_end() {
+    let conn = open(":memory:").unwrap();
+    seed_taggable_catalog(&conn);
+
+    // Discovery path is DIRECT (transl-tracklisting rels on the main release);
+    // do NOT provide a browse-fallback response so any accidental fallback errors loudly.
+    let http = FakeHttp::new()
+        .with(&artist_url(), 200, &fixture("artist_9e414497_aliases.json"))
+        .with(&release_url(), 200, &fixture("release_muzai.json"))
+        .with(
+            &translit_url(),
+            200,
+            &fixture("release_muzai_translit.json"),
+        )
+        .with(
+            &translate_url(),
+            200,
+            &fixture("release_muzai_translate.json"),
+        );
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+
+    let mut last: Option<rust_lib_olivier::enrich::progress::EnrichProgress> = None;
+    enrich(&conn, &client, false, |p| {
+        last = Some(p.clone());
+    })
+    .await
+    .unwrap();
+    assert!(last.unwrap().done);
+
+    // DIRECT path: must NOT have browsed the release-group.
+    assert!(
+        !client
+            .http()
+            .calls
+            .borrow()
+            .iter()
+            .any(|u| u.contains("release-group=")),
+        "must not browse — direct rel path"
+    );
+
+    // Artist transliteration + sort key set.
+    // "Sheena Ringo" is the primary EN "Artist name" alias in the fixture
+    // (primary=true, locale=en), so select_transliteration picks it.
+    let (translit, sort): (Option<String>, String) = conn
+        .query_row(
+            &format!(
+                "SELECT transliteration, sort_name FROM artist WHERE mbid='{}'",
+                ARTIST_MBID
+            ),
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(translit.as_deref(), Some("Sheena Ringo"));
+    assert_eq!(sort, "Sheena, Ringo");
+
+    // Release + track alts present.
+    let ra: i64 = conn
+        .query_row("SELECT count(*) FROM release_title_alt", [], |r| r.get(0))
+        .unwrap();
+    assert!(ra >= 1);
+    let ta: i64 = conn
+        .query_row(
+            &format!(
+                "SELECT count(*) FROM track_title_alt WHERE recording_mbid='{}'",
+                REC_KABUKI
+            ),
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(ta >= 1);
+
+    // File marked enriched.
+    let e: i64 = conn
+        .query_row(
+            "SELECT enriched FROM file WHERE path='/m/a.flac'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(e, 1);
+}
+
+#[tokio::test]
+async fn resumes_skipping_already_enriched_and_cached() {
+    let conn = open(":memory:").unwrap();
+    seed_taggable_catalog(&conn);
+    conn.execute("UPDATE file SET enriched = 1", []).unwrap();
+    // FakeHttp with NO responses: if enrich tried to fetch anything it would error.
+    let client = rust_lib_olivier::enrich::client::MbClient::new(FakeHttp::new());
+    enrich(&conn, &client, false, |_| {}).await.unwrap();
+    assert_eq!(
+        client.http().calls.borrow().len(),
+        0,
+        "nothing to do => no HTTP"
+    );
+}
+
+#[tokio::test]
+async fn synthetic_mbids_are_skipped() {
+    let conn = open(":memory:").unwrap();
+    // A synth-keyed artist/release (no real MBID) must never be fetched.
+    conn.execute(
+        "INSERT INTO artist(mbid,name,sort_name) VALUES ('synth:aa:foo','Foo','Foo')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid,album_artist_mbid,title) VALUES ('synth:rel:foo|bar','synth:aa:foo','Bar')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(release_mbid,disc,position,title) VALUES ('synth:rel:foo|bar',1,1,'T')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path,mtime,size,track_id,added_at,enriched) VALUES ('/m/s.flac',0,0,1,0,0)",
+        [],
+    )
+    .unwrap();
+    let client = rust_lib_olivier::enrich::client::MbClient::new(FakeHttp::new());
+    enrich(&conn, &client, false, |_| {}).await.unwrap();
+    assert_eq!(client.http().calls.borrow().len(), 0);
+    // Synthetic file stays unenriched (correctly — no MB data exists).
+    let e: i64 = conn
+        .query_row(
+            "SELECT enriched FROM file WHERE path='/m/s.flac'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(e, 0);
 }
