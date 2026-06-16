@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/catalog.dart';
+import 'api/enrich.dart';
 import 'api/queue.dart';
 import 'api/settings.dart';
 import 'api/simple.dart';
@@ -14,6 +15,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'db.dart';
+import 'enrich/progress.dart';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
 import 'tags.dart';
@@ -28,6 +30,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw);
+
+  @protected
+  RustStreamSink<EnrichProgress> dco_decode_StreamSink_enrich_progress_Sse(
+      dynamic raw);
 
   @protected
   RustStreamSink<ScanProgress> dco_decode_StreamSink_scan_progress_Sse(
@@ -56,6 +62,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  EnrichProgress dco_decode_enrich_progress(dynamic raw);
 
   @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
@@ -124,6 +133,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
+  RustStreamSink<EnrichProgress> sse_decode_StreamSink_enrich_progress_Sse(
+      SseDeserializer deserializer);
+
+  @protected
   RustStreamSink<ScanProgress> sse_decode_StreamSink_scan_progress_Sse(
       SseDeserializer deserializer);
 
@@ -151,6 +164,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  EnrichProgress sse_decode_enrich_progress(SseDeserializer deserializer);
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
@@ -224,6 +240,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       AnyhowException self, SseSerializer serializer);
 
   @protected
+  void sse_encode_StreamSink_enrich_progress_Sse(
+      RustStreamSink<EnrichProgress> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_StreamSink_scan_progress_Sse(
       RustStreamSink<ScanProgress> self, SseSerializer serializer);
 
@@ -252,6 +272,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_enrich_progress(
+      EnrichProgress self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
