@@ -3,6 +3,7 @@ pub struct Artist {
     pub mbid: String,
     pub name: String,
     pub sort_name: String,
+    pub transliteration: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

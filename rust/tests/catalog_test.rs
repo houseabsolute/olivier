@@ -172,6 +172,41 @@ fn artists_page_limit() {
 }
 
 #[test]
+fn artists_page_returns_transliteration() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name, transliteration)
+         VALUES ('m-ringo', '椎名林檎', 'Sheena, Ringo', 'Ringo Sheena')",
+        [],
+    )
+    .unwrap();
+    // A Latin-only artist with no transliteration.
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('m-beatles', 'The Beatles', 'Beatles, The')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('r1', 'm-ringo', 'X')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('r2', 'm-beatles', 'Y')",
+        [],
+    )
+    .unwrap();
+
+    let page = artists_page(&conn, None, 50).unwrap();
+    assert_eq!(page.len(), 2);
+    // Ordered by sort_name: "Beatles, The" then "Sheena, Ringo".
+    assert_eq!(page[0].name, "The Beatles");
+    assert_eq!(page[0].transliteration, None);
+    assert_eq!(page[1].name, "椎名林檎");
+    assert_eq!(page[1].transliteration, Some("Ringo Sheena".to_string()));
+}
+
+#[test]
 fn albums_for_artist_ordered_by_year() {
     let conn = open(":memory:").unwrap();
 

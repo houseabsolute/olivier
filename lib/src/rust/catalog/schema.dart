@@ -45,15 +45,21 @@ class Artist {
   final String mbid;
   final String name;
   final String sortName;
+  final String? transliteration;
 
   const Artist({
     required this.mbid,
     required this.name,
     required this.sortName,
+    this.transliteration,
   });
 
   @override
-  int get hashCode => mbid.hashCode ^ name.hashCode ^ sortName.hashCode;
+  int get hashCode =>
+      mbid.hashCode ^
+      name.hashCode ^
+      sortName.hashCode ^
+      transliteration.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -62,7 +68,8 @@ class Artist {
           runtimeType == other.runtimeType &&
           mbid == other.mbid &&
           name == other.name &&
-          sortName == other.sortName;
+          sortName == other.sortName &&
+          transliteration == other.transliteration;
 }
 
 /// A queue entry paired with its catalog metadata, keyed by file path — used to
