@@ -1,6 +1,10 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/src/rust/api/catalog.dart';
+import 'package:olivier/src/rust/api/settings.dart' as rust_settings;
 import 'package:olivier/src/rust/catalog/schema.dart';
+import 'package:olivier/widgets/bilingual_text.dart';
 
 // Exposes the global dbPath set in main() to the Riverpod graph.
 // Overridden at the ProviderScope level in main.dart.
@@ -66,3 +70,64 @@ final tracksProvider = FutureProvider<List<Track>>((ref) {
   if (releaseMbid == null) return Future.value(<Track>[]);
   return listTracks(dbPath: db, releaseMbid: releaseMbid);
 });
+
+// --- Language-leads (A/B) display mode ---
+
+// Indirection seams so the provider is unit-testable without the FFI.
+typedef GetSettingFn = Future<String?> Function(String key);
+typedef SetSettingFn = Future<void> Function(String key, String value);
+
+final getSettingFnProvider = Provider<GetSettingFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (key) => rust_settings.getSetting(dbPath: db, key: key);
+});
+
+final setSettingFnProvider = Provider<SetSettingFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (key, value) =>
+      rust_settings.setSetting(dbPath: db, key: key, value: value);
+});
+
+const _languageLeadsKey = 'language_leads';
+
+class LanguageLeadsNotifier extends Notifier<LanguageLeads> {
+  // Tracks whether a user action has already set the value explicitly so that
+  // a late-arriving hydrate() from build() does not stomp over it.
+  bool _userSet = false;
+
+  @override
+  LanguageLeads build() {
+    _userSet = false;
+    // Default to A immediately; hydrate the stored value asynchronously.
+    unawaited(hydrate());
+    return LanguageLeads.a;
+  }
+
+  Future<void> hydrate() async {
+    final raw = await ref.read(getSettingFnProvider)(_languageLeadsKey);
+    // Only apply if the user hasn't toggled/set in the meantime.
+    if (!_userSet) {
+      state = _parse(raw);
+    }
+  }
+
+  Future<void> set(LanguageLeads leads) async {
+    _userSet = true;
+    state = leads; // optimistic
+    await ref.read(setSettingFnProvider)(
+      _languageLeadsKey,
+      leads == LanguageLeads.a ? 'A' : 'B',
+    );
+  }
+
+  Future<void> toggle() =>
+      set(state == LanguageLeads.a ? LanguageLeads.b : LanguageLeads.a);
+
+  static LanguageLeads _parse(String? raw) =>
+      raw == 'B' ? LanguageLeads.b : LanguageLeads.a;
+}
+
+final languageLeadsProvider =
+    NotifierProvider<LanguageLeadsNotifier, LanguageLeads>(
+  LanguageLeadsNotifier.new,
+);
