@@ -68,10 +68,13 @@ pub fn tracks_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Result
     let mut out = Vec::new();
     let mut stmt = conn.prepare(
         "SELECT t.id, t.disc, t.position, t.title, t.artist, t.length_ms,
-                s.last_played, MIN(f.added_at)
+                s.last_played, MIN(f.added_at),
+                MAX(CASE WHEN tta.kind = 'translit' THEN tta.title END),
+                MAX(CASE WHEN tta.kind = 'translate' THEN tta.title END)
          FROM track t
          LEFT JOIN track_stats s ON s.track_id = t.id
          LEFT JOIN file f ON f.track_id = t.id
+         LEFT JOIN track_title_alt tta ON tta.recording_mbid = t.recording_mbid
          WHERE t.release_mbid = ?1
          GROUP BY t.id
          ORDER BY t.disc, t.position",
@@ -86,6 +89,8 @@ pub fn tracks_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Result
             length_ms: r.get::<_, Option<i64>>(5)?.map(|v| v as u64),
             last_played: r.get(6)?,
             added_at: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
+            title_translit: r.get(8)?,
+            title_translate: r.get(9)?,
         })
     })?;
     for r in rows {

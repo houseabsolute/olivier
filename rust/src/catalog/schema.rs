@@ -27,6 +27,8 @@ pub struct Track {
     pub length_ms: Option<u64>,
     pub last_played: Option<i64>,
     pub added_at: i64,
+    pub title_translit: Option<String>,
+    pub title_translate: Option<String>,
 }
 
 /// A queue entry paired with its catalog metadata, keyed by file path — used to

@@ -859,6 +859,57 @@ fn albums_for_artist_returns_title_alts() {
 }
 
 #[test]
+fn tracks_for_album_returns_title_alts_one_row_per_track() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('m', 'A', 'A')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('rel', 'm', 'Album')",
+        [],
+    )
+    .unwrap();
+    // Track 1: Japanese with both alts (two track_title_alt rows).
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, recording_mbid, disc, position, title)
+         VALUES (1, 'rel', 'rec-1', 1, 1, '正しい街')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track_title_alt(recording_mbid, kind, title) VALUES ('rec-1', 'translit', 'Tadashii Machi')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track_title_alt(recording_mbid, kind, title) VALUES ('rec-1', 'translate', 'The Right Town')",
+        [],
+    )
+    .unwrap();
+    // Track 2: Latin-only, no recording_mbid, no alts.
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (2, 'rel', 1, 2, 'Sport')",
+        [],
+    )
+    .unwrap();
+
+    let tracks = tracks_for_album(&conn, "rel").unwrap();
+    assert_eq!(tracks.len(), 2, "two alt rows must not duplicate the track");
+    assert_eq!(tracks[0].position, 1);
+    assert_eq!(tracks[0].title, "正しい街");
+    assert_eq!(tracks[0].title_translit, Some("Tadashii Machi".to_string()));
+    assert_eq!(
+        tracks[0].title_translate,
+        Some("The Right Town".to_string())
+    );
+    assert_eq!(tracks[1].position, 2);
+    assert_eq!(tracks[1].title_translit, None);
+    assert_eq!(tracks[1].title_translate, None);
+}
+
+#[test]
 fn reconcile_leaves_synth_only_artist_untouched() {
     let conn = open(":memory:").unwrap();
     // An album-artist with NO real-MBID counterpart must keep its synth key

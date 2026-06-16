@@ -131,6 +131,8 @@ class Track {
   final BigInt? lengthMs;
   final PlatformInt64? lastPlayed;
   final PlatformInt64 addedAt;
+  final String? titleTranslit;
+  final String? titleTranslate;
 
   const Track({
     required this.id,
@@ -141,6 +143,8 @@ class Track {
     this.lengthMs,
     this.lastPlayed,
     required this.addedAt,
+    this.titleTranslit,
+    this.titleTranslate,
   });
 
   @override
@@ -152,7 +156,9 @@ class Track {
       artist.hashCode ^
       lengthMs.hashCode ^
       lastPlayed.hashCode ^
-      addedAt.hashCode;
+      addedAt.hashCode ^
+      titleTranslit.hashCode ^
+      titleTranslate.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -166,5 +172,7 @@ class Track {
           artist == other.artist &&
           lengthMs == other.lengthMs &&
           lastPlayed == other.lastPlayed &&
-          addedAt == other.addedAt;
+          addedAt == other.addedAt &&
+          titleTranslit == other.titleTranslit &&
+          titleTranslate == other.titleTranslate;
 }
