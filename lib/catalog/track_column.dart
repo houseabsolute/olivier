@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/widgets/bilingual_text.dart';
 
 class TrackColumn extends ConsumerWidget {
   const TrackColumn({super.key});
@@ -34,6 +35,7 @@ class _TrackList extends ConsumerWidget {
     final releaseMbid = ref.watch(selectedAlbumProvider);
     final albumObj = ref.watch(selectedAlbumObjectProvider);
     final albumTitle = albumObj?.title ?? '';
+    final leads = ref.watch(languageLeadsProvider);
 
     return ListView.builder(
       itemCount: tracks.length,
@@ -57,8 +59,12 @@ class _TrackList extends ConsumerWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: _RowLabel(
-                    text: '${track.position}. ${track.title}',
+                  child: BilingualText(
+                    original: track.title,
+                    translit: track.titleTranslit,
+                    translate: track.titleTranslate,
+                    leads: leads,
+                    prefix: '${track.position}. ',
                   ),
                 ),
                 Text(
@@ -79,18 +85,5 @@ class _TrackList extends ConsumerWidget {
     final minutes = totalSeconds ~/ 60;
     final seconds = totalSeconds % 60;
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
-  }
-}
-
-class _RowLabel extends StatelessWidget {
-  const _RowLabel({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      overflow: TextOverflow.ellipsis,
-    );
   }
 }
