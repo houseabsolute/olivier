@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/scan_controller.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
@@ -11,6 +12,7 @@ class SettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scan = ref.watch(scanControllerProvider);
+    final enrich = ref.watch(enrichControllerProvider);
     final leads = ref.watch(languageLeadsProvider);
 
     return Scaffold(
@@ -92,6 +94,74 @@ class SettingsPage extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     'Error: ${scan.lastError}',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 24),
+          Text('Music metadata',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const Text(
+            'Fetch readings, translations, and original dates from MusicBrainz '
+            'for your tagged files. Runs automatically after a scan.',
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              FilledButton.icon(
+                icon: const Icon(Icons.translate),
+                label: const Text('Enrich library'),
+                onPressed: enrich.running
+                    ? null
+                    : () =>
+                        ref.read(enrichControllerProvider.notifier).enrich(),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.cloud_sync_outlined),
+                label: const Text('Re-fetch from MusicBrainz'),
+                onPressed: enrich.running
+                    ? null
+                    : () => ref
+                        .read(enrichControllerProvider.notifier)
+                        .refreshFromMusicBrainz(),
+              ),
+            ],
+          ),
+          if (enrich.running) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Enriching… ${enrich.entitiesDone}'
+                    '${enrich.entitiesTotal > 0 ? "/${enrich.entitiesTotal}" : ""}'
+                    '${enrich.current.isNotEmpty ? " · ${enrich.current}" : ""}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (enrich.lastError != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Enrich error: ${enrich.lastError}',
                     style: const TextStyle(color: Colors.red),
                   ),
                 ),

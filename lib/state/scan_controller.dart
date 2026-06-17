@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/src/rust/api/catalog.dart';
+import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
 
 /// Sentinel so [ScanState.copyWith] can distinguish "leave lastError unchanged"
@@ -168,6 +169,11 @@ class ScanController extends Notifier<ScanState> {
       // above already refreshed artistsProvider, and the selection can only be
       // stale once the batch has finished merging/removing artists.
       await _reconcileSelection();
+      // Auto-enrich newly-scanned items in the background (resumable; force=false
+      // skips already-enriched entities, so it's cheap when nothing changed).
+      if (!_disposed) {
+        unawaited(ref.read(enrichControllerProvider.notifier).enrich());
+      }
     } finally {
       _draining = false;
       if (!_disposed) state = state.copyWith(scanning: false, queued: 0);
