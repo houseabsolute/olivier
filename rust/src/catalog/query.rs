@@ -10,7 +10,7 @@ pub fn artists_page(
 ) -> anyhow::Result<Vec<Artist>> {
     let mut out = Vec::new();
     let mut stmt = conn.prepare(
-        "SELECT a.mbid, a.name, a.sort_name, a.transliteration FROM artist a
+        "SELECT a.mbid, a.name, a.sort_name, a.transliteration, a.name_original FROM artist a
          WHERE a.mbid IN (SELECT DISTINCT album_artist_mbid FROM release)
            AND (?1 IS NULL OR a.sort_name > ?1 COLLATE NOCASE)
          ORDER BY a.sort_name COLLATE NOCASE LIMIT ?2",
@@ -21,6 +21,7 @@ pub fn artists_page(
             name: r.get(1)?,
             sort_name: r.get(2)?,
             transliteration: r.get(3)?,
+            name_original: r.get(4)?,
         })
     })?;
     for r in rows {

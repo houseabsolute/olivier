@@ -848,11 +848,13 @@ impl SseDecode for crate::catalog::schema::Artist {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_sortName = <String>::sse_decode(deserializer);
         let mut var_transliteration = <Option<String>>::sse_decode(deserializer);
+        let mut var_nameOriginal = <Option<String>>::sse_decode(deserializer);
         return crate::catalog::schema::Artist {
             mbid: var_mbid,
             name: var_name,
             sort_name: var_sortName,
             transliteration: var_transliteration,
+            name_original: var_nameOriginal,
         };
     }
 }
@@ -1261,6 +1263,7 @@ impl flutter_rust_bridge::IntoDart for crate::catalog::schema::Artist {
             self.name.into_into_dart().into_dart(),
             self.sort_name.into_into_dart().into_dart(),
             self.transliteration.into_into_dart().into_dart(),
+            self.name_original.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1484,6 +1487,7 @@ impl SseEncode for crate::catalog::schema::Artist {
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.sort_name, serializer);
         <Option<String>>::sse_encode(self.transliteration, serializer);
+        <Option<String>>::sse_encode(self.name_original, serializer);
     }
 }
 

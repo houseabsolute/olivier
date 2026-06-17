@@ -7,6 +7,8 @@ import '../enrich/progress.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `enrich_runtime`
+
 /// Stream enrichment progress to Dart. `force=false` is the resumable auto path
 /// (skips already-enriched files + cached entities); `force=true` re-runs the
 /// logic over everything, still reading entity JSON from the cache.

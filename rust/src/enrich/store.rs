@@ -23,6 +23,7 @@ pub fn apply_artist_transliteration(
     conn: &Connection,
     artist_mbid: &str,
     chosen: &ChosenAlias,
+    original_name: &str,
 ) -> anyhow::Result<()> {
     // Snapshot the embedded sort_name once (first enrichment only).
     conn.execute(
@@ -31,9 +32,12 @@ pub fn apply_artist_transliteration(
           WHERE mbid = ?1 AND sort_name_embedded IS NULL",
         rusqlite::params![artist_mbid],
     )?;
+    // Store the MusicBrainz original-script name (e.g. 椎名林檎) in its own column,
+    // separate from the tag-derived `name` (which may be a romanization), so the
+    // bilingual row can lead with the original and a re-scan can't clobber it.
     conn.execute(
-        "UPDATE artist SET transliteration = ?1, sort_name = ?2 WHERE mbid = ?3",
-        rusqlite::params![chosen.name, chosen.sort_name, artist_mbid],
+        "UPDATE artist SET transliteration = ?1, sort_name = ?2, name_original = ?3 WHERE mbid = ?4",
+        rusqlite::params![chosen.name, chosen.sort_name, original_name, artist_mbid],
     )?;
     Ok(())
 }

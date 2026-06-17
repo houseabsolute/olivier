@@ -585,6 +585,7 @@ fn applies_artist_transliteration_and_sort_key() {
             sort_name: "Sheena, Ringo".into(),
             from_entity_sort_name: false,
         },
+        "椎名林檎",
     )
     .unwrap();
     let (translit, sort, embedded): (Option<String>, String, Option<String>) = conn
@@ -598,6 +599,15 @@ fn applies_artist_transliteration_and_sort_key() {
     assert_eq!(sort, "Sheena, Ringo");
     // The pre-enrichment embedded sort_name is preserved for the §6.1 tier-3 fallback.
     assert_eq!(embedded.as_deref(), Some("椎名林檎"));
+    // The MusicBrainz original-script name is stored separately from `name`.
+    let name_original: Option<String> = conn
+        .query_row(
+            "SELECT name_original FROM artist WHERE mbid='art1'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(name_original.as_deref(), Some("椎名林檎"));
 
     // A re-enrich must NOT clobber the preserved embedded value.
     store::apply_artist_transliteration(
@@ -608,6 +618,7 @@ fn applies_artist_transliteration_and_sort_key() {
             sort_name: "Sheena, Ringo".into(),
             from_entity_sort_name: false,
         },
+        "椎名林檎",
     )
     .unwrap();
     let embedded2: Option<String> = conn

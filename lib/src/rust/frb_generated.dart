@@ -724,13 +724,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Artist dco_decode_artist(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return Artist(
       mbid: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
       sortName: dco_decode_String(arr[2]),
       transliteration: dco_decode_opt_String(arr[3]),
+      nameOriginal: dco_decode_opt_String(arr[4]),
     );
   }
 
@@ -1026,11 +1027,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_name = sse_decode_String(deserializer);
     var var_sortName = sse_decode_String(deserializer);
     var var_transliteration = sse_decode_opt_String(deserializer);
+    var var_nameOriginal = sse_decode_opt_String(deserializer);
     return Artist(
         mbid: var_mbid,
         name: var_name,
         sortName: var_sortName,
-        transliteration: var_transliteration);
+        transliteration: var_transliteration,
+        nameOriginal: var_nameOriginal);
   }
 
   @protected
@@ -1418,6 +1421,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.sortName, serializer);
     sse_encode_opt_String(self.transliteration, serializer);
+    sse_encode_opt_String(self.nameOriginal, serializer);
   }
 
   @protected

@@ -73,7 +73,7 @@ pub async fn enrich<H: MbHttp, P: Pacer>(
         }
         let mb = client.fetch_artist(conn, artist_mbid).await?;
         if let Some(chosen) = select_transliteration(&mb) {
-            store::apply_artist_transliteration(conn, artist_mbid, &chosen)?;
+            store::apply_artist_transliteration(conn, artist_mbid, &chosen, &mb.name)?;
         }
         done += 1;
         if !on_progress(EnrichProgress {

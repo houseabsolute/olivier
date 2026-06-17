@@ -98,6 +98,8 @@ const MIGRATION_SLICE: &[M<'_>] = &[
          ALTER TABLE artist ADD COLUMN transliteration TEXT;
          ALTER TABLE artist ADD COLUMN sort_name_embedded TEXT;",
     ),
+    // ── Phase 2b: original-script artist name from MusicBrainz ───────────
+    M::up("ALTER TABLE artist ADD COLUMN name_original TEXT;"),
 ];
 const MIGRATIONS: Migrations<'_> = Migrations::from_slice(MIGRATION_SLICE);
 

@@ -4,6 +4,9 @@ pub struct Artist {
     pub name: String,
     pub sort_name: String,
     pub transliteration: Option<String>,
+    /// Original-script name from MusicBrainz (e.g. 椎名林檎) — present once
+    /// enriched; the tag-derived `name` may itself be a romanization.
+    pub name_original: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -55,11 +55,16 @@ class Artist {
   final String sortName;
   final String? transliteration;
 
+  /// Original-script name from MusicBrainz (e.g. 椎名林檎) — present once
+  /// enriched; the tag-derived `name` may itself be a romanization.
+  final String? nameOriginal;
+
   const Artist({
     required this.mbid,
     required this.name,
     required this.sortName,
     this.transliteration,
+    this.nameOriginal,
   });
 
   @override
@@ -67,7 +72,8 @@ class Artist {
       mbid.hashCode ^
       name.hashCode ^
       sortName.hashCode ^
-      transliteration.hashCode;
+      transliteration.hashCode ^
+      nameOriginal.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -77,7 +83,8 @@ class Artist {
           mbid == other.mbid &&
           name == other.name &&
           sortName == other.sortName &&
-          transliteration == other.transliteration;
+          transliteration == other.transliteration &&
+          nameOriginal == other.nameOriginal;
 }
 
 /// A queue entry paired with its catalog metadata, keyed by file path — used to

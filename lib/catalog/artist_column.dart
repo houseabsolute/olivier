@@ -49,7 +49,7 @@ class _ArtistList extends ConsumerWidget {
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: BilingualText(
-              original: artist.name,
+              original: artist.nameOriginal ?? artist.name,
               translit: artist.transliteration,
               translate: null, // names get a reading only (spec §6)
               leads: leads,
