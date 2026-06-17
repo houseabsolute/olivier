@@ -1,0 +1,36 @@
+{
+  "release-count": 2,
+  "release-offset": 0,
+  "releases": [
+    {
+      "id": "w0000000-0000-0000-0000-00000000jpan",
+      "title": "W",
+      "status": "Official",
+      "text-representation": { "script": "Jpan", "language": "jpn" },
+      "media": [
+        {
+          "tracks": [
+            { "title": "拍手喝采", "recording": { "id": "rec00000-0000-0000-0000-000000000001" } },
+            { "title": "火傷",     "recording": { "id": "rec00000-0000-0000-0000-000000000002" } },
+            { "title": "二酸化炭素", "recording": { "id": "rec00000-0000-0000-0000-000000000003" } }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "w0000000-0000-0000-0000-00000000latn",
+      "title": "W",
+      "status": "Official",
+      "text-representation": { "script": "Latn", "language": "eng" },
+      "media": [
+        {
+          "tracks": [
+            { "title": "Applause", "recording": { "id": "rec00000-0000-0000-0000-000000000001" } },
+            { "title": "Burn",     "recording": { "id": "rec00000-0000-0000-0000-000000000002" } },
+            { "title": "CO2",      "recording": { "id": "rec00000-0000-0000-0000-000000000003" } }
+          ]
+        }
+      ]
+    }
+  ]
+}

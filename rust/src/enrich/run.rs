@@ -2,9 +2,9 @@ use rusqlite::Connection;
 
 use crate::enrich::client::{MbClient, Pacer};
 use crate::enrich::http::MbHttp;
-use crate::enrich::model::MbRelease;
+use crate::enrich::model::{MbRelease, MbTextRepresentation};
 use crate::enrich::progress::EnrichProgress;
-use crate::enrich::select::{classify_pseudo, pseudo_release_targets, select_transliteration};
+use crate::enrich::select::{classify_from_text_representation, select_transliteration};
 use crate::enrich::store;
 
 fn is_real_mbid(mbid: &str) -> bool {
@@ -27,8 +27,10 @@ fn artists_to_enrich(conn: &Connection, force: bool) -> anyhow::Result<Vec<Strin
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
-/// Unique real-MBID releases owning ≥1 un-enriched file (or all, if force),
-/// paired with their release-group MBID for the fallback browse + dates.
+/// Unique real-MBID releases owning ≥1 un-enriched file (or all, if force).
+/// The catalog's stored `release_group_mbid` is selected too but no longer
+/// drives any fetch — the sibling-edition browse and dates both use the REAL RG
+/// read from the release JSON — so it is currently ignored by the caller.
 fn releases_to_enrich(
     conn: &Connection,
     force: bool,
@@ -88,32 +90,31 @@ pub async fn enrich<H: MbHttp, P: Pacer>(
 
     // ── releases ──
     // `rg_mbid` is the CATALOG's stored release_group_mbid (may be `synth:rg:…`);
-    // it is used only for the release-group browse fallback URL. The original
-    // date is written to the REAL RG read from the release JSON below.
-    for (rel_mbid, rg_mbid, title) in &releases {
+    // it is NOT used for the sibling-edition browse — that browses the REAL RG
+    // read from the release JSON. The original date is written to the REAL RG too.
+    for (rel_mbid, _rg_mbid, title) in &releases {
         // Network fetches happen OUTSIDE the per-release transaction (a tokio
-        // sleep must not hold a SQLite write lock). The pseudo-releases are
-        // fetched first, then all DB writes for this release commit atomically.
+        // sleep must not hold a SQLite write lock). The release + its sibling
+        // editions are fetched first, then all DB writes commit atomically.
         let release = client.fetch_release(conn, rel_mbid).await?;
 
-        // pseudo-releases on this release, else fall back to browsing the group
-        // (browse keyed by the catalog RG mbid — it's only a fetch URL).
-        let mut targets = pseudo_release_targets(&release);
-        if targets.is_empty() {
-            if let Some(rg) = rg_mbid {
-                if is_real_mbid(rg) {
-                    targets = find_pseudo_via_browse(conn, client, rg).await?;
-                }
+        // Title alts come from this release's SIBLING EDITIONS in the same
+        // release group: a regular international edition (Latin/English) or a
+        // Pseudo-Release (which IS just a sibling release in the group with a
+        // Latin `text-representation`) is handled uniformly. We browse the REAL
+        // release group from the fetched JSON (`release.release-group.id`), NOT
+        // the catalog's possibly-`synth:` release_group_mbid, then page until
+        // we've seen every edition.
+        let mut editions = Vec::new();
+        if let Some(rg) = release.release_group.as_ref() {
+            if is_real_mbid(&rg.id) {
+                editions = browse_all_editions(conn, client, &rg.id).await?;
             }
-        }
-        let mut pseudos = Vec::new();
-        for pseudo_mbid in targets {
-            pseudos.push(client.fetch_pseudo_release(conn, &pseudo_mbid).await?);
         }
 
         // ── per-release unit of work: ONE transaction ──
-        // apply dates + all pseudo title-alts + mark files enriched commit
-        // together, so a crash can't leave dates committed but files
+        // apply dates + all sibling-edition title-alts + mark files enriched
+        // commit together, so a crash can't leave dates committed but files
         // un-enriched (inconsistent). Uses the codebase's existing
         // `conn.unchecked_transaction()` pattern. One commit per release.
         let tx = conn.unchecked_transaction()?;
@@ -132,9 +133,12 @@ pub async fn enrich<H: MbHttp, P: Pacer>(
             )?;
         }
 
-        for pseudo in &pseudos {
-            apply_pseudo_alts(&tx, rel_mbid, title, pseudo)?;
-        }
+        apply_edition_alts(
+            &tx,
+            rel_mbid,
+            release.text_representation.as_ref(),
+            &editions,
+        )?;
 
         store::mark_release_files_enriched(&tx, rel_mbid)?;
         tx.commit()?;
@@ -159,57 +163,82 @@ pub async fn enrich<H: MbHttp, P: Pacer>(
     Ok(())
 }
 
-/// Album title alt = pseudo-release `title`; track title alts joined by
-/// recording MBID against media[].tracks[].recording.id.
+/// Store title alts for the original release from its sibling editions.
 ///
-/// A single pseudo-release is uniformly one kind (MB attaches a transliteration
-/// pseudo-release OR a translation pseudo-release, not mixed), so `classify_pseudo`
-/// is called once at the release level — using that pseudo-release's
-/// `text-representation` — and the resulting kind is applied to all its track
-/// titles. This is correct and avoids needing each original track title.
-fn apply_pseudo_alts(
+/// A sibling edition supplies title alts when its `text-representation` classifies
+/// (Latin script ⇒ transliteration; `language == "eng"` ⇒ translation). The
+/// edition's album title is the original release's album-title alt; each track
+/// title is joined to OUR tracks by recording MBID (`track_title_alt` is keyed
+/// `(recording_mbid, kind)`), so a sibling edition only needs to share recording
+/// MBIDs with the original — it does NOT need the original track titles.
+///
+/// Pseudo-releases require no special handling: a Pseudo-Release IS a sibling
+/// release in the group with a Latin `text-representation`, classified the same
+/// way as a regular international edition.
+///
+/// Editions written in the SAME script as the original are skipped: another
+/// native-script edition (e.g. a Japanese reissue of a Japanese album) is not a
+/// transliteration or translation, and `classify_from_text_representation` would
+/// otherwise label a non-Latin native script as a (spurious) translation.
+///
+/// Editions are processed in ascending `id` order so the `ON CONFLICT(...,kind)`
+/// last-writer is deterministic when two editions share a kind.
+fn apply_edition_alts(
     conn: &Connection,
     release_mbid: &str,
-    original_title: &str,
-    pseudo: &MbRelease,
+    original_text_rep: Option<&MbTextRepresentation>,
+    editions: &[MbRelease],
 ) -> anyhow::Result<()> {
-    // Authoritative: the pseudo-release's text-representation (script/language);
-    // falls back to the title-pair heuristic only when that metadata is absent.
-    let kind = classify_pseudo(original_title, pseudo);
-    store::upsert_release_alt(conn, release_mbid, kind, &pseudo.title)?;
-    for medium in &pseudo.media {
-        for tr in &medium.tracks {
-            if let Some(rec) = &tr.recording {
-                // classify each track title against… the original track title is
-                // unknown here cheaply; reuse the release-level kind (a pseudo
-                // release is uniformly translit OR translate per MB convention).
-                store::upsert_track_alt(conn, &rec.id, kind, &tr.title)?;
+    let original_script = original_text_rep.and_then(|tr| tr.script.as_deref());
+
+    let mut ordered: Vec<&MbRelease> = editions
+        .iter()
+        .filter(|ed| ed.id != release_mbid)
+        .filter(|ed| {
+            // Skip a sibling in the original's own script (not an alt).
+            let ed_script = ed
+                .text_representation
+                .as_ref()
+                .and_then(|tr| tr.script.as_deref());
+            original_script.is_none() || ed_script != original_script
+        })
+        .collect();
+    ordered.sort_by(|a, b| a.id.cmp(&b.id));
+
+    for ed in ordered {
+        let Some(kind) = classify_from_text_representation(ed.text_representation.as_ref()) else {
+            continue;
+        };
+        store::upsert_release_alt(conn, release_mbid, kind, &ed.title)?;
+        for medium in &ed.media {
+            for tr in &medium.tracks {
+                if let Some(rec) = &tr.recording {
+                    store::upsert_track_alt(conn, &rec.id, kind, &tr.title)?;
+                }
             }
         }
     }
     Ok(())
 }
 
-/// Release-group browse fallback (§5.1): page release-rels, collect any
-/// transl-tracklisting targets found on sibling releases.
-async fn find_pseudo_via_browse<H: MbHttp, P: Pacer>(
+/// Browse every edition in a release group, paging `limit=100&offset=` until
+/// we've seen all of them (`offset >= release_count`). Each edition carries its
+/// full tracklist (`inc=recordings`) and its `text-representation`.
+async fn browse_all_editions<H: MbHttp, P: Pacer>(
     conn: &Connection,
     client: &MbClient<H, P>,
     rg_mbid: &str,
-) -> anyhow::Result<Vec<String>> {
+) -> anyhow::Result<Vec<MbRelease>> {
     let mut offset = 0u32;
     let mut out = Vec::new();
     loop {
         let page = client.browse_release_group(conn, rg_mbid, offset).await?;
-        for rel in &page.releases {
-            out.extend(pseudo_release_targets(rel));
-        }
-        offset += page.releases.len() as u32;
-        if page.releases.is_empty() || offset >= page.release_count {
+        let n = page.releases.len() as u32;
+        out.extend(page.releases);
+        offset += n;
+        if n == 0 || offset >= page.release_count {
             break;
         }
     }
-    out.sort();
-    out.dedup();
     Ok(out)
 }

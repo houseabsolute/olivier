@@ -5,10 +5,12 @@
 //   search API and verified to be 9e414497-23b7-4ab7-9ec6-8ea9864c9e87.
 // release (無罪モラトリアム): 5588dfca-c011-4f66-9899-dcaa5f4efed5
 // release-group:             923db16c-6620-3e44-ba00-a20745c6a957
-// pseudo translit (romaji):  3e88897d-8c4f-4895-a28b-ccb933336c1b  text-representation: script=Latn language=jpn
-// pseudo translate (en):     9cda9af0-f295-4f20-a470-8b7d2ce0c4b8  text-representation: script=Latn language=eng
-// pseudo discovery path:     DIRECT transl-tracklisting rel on the main release
-//                            (NOT the release-group browse fallback)
+// sibling translit (romaji): 3e88897d-8c4f-4895-a28b-ccb933336c1b  text-representation: script=Latn language=jpn
+// sibling translate (en):    9cda9af0-f295-4f20-a470-8b7d2ce0c4b8  text-representation: script=Latn language=eng
+// alt discovery path:        release-group BROWSE (inc=recordings). Title alts
+//                            come from sibling editions in the group (a
+//                            Pseudo-Release IS one such Latin-script sibling),
+//                            joined to our tracks by recording MBID.
 // ─────────────────────────────────────────────────────────────────────────
 
 use rust_lib_olivier::db::open;
@@ -16,8 +18,8 @@ use rust_lib_olivier::enrich::http::{MbHttp, MbResponse};
 use rust_lib_olivier::enrich::model::{MbAlias, MbArtist, MbRelease, MbTextRepresentation};
 use rust_lib_olivier::enrich::run::enrich;
 use rust_lib_olivier::enrich::select::{
-    classify_alt, classify_pseudo, pseudo_release_targets, select_transliteration, AltKind,
-    TRANSL_TRACKLISTING_TYPE_ID,
+    classify_alt, classify_from_text_representation, classify_pseudo, select_transliteration,
+    AltKind,
 };
 use rust_lib_olivier::enrich::store;
 
@@ -424,40 +426,43 @@ async fn url_contains_expected_inc_params() {
     );
 }
 
-// ── Pseudo-release discovery tests (Task 9) ───────────────────────────────
+// ── Edition classification primitive (sibling-edition path) ───────────────
 
 #[test]
-fn finds_transl_tracklisting_targets() {
-    let r: MbRelease = serde_json::from_str(&fixture("release_muzai.json")).unwrap();
-    let targets = pseudo_release_targets(&r);
-    assert!(
-        !targets.is_empty(),
-        "expected at least one pseudo-release link"
-    );
-    // Each target MBID is non-empty.
-    assert!(targets.iter().all(|id| !id.is_empty()));
-}
-
-#[test]
-fn ignores_non_transl_relations() {
-    let json = r#"{
-      "id":"rel-x","title":"X",
-      "relations":[
-        {"type-id":"00000000-0000-0000-0000-000000000000","release":{"id":"other"}},
-        {"type-id":"fc399d47-23a7-4c28-bfcf-0607a562b644","release":{"id":"pseudo"}}
-      ],
-      "media":[]
-    }"#;
-    let r: MbRelease = serde_json::from_str(json).unwrap();
-    assert_eq!(pseudo_release_targets(&r), vec!["pseudo".to_string()]);
-}
-
-#[test]
-fn type_id_constant_matches_spec() {
+fn classify_from_text_representation_is_the_edition_primitive() {
+    // Latin script ⇒ transliteration.
     assert_eq!(
-        TRANSL_TRACKLISTING_TYPE_ID,
-        "fc399d47-23a7-4c28-bfcf-0607a562b644"
+        classify_from_text_representation(Some(&MbTextRepresentation {
+            script: Some("Latn".into()),
+            language: Some("jpn".into()),
+        })),
+        Some(AltKind::Translit)
     );
+    // English language ⇒ translation (an international edition / English pseudo).
+    assert_eq!(
+        classify_from_text_representation(Some(&MbTextRepresentation {
+            script: Some("Latn".into()),
+            language: Some("eng".into()),
+        })),
+        Some(AltKind::Translate)
+    );
+    // The original-script edition (e.g. Jpan/jpn) does not classify ⇒ skipped.
+    assert_eq!(
+        classify_from_text_representation(Some(&MbTextRepresentation {
+            script: Some("Jpan".into()),
+            language: Some("jpn".into()),
+        })),
+        Some(AltKind::Translate)
+    );
+    // No script + non-eng language ⇒ None (caller skips the edition).
+    assert_eq!(
+        classify_from_text_representation(Some(&MbTextRepresentation {
+            script: None,
+            language: Some("jpn".into()),
+        })),
+        None
+    );
+    assert_eq!(classify_from_text_representation(None), None);
 }
 
 // ── Alt-kind classification tests (Task 9) ────────────────────────────────
@@ -758,9 +763,6 @@ fn marks_files_enriched_for_release() {
 const ARTIST_MBID: &str = "9e414497-23b7-4ab7-9ec6-8ea9864c9e87";
 const RELEASE_MBID: &str = "5588dfca-c011-4f66-9899-dcaa5f4efed5";
 const RELEASE_GROUP_MBID: &str = "923db16c-6620-3e44-ba00-a20745c6a957";
-// pseudo release MBIDs (direct transl-tracklisting rels on the main release)
-const TRANSLIT_PSEUDO_MBID: &str = "3e88897d-8c4f-4895-a28b-ccb933336c1b";
-const TRANSLATE_PSEUDO_MBID: &str = "9cda9af0-f295-4f20-a470-8b7d2ce0c4b8";
 // recording MBID of 歌舞伎町の女王 (track 2 in the fixture)
 const REC_KABUKI: &str = "4dd9d08d-376c-42b2-8b44-e3322ed657b7";
 
@@ -773,11 +775,9 @@ fn artist_url() -> String {
 fn release_url() -> String {
     format!("{BASE}/release/{RELEASE_MBID}?inc=recordings+release-rels+release-groups+artist-credits&fmt=json")
 }
-fn translit_url() -> String {
-    format!("{BASE}/release/{TRANSLIT_PSEUDO_MBID}?inc=recordings&fmt=json")
-}
-fn translate_url() -> String {
-    format!("{BASE}/release/{TRANSLATE_PSEUDO_MBID}?inc=recordings&fmt=json")
+/// Release-group browse (inc=recordings) — the alt-discovery path.
+fn browse_url() -> String {
+    format!("{BASE}/release?release-group={RELEASE_GROUP_MBID}&inc=recordings&limit=100&offset=0&fmt=json")
 }
 
 fn seed_taggable_catalog(conn: &rusqlite::Connection) {
@@ -826,20 +826,16 @@ async fn enriches_catalog_end_to_end() {
     let conn = open(":memory:").unwrap();
     seed_taggable_catalog(&conn);
 
-    // Discovery path is DIRECT (transl-tracklisting rels on the main release);
-    // do NOT provide a browse-fallback response so any accidental fallback errors loudly.
+    // Alt-discovery path: browse the REAL release group (inc=recordings). The
+    // browse fixture carries the Japanese original + a romaji (Latn/jpn) sibling
+    // + an English (Latn/eng) sibling, all sharing the 歌舞伎町の女王 recording MBID.
     let http = FakeHttp::new()
         .with(&artist_url(), 200, &fixture("artist_9e414497_aliases.json"))
         .with(&release_url(), 200, &fixture("release_muzai.json"))
         .with(
-            &translit_url(),
+            &browse_url(),
             200,
-            &fixture("release_muzai_translit.json"),
-        )
-        .with(
-            &translate_url(),
-            200,
-            &fixture("release_muzai_translate.json"),
+            &fixture("release_group_browse_muzai.json"),
         );
     let client = rust_lib_olivier::enrich::client::MbClient::new(http);
 
@@ -852,15 +848,12 @@ async fn enriches_catalog_end_to_end() {
     .unwrap();
     assert!(last.unwrap().done);
 
-    // DIRECT path: must NOT have browsed the release-group.
+    // The alt path browses the REAL release group from the fetched JSON.
     assert!(
-        !client
-            .http()
-            .calls
-            .borrow()
-            .iter()
-            .any(|u| u.contains("release-group=")),
-        "must not browse — direct rel path"
+        client.http().calls.borrow().iter().any(|u| u
+            .contains(&format!("release-group={RELEASE_GROUP_MBID}"))
+            && u.contains("inc=recordings")),
+        "must browse the release group with inc=recordings"
     );
 
     // Artist transliteration + sort key set.
@@ -879,22 +872,63 @@ async fn enriches_catalog_end_to_end() {
     assert_eq!(translit.as_deref(), Some("Sheena Ringo"));
     assert_eq!(sort, "Sheena, Ringo");
 
-    // Release + track alts present.
-    let ra: i64 = conn
-        .query_row("SELECT count(*) FROM release_title_alt", [], |r| r.get(0))
-        .unwrap();
-    assert!(ra >= 1);
-    let ta: i64 = conn
+    // Album-title alts: romaji ⇒ translit, English ⇒ translate, keyed by release.
+    let album_translit: String = conn
         .query_row(
             &format!(
-                "SELECT count(*) FROM track_title_alt WHERE recording_mbid='{}'",
-                REC_KABUKI
+                "SELECT title FROM release_title_alt WHERE release_mbid='{RELEASE_MBID}' AND kind='translit'"
             ),
             [],
             |r| r.get(0),
         )
         .unwrap();
-    assert!(ta >= 1);
+    assert_eq!(album_translit, "Muzai Moratorium");
+    let album_translate: String = conn
+        .query_row(
+            &format!(
+                "SELECT title FROM release_title_alt WHERE release_mbid='{RELEASE_MBID}' AND kind='translate'"
+            ),
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(album_translate, "Innocence Moratorium");
+
+    // Track-title alts for 歌舞伎町の女王, joined by recording MBID.
+    let track_translit: String = conn
+        .query_row(
+            &format!(
+                "SELECT title FROM track_title_alt WHERE recording_mbid='{REC_KABUKI}' AND kind='translit'"
+            ),
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(track_translit, "Kabukicho no Joo");
+    let track_translate: String = conn
+        .query_row(
+            &format!(
+                "SELECT title FROM track_title_alt WHERE recording_mbid='{REC_KABUKI}' AND kind='translate'"
+            ),
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(track_translate, "Queen of Kabuki-Cho");
+
+    // The same-script Japanese reissue (2008) must NOT have written a Japanese
+    // "translate" alt over the English one — guarded by exact title above, and
+    // by the row count: exactly one translate row for this recording.
+    let translate_rows: i64 = conn
+        .query_row(
+            &format!(
+                "SELECT count(*) FROM track_title_alt WHERE recording_mbid='{REC_KABUKI}' AND kind='translate'"
+            ),
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(translate_rows, 1);
 
     // File marked enriched.
     let e: i64 = conn
@@ -905,6 +939,122 @@ async fn enriches_catalog_end_to_end() {
         )
         .unwrap();
     assert_eq!(e, 1);
+}
+
+// ── International-edition case (real W → Applause / Burn / CO2) ─────────────
+
+/// A regular *international edition* (a real Official release whose
+/// `text-representation` is Latin/English) in the same release group — NOT a
+/// `transl-tracklisting` pseudo-release — must contribute its English titles as
+/// `translate` alts, joined to the original's recordings by recording MBID.
+/// Mirrors album "W" by Akira Yuki: a Japanese original (拍手喝采 / 火傷 / 二酸化炭素)
+/// and an English edition (Applause / Burn / CO2) sharing recording MBIDs.
+#[tokio::test]
+async fn international_edition_supplies_translate_alts() {
+    const W_RG: &str = "03271c5b-ced2-4356-ac0f-686cc9d9fc52";
+    const W_REL: &str = "w0000000-0000-0000-0000-00000000jpan";
+    const W_ARTIST: &str = "aaaaaaaa-0000-0000-0000-00000000akir";
+    const REC1: &str = "rec00000-0000-0000-0000-000000000001"; // 拍手喝采 / Applause
+    const REC2: &str = "rec00000-0000-0000-0000-000000000002"; // 火傷    / Burn
+    const REC3: &str = "rec00000-0000-0000-0000-000000000003"; // 二酸化炭素 / CO2
+
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        &format!("INSERT INTO artist(mbid,name,sort_name) VALUES ('{W_ARTIST}','結城アイラ','結城アイラ')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO release_group(mbid,title) VALUES ('{W_RG}','W')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO release(mbid,release_group_mbid,album_artist_mbid,title) VALUES ('{W_REL}','{W_RG}','{W_ARTIST}','W')"),
+        [],
+    )
+    .unwrap();
+    for (i, (rec, jp)) in [(REC1, "拍手喝采"), (REC2, "火傷"), (REC3, "二酸化炭素")]
+        .iter()
+        .enumerate()
+    {
+        conn.execute(
+            &format!(
+                "INSERT INTO track(release_mbid,recording_mbid,disc,position,title) VALUES ('{W_REL}','{rec}',1,{},'{jp}')",
+                i + 1
+            ),
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            &format!(
+                "INSERT INTO file(path,mtime,size,track_id,added_at,enriched) VALUES ('/m/w{}.flac',0,0,{},0,0)",
+                i + 1,
+                i + 1
+            ),
+            [],
+        )
+        .unwrap();
+    }
+
+    let artist_url = format!("{BASE}/artist/{W_ARTIST}?inc=aliases&fmt=json");
+    let release_url = format!(
+        "{BASE}/release/{W_REL}?inc=recordings+release-rels+release-groups+artist-credits&fmt=json"
+    );
+    let browse_url =
+        format!("{BASE}/release?release-group={W_RG}&inc=recordings&limit=100&offset=0&fmt=json");
+    // Minimal artist body — no usable EN "Artist name" alias, so artist
+    // transliteration falls back to entity sort-name (irrelevant here).
+    let artist_body = format!(
+        "{{\"id\":\"{W_ARTIST}\",\"name\":\"結城アイラ\",\"sort-name\":\"Yuki, Aira\",\"aliases\":[]}}"
+    );
+
+    let http = FakeHttp::new()
+        .with(&artist_url, 200, &artist_body)
+        .with(&release_url, 200, &fixture("release_w_jpan.json"))
+        .with(
+            &browse_url,
+            200,
+            &fixture("release_group_browse_w_intl.json"),
+        );
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+
+    enrich(&conn, &client, false, |_| true).await.unwrap();
+
+    // The English international edition's titles land as `translate` track alts,
+    // keyed by the SHARED recording MBIDs of the original's tracks.
+    let english = |rec: &str| -> Option<String> {
+        conn.query_row(
+            "SELECT title FROM track_title_alt WHERE recording_mbid=?1 AND kind='translate'",
+            [rec],
+            |r| r.get::<_, String>(0),
+        )
+        .ok()
+    };
+    assert_eq!(english(REC1).as_deref(), Some("Applause"));
+    assert_eq!(english(REC2).as_deref(), Some("Burn"));
+    assert_eq!(english(REC3).as_deref(), Some("CO2"));
+
+    // The album title alt is the edition's title (here also "W"), stored translate.
+    let album_translate: String = conn
+        .query_row(
+            &format!("SELECT title FROM release_title_alt WHERE release_mbid='{W_REL}' AND kind='translate'"),
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(album_translate, "W");
+
+    // The original Japanese edition (same script) contributed NO alts: no
+    // `translit` rows, and the Japanese titles were never stored as alts.
+    let translit_rows: i64 = conn
+        .query_row(
+            &format!("SELECT count(*) FROM track_title_alt WHERE recording_mbid='{REC1}' AND kind='translit'"),
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(translit_rows, 0);
 }
 
 #[tokio::test]
@@ -997,20 +1147,15 @@ async fn enrich_after_scan_is_safe_noop_for_untagged_fixtures() {
         .unwrap();
 
     // Provide canned responses for the fake MBIDs so enrich can complete.
-    // The release_muzai.json fixture carries transl-tracklisting rels, so we
-    // also provide responses for the pseudo-release MBIDs it references.
+    // release_muzai.json's release-group is the real muzai RG, so enrich browses
+    // it (inc=recordings) for sibling editions — provide that browse response.
     let http = FakeHttp::new()
         .with(&artist_url, 200, &fixture("artist_9e414497_aliases.json"))
         .with(&release_url, 200, &fixture("release_muzai.json"))
         .with(
-            &translit_url(),
+            &browse_url(),
             200,
-            &fixture("release_muzai_translit.json"),
-        )
-        .with(
-            &translate_url(),
-            200,
-            &fixture("release_muzai_translate.json"),
+            &fixture("release_group_browse_muzai.json"),
         );
     let client = rust_lib_olivier::enrich::client::MbClient::new(http);
 

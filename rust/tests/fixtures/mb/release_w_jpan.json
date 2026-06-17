@@ -1,0 +1,21 @@
+{
+  "id": "w0000000-0000-0000-0000-00000000jpan",
+  "title": "W",
+  "status": "Official",
+  "date": "2019-01-01",
+  "text-representation": { "script": "Jpan", "language": "jpn" },
+  "release-group": {
+    "id": "03271c5b-ced2-4356-ac0f-686cc9d9fc52",
+    "first-release-date": "2019-01-01"
+  },
+  "media": [
+    {
+      "tracks": [
+        { "title": "拍手喝采", "recording": { "id": "rec00000-0000-0000-0000-000000000001" } },
+        { "title": "火傷",     "recording": { "id": "rec00000-0000-0000-0000-000000000002" } },
+        { "title": "二酸化炭素", "recording": { "id": "rec00000-0000-0000-0000-000000000003" } }
+      ]
+    }
+  ],
+  "relations": []
+}

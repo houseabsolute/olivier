@@ -59,26 +59,11 @@ fn chosen(a: &MbAlias) -> ChosenAlias {
     }
 }
 
-// ── Pseudo-release discovery ──────────────────────────────────────────────
-
-/// MusicBrainz `transl-tracklisting` relationship type-id (§5.1, Appendix B).
-pub const TRANSL_TRACKLISTING_TYPE_ID: &str = "fc399d47-23a7-4c28-bfcf-0607a562b644";
-
-/// Pseudo-release target MBIDs linked from `release` via `transl-tracklisting`.
-pub fn pseudo_release_targets(release: &MbRelease) -> Vec<String> {
-    release
-        .relations
-        .iter()
-        .filter(|rel| rel.type_id.as_deref() == Some(TRANSL_TRACKLISTING_TYPE_ID))
-        .filter_map(|rel| rel.release.as_ref().map(|r| r.id.clone()))
-        .collect()
-}
-
 // ── Alt-kind classification ───────────────────────────────────────────────
 
-/// Which kind of alternate a pseudo-release supplies. Authoritative source is
-/// the pseudo-release's `text-representation`; the title-pair heuristic is only
-/// a documented fallback for releases that omit it.
+/// Which kind of alternate an edition supplies. Authoritative source is the
+/// edition's `text-representation`; the title-pair heuristic is only a documented
+/// fallback for editions that omit it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AltKind {
     Translit,
@@ -96,9 +81,12 @@ pub fn classify_pseudo(original_title: &str, pseudo: &MbRelease) -> AltKind {
     classify_alt(original_title, &pseudo.title)
 }
 
-/// Returns `None` when `text-representation` carries no script and no language
-/// (caller then falls back to the title heuristic).
-fn classify_from_text_representation(tr: Option<&MbTextRepresentation>) -> Option<AltKind> {
+/// Classify an edition by its `text-representation` (script/language): a Latin
+/// script ⇒ transliteration; `language == "eng"` (or any other non-original
+/// script) ⇒ translation. Returns `None` when `text-representation` carries no
+/// script and no language (caller then falls back to the title heuristic, or —
+/// for the sibling-edition path — skips the edition).
+pub fn classify_from_text_representation(tr: Option<&MbTextRepresentation>) -> Option<AltKind> {
     let tr = tr?;
     // English-language title is a translation regardless of script.
     if tr.language.as_deref() == Some("eng") {

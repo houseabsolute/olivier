@@ -8,7 +8,10 @@ use crate::enrich::model::{MbArtist, MbRelease, MbReleaseBrowse};
 const BASE: &str = "https://musicbrainz.org/ws/2";
 const ARTIST_INC: &str = "aliases";
 const RELEASE_INC: &str = "recordings+release-rels+release-groups+artist-credits";
-const PSEUDO_INC: &str = "recordings";
+/// The release-group browse pulls every edition's full tracklist (each track's
+/// `recording.id`) so sibling editions can be classified and their titles joined
+/// to our tracks by recording MBID.
+const BROWSE_INC: &str = "recordings";
 /// MusicBrainz rate limit is 1 req/s; space ≥1.05 s (Appendix B).
 const MIN_SPACING: Duration = Duration::from_millis(1050);
 const MAX_503_RETRIES: u32 = 5;
@@ -100,27 +103,19 @@ impl<H: MbHttp, P: Pacer> MbClient<H, P> {
         Ok(serde_json::from_str(&body)?)
     }
 
-    pub async fn fetch_pseudo_release(
-        &self,
-        conn: &Connection,
-        mbid: &str,
-    ) -> anyhow::Result<MbRelease> {
-        let url = format!("{BASE}/release/{mbid}?inc={PSEUDO_INC}&fmt=json");
-        let body = self
-            .get_cached(conn, "release", mbid, PSEUDO_INC, &url)
-            .await?;
-        Ok(serde_json::from_str(&body)?)
-    }
-
+    /// Browse every edition in a release group (one page of ≤100), each carrying
+    /// its full tracklist with per-track `recording.id` and the edition's
+    /// `text-representation`. The `inc_set` cache key embeds the `inc` + offset so
+    /// it never collides with the old `release-rels` browse.
     pub async fn browse_release_group(
         &self,
         conn: &Connection,
         rg_mbid: &str,
         offset: u32,
     ) -> anyhow::Result<MbReleaseBrowse> {
-        let inc = format!("release-rels:offset={offset}");
+        let inc = format!("{BROWSE_INC}:offset={offset}");
         let url = format!(
-            "{BASE}/release?release-group={rg_mbid}&inc=release-rels&limit=100&offset={offset}&fmt=json"
+            "{BASE}/release?release-group={rg_mbid}&inc={BROWSE_INC}&limit=100&offset={offset}&fmt=json"
         );
         let body = self
             .get_cached(conn, "release-browse", rg_mbid, &inc, &url)
