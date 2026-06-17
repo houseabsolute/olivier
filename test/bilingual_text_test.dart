@@ -22,7 +22,7 @@ void main() {
         translate: 'Innocence Moratorium',
         leads: LanguageLeads.a,
       );
-      expect(r.primary, 'Muzai Moratorium · "Innocence Moratorium"');
+      expect(r.primary, 'Muzai Moratorium · Innocence Moratorium');
       expect(r.secondary, '無罪モラトリアム');
     });
 
@@ -68,6 +68,31 @@ void main() {
       );
       expect(r.primary, 'Cornelius');
       expect(r.secondary, isNull);
+    });
+
+    test('Latin original ignores a differing reading (single line)', () {
+      // "TOKYO" is already Latin — a "Tokyo" reading is noise, so show one line.
+      final r = resolveBilingual(
+        original: 'TOKYO',
+        translit: 'Tokyo',
+        translate: null,
+        leads: LanguageLeads.a,
+      );
+      expect(r.primary, 'TOKYO');
+      expect(r.secondary, isNull);
+    });
+
+    test('drops an alternate that is the original script again', () {
+      // A "translation" that carries the original Japanese must not render the
+      // original twice — only the romaji reading remains as the alternate.
+      final r = resolveBilingual(
+        original: '三毒史',
+        translit: 'Sandokushi',
+        translate: '三毒史',
+        leads: LanguageLeads.a,
+      );
+      expect(r.primary, 'Sandokushi');
+      expect(r.secondary, '三毒史');
     });
   });
 

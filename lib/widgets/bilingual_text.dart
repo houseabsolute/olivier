@@ -16,34 +16,44 @@ class BilingualLines {
 ///
 /// - A *name* passes only [translit] (a reading); a *title* may pass both a
 ///   [translit] (romaji) and a [translate] (English).
-/// - Layout A leads with the reading/translation; layout B leads with the
-///   original. When no distinct alternate exists the row collapses to one line.
+/// - If the [original] is already Latin-script there is nothing to transliterate,
+///   so it shows alone on one line (the reading only exists to make a non-Latin
+///   original readable).
+/// - Otherwise, any alternate equal to the original (e.g. a "translation" that
+///   carries the original-script title) is dropped; the remaining reading and/or
+///   translation form the alternate line. Layout A leads with that alternate,
+///   layout B leads with the original. No distinct alternate ⇒ a single line.
 BilingualLines resolveBilingual({
   required String original,
   required String? translit,
   required String? translate,
   required LanguageLeads leads,
 }) {
-  final t1 = (translit ?? '').trim();
-  final t2 = (translate ?? '').trim();
   final orig = original.trim();
 
-  // Build the "alternate" line: romaji and translation together when both
-  // exist (titles), otherwise whichever is present.
-  final String alt;
-  if (t1.isNotEmpty && t2.isNotEmpty) {
-    alt = '$t1 · "$t2"';
-  } else if (t1.isNotEmpty) {
-    alt = t1;
-  } else {
-    alt = t2; // may be empty
+  // Latin-script original: nothing to transliterate — show it alone.
+  if (_isLatin(orig)) {
+    return BilingualLines(orig, null);
   }
 
-  // Collapse: no alternate, or the alternate is just the original again.
-  final altIsRedundant = alt.isEmpty ||
-      alt.toLowerCase() == orig.toLowerCase() ||
-      (t2.isEmpty && t1.toLowerCase() == orig.toLowerCase());
-  if (altIsRedundant) {
+  // Keep an alternate only if it's non-empty and actually differs from the
+  // original (case-insensitively).
+  String? keep(String? s) {
+    final v = (s ?? '').trim();
+    if (v.isEmpty || v.toLowerCase() == orig.toLowerCase()) return null;
+    return v;
+  }
+
+  final reading = keep(translit);
+  final translation = keep(translate);
+
+  // The alternate line: reading and translation together when both exist,
+  // otherwise whichever is present.
+  final String? alt = (reading != null && translation != null)
+      ? '$reading · $translation'
+      : (reading ?? translation);
+
+  if (alt == null) {
     return BilingualLines(orig, null);
   }
 
@@ -54,6 +64,18 @@ BilingualLines resolveBilingual({
       return BilingualLines(orig, alt);
   }
 }
+
+/// True when [s] is already Latin-script (Latin letters/accents, digits, common
+/// punctuation) — nothing a reading helps with, so the row collapses to one
+/// line. Non-Latin scripts (CJK, kana, Hangul, Cyrillic, Greek, …) keep their
+/// reading.
+bool _isLatin(String s) => s.runes.every(_isLatinRune);
+
+bool _isLatinRune(int r) =>
+    r <= 0x024F || // Basic Latin … Latin Extended-B (includes accents)
+    (r >= 0x0300 && r <= 0x036F) || // combining diacritical marks
+    (r >= 0x1E00 && r <= 0x1EFF) || // Latin Extended Additional
+    (r >= 0x2000 && r <= 0x206F); // general punctuation (– — ' ' " " …)
 
 /// Renders an entry's original plus its reading/translation as one or two
 /// lines, per the current [leads] mode. The primary line uses [primaryStyle]
