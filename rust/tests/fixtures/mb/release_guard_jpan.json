@@ -1,0 +1,19 @@
+{
+  "id": "11111111-1111-1111-1111-111111111111",
+  "title": "拍手",
+  "status": "Official",
+  "date": "2019-01-01",
+  "text-representation": { "script": "Jpan", "language": "jpn" },
+  "release-group": {
+    "id": "g0000000-0000-0000-0000-0000000guard",
+    "first-release-date": "2019-01-01"
+  },
+  "media": [
+    {
+      "tracks": [
+        { "title": "拍手", "recording": { "id": "rec00000-0000-0000-0000-0000000guard" } }
+      ]
+    }
+  ],
+  "relations": []
+}

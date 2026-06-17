@@ -1,0 +1,45 @@
+{
+  "release-count": 3,
+  "release-offset": 0,
+  "releases": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "title": "拍手",
+      "status": "Official",
+      "text-representation": { "script": "Jpan", "language": "jpn" },
+      "media": [
+        {
+          "tracks": [
+            { "title": "拍手", "recording": { "id": "rec00000-0000-0000-0000-0000000guard" } }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "55555555-5555-5555-5555-555555555555",
+      "title": "Applause",
+      "status": "Official",
+      "text-representation": { "script": "Latn", "language": "eng" },
+      "media": [
+        {
+          "tracks": [
+            { "title": "Applause", "recording": { "id": "rec00000-0000-0000-0000-0000000guard" } }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "99999999-9999-9999-9999-999999999999",
+      "title": "拍手（再発）",
+      "status": "Official",
+      "text-representation": { "script": "Jpan", "language": "jpn" },
+      "media": [
+        {
+          "tracks": [
+            { "title": "拍手（再発）", "recording": { "id": "rec00000-0000-0000-0000-0000000guard" } }
+          ]
+        }
+      ]
+    }
+  ]
+}

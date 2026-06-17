@@ -446,7 +446,9 @@ fn classify_from_text_representation_is_the_edition_primitive() {
         })),
         Some(AltKind::Translate)
     );
-    // The original-script edition (e.g. Jpan/jpn) does not classify ⇒ skipped.
+    // A non-Latn, non-eng edition (e.g. Jpan/jpn) classifies as Translate; the
+    // classifier does NOT skip it. Skipping a same-script sibling is the job of
+    // the `apply_edition_alts` guard, not this classifier.
     assert_eq!(
         classify_from_text_representation(Some(&MbTextRepresentation {
             script: Some("Jpan".into()),
@@ -1055,6 +1057,99 @@ async fn international_edition_supplies_translate_alts() {
         )
         .unwrap();
     assert_eq!(translit_rows, 0);
+}
+
+/// The same-script guard is load-bearing: a same-script native reissue must NOT
+/// clobber a real translation alt, even though it sorts LAST and would win the
+/// `ON CONFLICT(...,kind)` last-writer race without the guard.
+///
+/// The release group browses to THREE editions, all sharing recording REC_GUARD:
+///   1. the Japanese original (id `1111…`) — filtered out by id.
+///   2. an English edition (id `5555…`, Latn/eng) → translate alt "Applause".
+///   3. a Japanese reissue (id `9999…`, Jpan/jpn) with a DIFFERENT title.
+/// Ascending-id order processes English (`5…`) before the reissue (`9…`); without
+/// the guard the `Jpan` reissue hits `Some(_) => Translate` and, as last writer,
+/// would clobber REC_GUARD's translate alt with the Japanese reissue title. With
+/// the guard the reissue is skipped, so "Applause" survives.
+#[tokio::test]
+async fn same_script_reissue_does_not_clobber_translate_alt() {
+    const RG: &str = "g0000000-0000-0000-0000-0000000guard";
+    const REL: &str = "11111111-1111-1111-1111-111111111111";
+    const ARTIST: &str = "aaaaaaaa-0000-0000-0000-0000000guard";
+    const REC_GUARD: &str = "rec00000-0000-0000-0000-0000000guard";
+
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        &format!(
+            "INSERT INTO artist(mbid,name,sort_name) VALUES ('{ARTIST}','結城アイラ','結城アイラ')"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO release_group(mbid,title) VALUES ('{RG}','拍手')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO release(mbid,release_group_mbid,album_artist_mbid,title) VALUES ('{REL}','{RG}','{ARTIST}','拍手')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO track(release_mbid,recording_mbid,disc,position,title) VALUES ('{REL}','{REC_GUARD}',1,1,'拍手')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path,mtime,size,track_id,added_at,enriched) VALUES ('/m/guard.flac',0,0,1,0,0)",
+        [],
+    )
+    .unwrap();
+
+    let artist_url = format!("{BASE}/artist/{ARTIST}?inc=aliases&fmt=json");
+    let release_url = format!(
+        "{BASE}/release/{REL}?inc=recordings+release-rels+release-groups+artist-credits&fmt=json"
+    );
+    let browse_url =
+        format!("{BASE}/release?release-group={RG}&inc=recordings&limit=100&offset=0&fmt=json");
+    let artist_body = format!(
+        "{{\"id\":\"{ARTIST}\",\"name\":\"結城アイラ\",\"sort-name\":\"Yuki, Aira\",\"aliases\":[]}}"
+    );
+
+    let http = FakeHttp::new()
+        .with(&artist_url, 200, &artist_body)
+        .with(&release_url, 200, &fixture("release_guard_jpan.json"))
+        .with(
+            &browse_url,
+            200,
+            &fixture("release_group_browse_guard.json"),
+        );
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+
+    enrich(&conn, &client, false, |_| true).await.unwrap();
+
+    // The English edition's translate alt survives — the same-script Japanese
+    // reissue (which sorts last) was skipped by the guard, not stored.
+    let translate: Option<String> = conn
+        .query_row(
+            "SELECT title FROM track_title_alt WHERE recording_mbid=?1 AND kind='translate'",
+            [REC_GUARD],
+            |r| r.get::<_, String>(0),
+        )
+        .ok();
+    assert_eq!(translate.as_deref(), Some("Applause"));
+
+    // Exactly ONE translate row for REC_GUARD — the reissue never wrote a second
+    // one (and never clobbered the first).
+    let translate_rows: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM track_title_alt WHERE recording_mbid=?1 AND kind='translate'",
+            [REC_GUARD],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(translate_rows, 1);
 }
 
 #[tokio::test]

@@ -179,7 +179,11 @@ pub async fn enrich<H: MbHttp, P: Pacer>(
 /// Editions written in the SAME script as the original are skipped: another
 /// native-script edition (e.g. a Japanese reissue of a Japanese album) is not a
 /// transliteration or translation, and `classify_from_text_representation` would
-/// otherwise label a non-Latin native script as a (spurious) translation.
+/// otherwise label a non-Latin native script as a (spurious) translation. When
+/// the original's own script is unknown (no `text-representation`) we can't
+/// detect a same-script reissue, so only the two reliably-safe alt forms are
+/// accepted — a Latin-script (`Latn`) sibling or an English-language (`eng`)
+/// sibling; any other-script sibling is skipped.
 ///
 /// Editions are processed in ascending `id` order so the `ON CONFLICT(...,kind)`
 /// last-writer is deterministic when two editions share a kind.
@@ -195,12 +199,22 @@ fn apply_edition_alts(
         .iter()
         .filter(|ed| ed.id != release_mbid)
         .filter(|ed| {
-            // Skip a sibling in the original's own script (not an alt).
-            let ed_script = ed
-                .text_representation
-                .as_ref()
-                .and_then(|tr| tr.script.as_deref());
-            original_script.is_none() || ed_script != original_script
+            let tr = ed.text_representation.as_ref();
+            let ed_script = tr.and_then(|t| t.script.as_deref());
+            let ed_lang = tr.and_then(|t| t.language.as_deref());
+            match original_script {
+                // Known original script: skip a sibling written in that SAME
+                // script — a native-script reissue is neither a transliteration
+                // nor a translation, and would otherwise be stored as a
+                // (spurious) translation (the Some(_) arm of
+                // classify_from_text_representation).
+                Some(orig) => ed_script != Some(orig),
+                // Unknown original script: we can't confirm a non-Latin /
+                // non-English sibling differs from the original, so accept only
+                // the two reliably-safe alt forms — a Latin-script romanization
+                // or an English translation.
+                None => ed_script == Some("Latn") || ed_lang == Some("eng"),
+            }
         })
         .collect();
     ordered.sort_by(|a, b| a.id.cmp(&b.id));

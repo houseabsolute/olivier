@@ -90,7 +90,7 @@ pub struct MbRelationRelease {
     pub id: String,
 }
 
-// ── release?release-group=<mbid>&inc=release-rels (browse fallback) ──────
+// ── release?release-group=<mbid>&inc=recordings (edition browse) ─────────
 #[derive(Debug, Deserialize)]
 pub struct MbReleaseBrowse {
     #[serde(default)]
