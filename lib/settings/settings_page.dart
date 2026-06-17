@@ -1,7 +1,9 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/scan_controller.dart';
+import 'package:olivier/widgets/bilingual_text.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -9,6 +11,7 @@ class SettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scan = ref.watch(scanControllerProvider);
+    final leads = ref.watch(languageLeadsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -95,6 +98,29 @@ class SettingsPage extends ConsumerWidget {
               ],
             ),
           ],
+          const SizedBox(height: 24),
+          Text('Display', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const Text(
+            'Language leads: which script shows first in bilingual rows.',
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<LanguageLeads>(
+            segments: const [
+              ButtonSegment(
+                value: LanguageLeads.a,
+                label: Text('Reading / translation (A)'),
+              ),
+              ButtonSegment(
+                value: LanguageLeads.b,
+                label: Text('Original (B)'),
+              ),
+            ],
+            selected: {leads},
+            onSelectionChanged: (sel) =>
+                ref.read(languageLeadsProvider.notifier).set(sel.first),
+          ),
         ],
       ),
     );
