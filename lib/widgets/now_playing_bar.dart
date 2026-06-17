@@ -1,7 +1,10 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:olivier/audio/audio_handler.dart';
+import 'package:olivier/state/providers.dart';
+import 'package:olivier/widgets/bilingual_text.dart';
 import 'package:rxdart/rxdart.dart';
 
 class PositionData {
@@ -11,7 +14,7 @@ class PositionData {
   final Duration duration;
 }
 
-class NowPlayingBar extends StatelessWidget {
+class NowPlayingBar extends ConsumerWidget {
   const NowPlayingBar({super.key, required this.audioHandler});
 
   final OlivierAudioHandler audioHandler;
@@ -27,7 +30,8 @@ class NowPlayingBar extends StatelessWidget {
       );
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final leads = ref.watch(languageLeadsProvider);
     return Material(
       elevation: 8,
       child: SizedBox(
@@ -93,13 +97,15 @@ class NowPlayingBar extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          item.title,
-                          style: Theme.of(context)
+                        BilingualText(
+                          original: item.title,
+                          translit: item.extras?['titleTranslit'] as String?,
+                          translate: item.extras?['titleTranslate'] as String?,
+                          leads: leads,
+                          primaryStyle: Theme.of(context)
                               .textTheme
                               .bodyMedium
                               ?.copyWith(fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
                         ),
                         if (item.artist != null)
                           Text(

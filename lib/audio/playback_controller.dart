@@ -96,7 +96,11 @@ class PlaybackController {
           duration: qt.lengthMs == null
               ? null
               : Duration(milliseconds: qt.lengthMs!.toInt()),
-          extras: qt.trackId == null ? null : {'trackId': qt.trackId},
+          extras: {
+            if (qt.trackId != null) 'trackId': qt.trackId,
+            'titleTranslit': qt.titleTranslit,
+            'titleTranslate': qt.titleTranslate,
+          },
         ),
     ];
 
@@ -131,7 +135,11 @@ class PlaybackController {
           duration: tracks[i].lengthMs == null
               ? null
               : Duration(milliseconds: tracks[i].lengthMs!.toInt()),
-          extras: {'trackId': tracks[i].id},
+          extras: {
+            'trackId': tracks[i].id,
+            'titleTranslit': tracks[i].titleTranslit,
+            'titleTranslate': tracks[i].titleTranslate,
+          },
         ),
     ];
   }
