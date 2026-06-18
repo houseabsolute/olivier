@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 import 'package:olivier/catalog/album_column.dart';
 import 'package:olivier/catalog/artist_column.dart';
+import 'package:olivier/catalog/queue_panel.dart';
 import 'package:olivier/catalog/track_column.dart';
 import 'package:olivier/main.dart' show audioHandler;
 import 'package:olivier/settings/settings_page.dart';
@@ -29,9 +30,18 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
     super.initState();
     _splitController = MultiSplitViewController(
       areas: [
-        Area(min: 160, builder: (ctx, area) => const ArtistColumn()),
-        Area(min: 160, builder: (ctx, area) => const AlbumColumn()),
-        Area(min: 240, builder: (ctx, area) => const TrackColumn()),
+        // Wide Artist column (≈ 33% default).
+        Area(
+          flex: 1,
+          min: 220,
+          builder: (ctx, area) => const ArtistColumn(),
+        ),
+        // Right pane (≈ 67% default): Albums stacked over Tracks.
+        Area(
+          flex: 2,
+          min: 320,
+          builder: (ctx, area) => const _RightPane(),
+        ),
       ],
     );
     // Hydrate persisted root folders after the first frame.
@@ -89,7 +99,14 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
         ],
         bottom: scan.scanning ? _scanProgressBar(scan) : null,
       ),
-      body: MultiSplitView(controller: _splitController),
+      body: Column(
+        children: [
+          Expanded(child: MultiSplitView(controller: _splitController)),
+          // Collapsed queue-panel shell between the browse split and the
+          // now-playing bar. Data/wiring arrive in later slices.
+          const QueuePanel(),
+        ],
+      ),
       bottomNavigationBar:
           widget.nowPlaying ?? NowPlayingBar(audioHandler: audioHandler),
     );
@@ -115,6 +132,23 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The right pane of the browse split: the album list stacked over the track
+/// list, separated by a hairline divider. Each list takes half the height.
+class _RightPane extends StatelessWidget {
+  const _RightPane();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [
+        Expanded(child: AlbumColumn()),
+        Divider(height: 1),
+        Expanded(child: TrackColumn()),
+      ],
     );
   }
 }

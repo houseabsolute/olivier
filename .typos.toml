@@ -5,3 +5,5 @@ TPE = "TPE"
 TPOS = "TPOS"
 # MP4 atom "©nam" (title): the "nam" token is not a misspelling of "name".
 nam = "nam"
+# Audio-domain past tense of "seek" (seek to position) — correct terminology.
+seeked = "seeked"
