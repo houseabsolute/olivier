@@ -35,7 +35,9 @@ class NowPlayingBar extends ConsumerWidget {
     return Material(
       elevation: 8,
       child: SizedBox(
-        height: 80,
+        // Grow the bar with the OS text size so the (up to) two-line bilingual
+        // title plus the artist line never overflow at large accessibility scale.
+        height: bilingualRowExtent(context, 80),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: Row(

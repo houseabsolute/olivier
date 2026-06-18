@@ -34,7 +34,7 @@ class _AlbumList extends ConsumerWidget {
     }
     return ListView.builder(
       itemCount: albums.length,
-      itemExtent: 48,
+      itemExtent: bilingualRowExtent(context, 48),
       scrollCacheExtent: const ScrollCacheExtent.pixels(600),
       itemBuilder: (context, index) {
         final album = albums[index];

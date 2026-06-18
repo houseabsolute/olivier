@@ -33,7 +33,7 @@ class _ArtistList extends ConsumerWidget {
     }
     return ListView.builder(
       itemCount: artists.length,
-      itemExtent: 48,
+      itemExtent: bilingualRowExtent(context, 48),
       scrollCacheExtent: const ScrollCacheExtent.pixels(600),
       itemBuilder: (context, index) {
         final artist = artists[index];

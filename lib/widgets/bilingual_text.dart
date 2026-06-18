@@ -4,6 +4,20 @@ import 'package:flutter/material.dart';
 /// (spec layout A, default); `b` = original primary (layout B).
 enum LanguageLeads { a, b }
 
+/// A fixed list-row extent (or bar height) that grows with the OS text size.
+///
+/// A bilingual row renders up to two lines, so a hard-coded extent that fits at
+/// 1.0x text scaling overflows once accessibility text scaling enlarges those
+/// lines. Scaling [base] by the ambient text scaler keeps the row proportional
+/// to its text, so it never overflows — while preserving the perf benefit of a
+/// fixed `itemExtent` (ListView can still compute scroll offsets without laying
+/// every row out). The list rows carry no vertical padding, so the two text
+/// lines are the only content; each base (48 for a list row, 80 for the
+/// now-playing bar's title block) keeps a constant headroom over its lines at
+/// every scale, since base and text grow by the same factor.
+double bilingualRowExtent(BuildContext context, double base) =>
+    MediaQuery.textScalerOf(context).scale(base);
+
 /// The two lines a bilingual row renders. [secondary] is null when the row
 /// collapses to a single line (Latin-only, or no distinct alternate).
 class BilingualLines {
