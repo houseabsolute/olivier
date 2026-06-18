@@ -187,4 +187,37 @@ void main() {
     expect(snap!.paths.last, '/e.flac');
     expect(snap.shuffle, isTrue);
   });
+
+  test('setShuffle bumps the revision Listenable', () async {
+    final start = controller.revision.value;
+    await controller.setShuffle(true);
+    expect(controller.revision.value, start + 1);
+    await controller.setShuffle(false);
+    expect(controller.revision.value, start + 2);
+  });
+
+  // Adaptation note (host-VM test rules): the plan's verbatim test called
+  // `loadQueue(dbPath: dbPath)` (real Rust FFI / LD_LIBRARY_PATH). We instead
+  // read the last recorded snapshot from `saved` — same substance, no FFI.
+  test('toggling shuffle OFF restores canonical order in the player', () async {
+    await controller.setShuffle(true);
+    await controller.setShuffle(false);
+
+    expect(controller.shuffled, isFalse);
+    expect(controller.playOrder, controller.orderedPaths);
+    expect(player.sources, ['/a.flac', '/b.flac', '/c.flac', '/d.flac']);
+
+    final snap = saved.last;
+    expect(snap!.shuffle, isFalse);
+    expect(snap.paths, ['/a.flac', '/b.flac', '/c.flac', '/d.flac']);
+  });
+
+  test(
+      'shuffled playOrder is a permutation of orderedPaths and the player '
+      'matches it', () async {
+    await controller.setShuffle(true);
+    expect(controller.shuffled, isTrue);
+    expect(controller.playOrder.toSet(), controller.orderedPaths.toSet());
+    expect(player.sources, controller.playOrder);
+  });
 }
