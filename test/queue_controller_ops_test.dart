@@ -71,4 +71,15 @@ void main() {
     expect(player.sources, isEmpty);
     expect(saved.last!.paths, isEmpty);
   });
+
+  test('playAt seeks to the canonical index and plays (not shuffled)',
+      () async {
+    await controller.append(['/a.flac', '/b.flac', '/c.flac']);
+
+    await controller.playAt(2);
+
+    // Not shuffled: canonical index 2 == player index 2.
+    expect(player.seeks.single.index, 2);
+    expect(player.played, isTrue);
+  });
 }

@@ -192,4 +192,15 @@ class QueueController {
     final idx = _orderedPaths.indexOf(_playOrder[pi]);
     return idx < 0 ? null : idx;
   }
+
+  /// Jump to and play the entry at canonical [index].
+  Future<void> playAt(int index) async {
+    if (index < 0 || index >= _orderedPaths.length) return;
+    final path = _orderedPaths[index];
+    // Map canonical -> player index (== index when not shuffled).
+    final playerIndex = _shuffled ? _playOrder.indexOf(path) : index;
+    if (playerIndex < 0) return;
+    await _player.seek(Duration.zero, index: playerIndex);
+    await _player.play();
+  }
 }
