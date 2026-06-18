@@ -179,6 +179,23 @@ pub fn track_paths_for_artist(
     Ok(out)
 }
 
+/// One absolute file path per track for the entire catalog, in a deterministic
+/// order (by track id). Used by "Shuffle entire library", which shuffles the
+/// playback order afterward, so the on-disk order only needs to be stable, not
+/// musically meaningful. One path per track (`MIN(path)`).
+pub fn track_paths_for_library(conn: &Connection) -> anyhow::Result<Vec<String>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT MIN(f.path) FROM track t JOIN file f ON f.track_id = t.id
+         GROUP BY t.id ORDER BY t.id",
+    )?;
+    let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
 /// Track metadata for an explicit, ordered list of file paths — used to rebuild
 /// the now-playing items for a restored queue. Returns exactly one entry per
 /// input path, in the same order; a path no longer in the catalog gets a

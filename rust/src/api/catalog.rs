@@ -51,6 +51,10 @@ pub fn track_paths_for_artist(
     query::track_paths_for_artist(&db::open(&db_path)?, &album_artist_mbid)
 }
 
+pub fn track_paths_for_library(db_path: String) -> anyhow::Result<Vec<String>> {
+    query::track_paths_for_library(&db::open(&db_path)?)
+}
+
 pub fn record_play(db_path: String, track_id: i64, played_at: i64) -> anyhow::Result<()> {
     query::record_play(&db::open(&db_path)?, track_id, played_at)
 }

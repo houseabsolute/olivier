@@ -48,6 +48,9 @@ Future<List<String>> trackPathsForArtist(
     RustLib.instance.api.crateApiCatalogTrackPathsForArtist(
         dbPath: dbPath, albumArtistMbid: albumArtistMbid);
 
+Future<List<String>> trackPathsForLibrary({required String dbPath}) =>
+    RustLib.instance.api.crateApiCatalogTrackPathsForLibrary(dbPath: dbPath);
+
 Future<void> recordPlay(
         {required String dbPath,
         required PlatformInt64 trackId,

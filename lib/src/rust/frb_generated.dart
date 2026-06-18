@@ -80,7 +80,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1838217848;
+  int get rustContentHash => -1628758887;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -150,6 +150,9 @@ abstract class RustLibApi extends BaseApi {
 
   Future<List<String>> crateApiCatalogTrackPathsForArtist(
       {required String dbPath, required String albumArtistMbid});
+
+  Future<List<String>> crateApiCatalogTrackPathsForLibrary(
+      {required String dbPath});
 
   Future<List<QueueTrack>> crateApiCatalogTracksForPaths(
       {required String dbPath, required List<String> paths});
@@ -710,6 +713,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<String>> crateApiCatalogTrackPathsForLibrary(
+      {required String dbPath}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(dbPath, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 22, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCatalogTrackPathsForLibraryConstMeta,
+      argValues: [dbPath],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCatalogTrackPathsForLibraryConstMeta =>
+      const TaskConstMeta(
+        debugName: "track_paths_for_library",
+        argNames: ["dbPath"],
+      );
+
+  @override
   Future<List<QueueTrack>> crateApiCatalogTracksForPaths(
       {required String dbPath, required List<String> paths}) {
     return handler.executeNormal(NormalTask(
@@ -718,7 +747,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_list_String(paths, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 22, port: port_);
+            funcId: 23, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_queue_track,

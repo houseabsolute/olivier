@@ -1,7 +1,7 @@
 use rust_lib_olivier::catalog::ids::{album_artist_key, sort_name};
 use rust_lib_olivier::catalog::query::{
     albums_for_artist, artists_page, file_paths_for_album, record_play, track_path,
-    track_paths_for_artist, tracks_for_album, tracks_for_paths,
+    track_paths_for_artist, track_paths_for_library, tracks_for_album, tracks_for_paths,
 };
 use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
 use rust_lib_olivier::catalog::scan::{reconcile_album_artists, scan_roots};
@@ -1129,4 +1129,55 @@ fn track_paths_for_artist_is_one_per_track() {
     }
     let paths = track_paths_for_artist(&conn, "art").unwrap();
     assert_eq!(paths, vec!["/m/a1.flac"]);
+}
+
+#[test]
+fn track_paths_for_library_covers_every_track_one_per_track() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('a1', 'A1', 'A1')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('a2', 'A2', 'A2')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('r1', 'a1', 'Alb1')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('r2', 'a2', 'Alb2')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (1, 'r1', 1, 1, 'T1')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (2, 'r2', 1, 1, 'T2')",
+        [],
+    )
+    .unwrap();
+    // Track 1 has two files; it must still contribute exactly one path.
+    for (path, tid) in [("/m/a.flac", 1), ("/m/a.m4a", 1), ("/m/b.flac", 2)] {
+        conn.execute(
+            "INSERT INTO file(path, mtime, size, track_id, added_at) VALUES (?1, 0, 0, ?2, 0)",
+            rusqlite::params![path, tid],
+        )
+        .unwrap();
+    }
+
+    let mut paths = track_paths_for_library(&conn).unwrap();
+    paths.sort();
+    assert_eq!(paths, vec!["/m/a.flac", "/m/b.flac"]);
+
+    // Empty library → empty result.
+    let empty = open(":memory:").unwrap();
+    assert!(track_paths_for_library(&empty).unwrap().is_empty());
 }
