@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/src/rust/db.dart';
@@ -219,5 +221,123 @@ void main() {
     expect(controller.shuffled, isTrue);
     expect(controller.playOrder.toSet(), controller.orderedPaths.toSet());
     expect(player.sources, controller.playOrder);
+  });
+
+  // Persist-while-shuffled must save a CANONICAL currentIndex so that a fresh
+  // controller restoring the snapshot resumes on the SAME track. With the old
+  // _persist (which saved the player-order index alongside canonical paths)
+  // this round-trips to the WRONG track when shuffled.
+  test('persist while shuffled round-trips restore to the same canonical track',
+      () async {
+    // Use real on-disk files so restoreFromSnapshot's File.exists guard keeps
+    // them (it drops paths that don't exist).
+    final dir = await Directory.systemTemp.createTemp('queue_restore_test');
+    addTearDown(() => dir.delete(recursive: true));
+    final paths = <String>[];
+    for (final name in ['a', 'b', 'c', 'd']) {
+      final f = File('${dir.path}/$name.flac');
+      await f.writeAsString('x');
+      paths.add(f.path);
+    }
+
+    await controller.setQueue(paths);
+    await controller.setShuffle(true);
+
+    // Advance the fake player to a non-zero player-order position whose
+    // canonical track is known, then trigger a persist while there.
+    const pi = 2;
+    player.setCurrentIndex(pi);
+    final expectedCanonicalPath = controller.playOrder[pi];
+    // append persists WITHOUT rebuilding, so the player stays on index pi. Use a
+    // brand-new unique path so the existing tracks stay unique (unambiguous
+    // canonical mapping).
+    final extra = File('${dir.path}/extra.flac');
+    await extra.writeAsString('x');
+    await controller.append([extra.path]);
+
+    // Capture the snapshot the controller just wrote and assert it is
+    // canonical-correct (the saved currentIndex addresses the saved paths).
+    final snap = saved.last!;
+    expect(snap.shuffle, isTrue);
+    // The saved canonical currentIndex must address the saved canonical paths
+    // and point at the track that was playing.
+    expect(snap.paths[snap.currentIndex], expectedCanonicalPath);
+
+    // Restore on a FRESH controller + fresh fake player and confirm it resumes
+    // on the same canonical track.
+    final freshPlayer = FakeQueuePlayer();
+    final fresh = QueueController.withPlayer(freshPlayer,
+        dbPath: dbPath, saveQueue: (_) async {});
+    await fresh.restoreFromSnapshot(snap);
+
+    final restoredCanonicalIndex = fresh.currentCanonicalIndex;
+    expect(restoredCanonicalIndex, isNotNull);
+    expect(fresh.orderedPaths[restoredCanonicalIndex!], expectedCanonicalPath);
+  });
+
+  // Toggling shuffle must keep the currently-playing track playing, not restart
+  // from canonical-0.
+  test('setShuffle preserves the currently-playing canonical track', () async {
+    // Queue is the 4 tracks from setUp; put the player on canonical track 2.
+    // Not shuffled yet, so player index == canonical index.
+    player.setCurrentIndex(2);
+    expect(controller.currentCanonicalIndex, 2);
+    const track2 = '/c.flac';
+
+    await controller.setShuffle(true);
+    // The player's current source must still be track 2's path, not track 0.
+    expect(player.sources[player.currentIndex!], track2);
+    expect(controller.currentCanonicalIndex, 2);
+
+    await controller.setShuffle(false);
+    expect(player.sources[player.currentIndex!], track2);
+    expect(controller.currentCanonicalIndex, 2);
+  });
+
+  // reorder while shuffled (previously untested branch): only the canonical
+  // order + persisted snapshot change; the player order stays put.
+  test('reorder while shuffled changes canonical order only', () async {
+    await controller.setShuffle(true);
+    final playOrderBefore = controller.playOrder;
+    final sourcesBefore = List.of(player.sources);
+
+    await controller.reorder(0, 3);
+
+    // Canonical order changed: first element moved to the end.
+    expect(
+        controller.orderedPaths, ['/b.flac', '/c.flac', '/d.flac', '/a.flac']);
+    // Player order / sources did NOT change.
+    expect(controller.playOrder, playOrderBefore);
+    expect(player.sources, sourcesBefore);
+
+    final snap = saved.last;
+    expect(snap!.paths, ['/b.flac', '/c.flac', '/d.flac', '/a.flac']);
+    expect(snap.shuffle, isTrue);
+  });
+
+  // currentCanonicalIndex must be occurrence-aware: with duplicate paths it must
+  // return the canonical index of the SPECIFIC occurrence playing, not the first
+  // canonical match.
+  test('currentCanonicalIndex is duplicate-aware', () async {
+    await controller.setQueue(['/a.flac', '/dup.flac', '/b.flac', '/dup.flac']);
+    await controller.setShuffle(true);
+
+    // Find the player index of the SECOND '/dup.flac' in the shuffled order.
+    final order = controller.playOrder;
+    var seen = 0;
+    var secondDupPlayerIndex = -1;
+    for (var i = 0; i < order.length; i++) {
+      if (order[i] == '/dup.flac') {
+        if (seen == 1) {
+          secondDupPlayerIndex = i;
+          break;
+        }
+        seen++;
+      }
+    }
+    expect(secondDupPlayerIndex, greaterThanOrEqualTo(0));
+
+    player.setCurrentIndex(secondDupPlayerIndex);
+    expect(controller.currentCanonicalIndex, 3);
   });
 }

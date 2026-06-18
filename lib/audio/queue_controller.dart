@@ -55,8 +55,14 @@ class QueueController implements ShuffleAllTarget {
   }
 
   Future<void> setShuffle(bool on) async {
+    // Keep playing the same track from the same position across the toggle
+    // (spec §3: shuffle randomizes order with the list "staying put", it does
+    // NOT restart playback). Capture the canonical current track + position
+    // BEFORE flipping `_shuffled`, then rebuild seeded on that canonical index.
+    final cur = currentCanonicalIndex ?? 0;
+    final pos = _player.position;
     _shuffled = on;
-    await _rebuild(0);
+    await _rebuild(cur, initialPosition: pos);
     await _persist();
     revision.value++;
   }
@@ -152,28 +158,49 @@ class QueueController implements ShuffleAllTarget {
   Future<void> replaceLibraryShuffled(List<String> paths) async {
     await setQueue(paths);
     await setShuffle(true);
+    // setShuffle now preserves the currently-playing canonical track (here that
+    // is canonical-0). "Shuffle entire library" should instead START on a
+    // random track, so jump to player-order 0 (a random track after the
+    // shuffle) before playing.
+    await _player.seek(Duration.zero, index: 0);
     await _player.play();
   }
 
+  /// Rebuilds the player's sources from the canonical list. [canonicalIndex] is
+  /// an index into `_orderedPaths` (the canonical/display order); it is
+  /// translated to the matching position in the (possibly shuffled) player
+  /// order before being handed to `setAudioSources(initialIndex:)`. When not
+  /// shuffled `order == _orderedPaths`, so the translated index equals
+  /// [canonicalIndex] and the not-shuffled behavior is unchanged.
   Future<void> _rebuild(
-    int initialIndex, {
+    int canonicalIndex, {
     Duration initialPosition = Duration.zero,
   }) async {
     final order =
         _shuffled ? (List.of(_orderedPaths)..shuffle()) : _orderedPaths;
     _playOrder = List.of(order);
+    int? initialIndex;
+    if (order.isNotEmpty) {
+      final clampedCanonical = canonicalIndex.clamp(0, order.length - 1);
+      final startPath = _orderedPaths[clampedCanonical];
+      final translated = order.indexOf(startPath);
+      initialIndex = (translated < 0 ? clampedCanonical : translated)
+          .clamp(0, order.length - 1);
+    }
     await _player.setAudioSources(
       [for (final p in order) AudioSource.file(p)],
-      initialIndex:
-          order.isEmpty ? null : initialIndex.clamp(0, order.length - 1),
+      initialIndex: initialIndex,
       initialPosition: initialPosition,
     );
   }
 
   Future<void> _persist() async {
     final snapshot = QueueSnapshot(
+      // currentIndex is CANONICAL (an index into `paths`), so it round-trips
+      // correctly through restoreFromSnapshot even when shuffled — the saved
+      // player-order index would not address the saved canonical paths.
       paths: List.of(_orderedPaths),
-      currentIndex: _player.currentIndex ?? 0,
+      currentIndex: currentCanonicalIndex ?? 0,
       positionMs: BigInt.from(_player.position.inMilliseconds),
       shuffle: _shuffled,
     );
@@ -229,8 +256,23 @@ class QueueController implements ShuffleAllTarget {
     if (_orderedPaths.isEmpty) return null;
     final pi = _player.currentIndex ?? 0;
     if (pi < 0 || pi >= _playOrder.length) return null;
-    final idx = _orderedPaths.indexOf(_playOrder[pi]);
-    return idx < 0 ? null : idx;
+    // Occurrence-aware inverse of `_playerIndexForCanonical`: find which
+    // occurrence (k) of this path the player is on, then return the canonical
+    // index of the k-th occurrence in `_orderedPaths`. A naive `indexOf` would
+    // map DUPLICATE paths to the wrong (first) canonical occurrence.
+    final path = _playOrder[pi];
+    var occurrence = 0;
+    for (var i = 0; i < pi; i++) {
+      if (_playOrder[i] == path) occurrence++;
+    }
+    var seen = 0;
+    for (var i = 0; i < _orderedPaths.length; i++) {
+      if (_orderedPaths[i] == path) {
+        if (seen == occurrence) return i;
+        seen++;
+      }
+    }
+    return null;
   }
 
   /// Jump to and play the entry at canonical [index]. Translates the canonical

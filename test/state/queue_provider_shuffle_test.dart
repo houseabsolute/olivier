@@ -45,6 +45,13 @@ void main() {
     final playingPath = controller.playOrder[0];
     final expectedCanonical = controller.orderedPaths.indexOf(playingPath);
 
+    // setCurrentIndex emits on the (async, broadcast) currentIndexStream, which
+    // drives invalidateSelf. Let that microtask propagate before re-reading so
+    // the canonical index is recomputed for the new player position. (Before the
+    // setShuffle fix, setShuffle forced player index 0, so this value already
+    // matched without waiting; now setShuffle preserves the prior track.)
+    await Future<void>.delayed(Duration.zero);
+
     // Re-read after invalidation so the canonical index is recomputed.
     final view = await container.read(queueProvider.future);
     expect(view.shuffled, isTrue);
