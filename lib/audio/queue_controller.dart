@@ -142,4 +142,15 @@ class QueueController {
   /// with what the player is playing.
   List<String> get playOrder => List.unmodifiable(_playOrder);
   bool get shuffled => _shuffled;
+
+  /// Canonical index (into [orderedPaths]) of the entry the player is currently
+  /// on. Equals `player.currentIndex` when not shuffled; when shuffled it maps
+  /// the player's current source back through `_playOrder`. Null when empty.
+  int? get currentCanonicalIndex {
+    if (_orderedPaths.isEmpty) return null;
+    final pi = _player.currentIndex ?? 0;
+    if (pi < 0 || pi >= _playOrder.length) return null;
+    final idx = _orderedPaths.indexOf(_playOrder[pi]);
+    return idx < 0 ? null : idx;
+  }
 }
