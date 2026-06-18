@@ -77,25 +77,40 @@ class QueueController implements ShuffleAllTarget {
     revision.value++;
   }
 
-  /// Remove the entry at [index] in the DISPLAYED canonical order.
+  /// Remove the entry at [index] in the DISPLAYED canonical order
+  /// (_orderedPaths), keeping playback uninterrupted. When not shuffled the
+  /// player source index equals the canonical index; when shuffled we translate
+  /// through _playOrder. Occurrence-aware so duplicate paths are handled.
   Future<void> removeAt(int index) async {
     if (index < 0 || index >= _orderedPaths.length) return;
+    final playerIndex = _playerIndexForCanonical(index);
     final path = _orderedPaths.removeAt(index);
-    if (!_shuffled) {
-      // Player order == canonical order, so the indices line up.
-      _playOrder.removeAt(index);
-      await _player.removeAudioSourceAt(index);
-    } else {
-      // Shuffled: find this path's position in the independent play order.
-      // (Duplicate paths + shuffle edge cases are finished in Slice 5.)
-      final playerIndex = _playOrder.indexOf(path);
-      if (playerIndex >= 0) {
-        _playOrder.removeAt(playerIndex);
-        await _player.removeAudioSourceAt(playerIndex);
-      }
+    if (playerIndex >= 0 && playerIndex < _playOrder.length) {
+      _playOrder.removeAt(playerIndex);
+      await _player.removeAudioSourceAt(playerIndex);
     }
+    assert(path.isNotEmpty);
     await _persist();
     revision.value++;
+  }
+
+  /// Maps a canonical _orderedPaths index to the matching player source index in
+  /// _playOrder, accounting for the same path appearing multiple times. Returns
+  /// the same index when not shuffled (orders are in sync).
+  int _playerIndexForCanonical(int index) {
+    final path = _orderedPaths[index];
+    var occurrence = 0;
+    for (var i = 0; i < index; i++) {
+      if (_orderedPaths[i] == path) occurrence++;
+    }
+    var seen = 0;
+    for (var i = 0; i < _playOrder.length; i++) {
+      if (_playOrder[i] == path) {
+        if (seen == occurrence) return i;
+        seen++;
+      }
+    }
+    return index; // fallback: orders are in sync
   }
 
   /// Move the entry at [from] to [to] within the canonical order.
