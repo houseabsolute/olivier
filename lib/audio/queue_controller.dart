@@ -71,6 +71,45 @@ class QueueController {
     revision.value++;
   }
 
+  /// Remove the entry at [index] in the DISPLAYED canonical order.
+  Future<void> removeAt(int index) async {
+    if (index < 0 || index >= _orderedPaths.length) return;
+    final path = _orderedPaths.removeAt(index);
+    if (!_shuffled) {
+      // Player order == canonical order, so the indices line up.
+      _playOrder.removeAt(index);
+      await _player.removeAudioSourceAt(index);
+    } else {
+      // Shuffled: find this path's position in the independent play order.
+      // (Duplicate paths + shuffle edge cases are finished in Slice 5.)
+      final playerIndex = _playOrder.indexOf(path);
+      if (playerIndex >= 0) {
+        _playOrder.removeAt(playerIndex);
+        await _player.removeAudioSourceAt(playerIndex);
+      }
+    }
+    await _persist();
+    revision.value++;
+  }
+
+  /// Move the entry at [from] to [to] within the canonical order.
+  Future<void> reorder(int from, int to) async {
+    if (from < 0 || from >= _orderedPaths.length) return;
+    final path = _orderedPaths.removeAt(from);
+    final dest = to.clamp(0, _orderedPaths.length);
+    _orderedPaths.insert(dest, path);
+    if (!_shuffled) {
+      _playOrder
+        ..removeAt(from)
+        ..insert(dest, path);
+      await _player.moveAudioSource(from, dest);
+    }
+    // When shuffled, _playOrder is independent of the canonical order, so only
+    // the canonical list + persistence change here (Slice 5 owns shuffle ops).
+    await _persist();
+    revision.value++;
+  }
+
   /// Empty the whole queue and stop driving the player.
   Future<void> clear() async {
     _orderedPaths = [];
