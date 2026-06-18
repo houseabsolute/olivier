@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:olivier/catalog/browser_page.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/state/scan_controller.dart';
 
 const _artist = Artist(
@@ -34,6 +35,12 @@ final _track = Track(
   titleTranslate: 'Queen of Kabuki-cho',
 );
 
+/// Returns an empty [QueueView] without touching FFI or [queueControllerProvider].
+class _EmptyQueue extends QueueNotifier {
+  @override
+  Future<QueueView> build() async => QueueView.empty;
+}
+
 /// A [ScanController] whose [loadRoots] is a no-op, so the page's post-frame
 /// hydrate never reaches the real `listRoots` FFI in a headless test.
 class _StubScanController extends ScanController {
@@ -58,6 +65,7 @@ Widget _page(double scale) {
       selectedAlbumProvider
           .overrideWith(() => _PreselectedAlbum(_album.releaseMbid)),
       scanControllerProvider.overrideWith(_StubScanController.new),
+      queueProvider.overrideWith(_EmptyQueue.new),
     ],
     child: MaterialApp(
       home: Builder(
@@ -110,8 +118,8 @@ void main() {
       // The stacked right pane separates album from track with a Divider.
       expect(find.byType(Divider), findsWidgets);
 
-      // The collapsed queue-panel shell is present, above the now-playing bar.
-      expect(find.text('Queue · 0'), findsOneWidget);
+      // The collapsed queue-panel header is present, above the now-playing bar.
+      expect(find.textContaining('0 tracks'), findsOneWidget);
       expect(find.text('stub-now-playing'), findsOneWidget);
     });
   }
