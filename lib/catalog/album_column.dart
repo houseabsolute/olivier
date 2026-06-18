@@ -2,9 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
+import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+import 'package:olivier/widgets/context_menu.dart';
+
+Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
+  final paths = await resolveEntityPaths(
+    entity,
+    ref.read(entityPathFnsProvider),
+  );
+  if (paths.isEmpty) return;
+  await ref.read(playbackControllerProvider).queueController.append(paths);
+}
 
 class AlbumColumn extends ConsumerWidget {
   const AlbumColumn({super.key});
@@ -40,37 +51,44 @@ class _AlbumList extends ConsumerWidget {
         final album = albums[index];
         final isSelected = selected == album.releaseMbid;
         final year = album.originalYear ?? album.reissueYear ?? '';
-        return InkWell(
-          key: ValueKey(album.releaseMbid),
-          onTap: () {
-            ref.read(selectedAlbumProvider.notifier).select(album.releaseMbid);
-            // Store the full album object so the track column can access title.
-            ref.read(selectedAlbumObjectProvider.notifier).select(album);
-          },
-          onDoubleTap: () async {
-            final paths =
-                await ref.read(albumFilePathsFnProvider)(album.releaseMbid);
-            if (paths.isEmpty) return;
-            await ref.read(queueControllerProvider).append(paths);
-          },
-          child: Container(
-            color: isSelected
-                ? Theme.of(context).colorScheme.primaryContainer
-                : null,
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.only(left: 12, right: 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: BilingualText(
-                    original: album.title,
-                    translit: album.titleTranslit,
-                    translate: album.titleTranslate,
-                    leads: leads,
-                    suffix: year.isNotEmpty ? ' ($year)' : null,
+        final entity = QueueEntityRef.album(album.releaseMbid);
+        return AddToQueueMenu(
+          entity: entity,
+          onAddToQueue: (e) => _enqueue(ref, e),
+          child: InkWell(
+            key: ValueKey(album.releaseMbid),
+            onTap: () {
+              ref
+                  .read(selectedAlbumProvider.notifier)
+                  .select(album.releaseMbid);
+              // Store the full album object so the track column can access title.
+              ref.read(selectedAlbumObjectProvider.notifier).select(album);
+            },
+            onDoubleTap: () async {
+              final paths =
+                  await ref.read(albumFilePathsFnProvider)(album.releaseMbid);
+              if (paths.isEmpty) return;
+              await ref.read(queueControllerProvider).append(paths);
+            },
+            child: Container(
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : null,
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.only(left: 12, right: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: BilingualText(
+                      original: album.title,
+                      translit: album.titleTranslit,
+                      translate: album.titleTranslate,
+                      leads: leads,
+                      suffix: year.isNotEmpty ? ' ($year)' : null,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

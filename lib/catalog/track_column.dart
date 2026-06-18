@@ -2,9 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
+import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+import 'package:olivier/widgets/context_menu.dart';
+
+Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
+  final paths = await resolveEntityPaths(
+    entity,
+    ref.read(entityPathFnsProvider),
+  );
+  if (paths.isEmpty) return;
+  await ref.read(playbackControllerProvider).queueController.append(paths);
+}
 
 class TrackColumn extends ConsumerWidget {
   const TrackColumn({super.key});
@@ -42,36 +53,42 @@ class _TrackList extends ConsumerWidget {
         final track = tracks[index];
         final trackId = track.id;
         final isSelected = selectedTrack == trackId;
-        return InkWell(
-          key: ValueKey(track.id),
-          onTap: () => ref.read(selectedTrackProvider.notifier).select(trackId),
-          onDoubleTap: () async {
-            final path = await ref.read(trackPathFnProvider)(trackId);
-            if (path == null) return;
-            await ref.read(queueControllerProvider).append([path]);
-          },
-          child: Container(
-            color: isSelected
-                ? Theme.of(context).colorScheme.primaryContainer
-                : null,
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: BilingualText(
-                    original: track.title,
-                    translit: track.titleTranslit,
-                    translate: track.titleTranslate,
-                    leads: leads,
-                    prefix: '${track.position}. ',
+        final entity = QueueEntityRef.track(trackId);
+        return AddToQueueMenu(
+          entity: entity,
+          onAddToQueue: (e) => _enqueue(ref, e),
+          child: InkWell(
+            key: ValueKey(track.id),
+            onTap: () =>
+                ref.read(selectedTrackProvider.notifier).select(trackId),
+            onDoubleTap: () async {
+              final path = await ref.read(trackPathFnProvider)(trackId);
+              if (path == null) return;
+              await ref.read(queueControllerProvider).append([path]);
+            },
+            child: Container(
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : null,
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: BilingualText(
+                      original: track.title,
+                      translit: track.titleTranslit,
+                      translate: track.titleTranslate,
+                      leads: leads,
+                      prefix: '${track.position}. ',
+                    ),
                   ),
-                ),
-                Text(
-                  _formatLength(track.lengthMs),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
+                  Text(
+                    _formatLength(track.lengthMs),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
             ),
           ),
         );

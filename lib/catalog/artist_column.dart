@@ -1,9 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:olivier/audio/playback_controller.dart';
+import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+import 'package:olivier/widgets/context_menu.dart';
+
+Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
+  final paths = await resolveEntityPaths(
+    entity,
+    ref.read(entityPathFnsProvider),
+  );
+  if (paths.isEmpty) return;
+  await ref.read(playbackControllerProvider).queueController.append(paths);
+}
 
 class ArtistColumn extends ConsumerWidget {
   const ArtistColumn({super.key});
@@ -38,21 +50,27 @@ class _ArtistList extends ConsumerWidget {
       itemBuilder: (context, index) {
         final artist = artists[index];
         final isSelected = selected == artist.mbid;
-        return InkWell(
-          key: ValueKey(artist.mbid),
-          onTap: () =>
-              ref.read(selectedArtistProvider.notifier).select(artist.mbid),
-          child: Container(
-            color: isSelected
-                ? Theme.of(context).colorScheme.primaryContainer
-                : null,
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: BilingualText(
-              original: artist.nameOriginal ?? artist.name,
-              translit: artist.transliteration,
-              translate: null, // names get a reading only (spec §6)
-              leads: leads,
+        final entity = QueueEntityRef.artist(artist.mbid);
+        return AddToQueueMenu(
+          entity: entity,
+          onAddToQueue: (e) => _enqueue(ref, e),
+          child: InkWell(
+            key: ValueKey(artist.mbid),
+            onTap: () =>
+                ref.read(selectedArtistProvider.notifier).select(artist.mbid),
+            onDoubleTap: () => _enqueue(ref, entity),
+            child: Container(
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : null,
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: BilingualText(
+                original: artist.nameOriginal ?? artist.name,
+                translit: artist.transliteration,
+                translate: null, // names get a reading only (spec §6)
+                leads: leads,
+              ),
             ),
           ),
         );
