@@ -31,11 +31,8 @@ class _TrackList extends ConsumerWidget {
       return const Center(child: Text('Select an album'));
     }
 
-    // We need the currently selected album to get the releaseMbid and title.
-    final releaseMbid = ref.watch(selectedAlbumProvider);
-    final albumObj = ref.watch(selectedAlbumObjectProvider);
-    final albumTitle = albumObj?.title ?? '';
     final leads = ref.watch(languageLeadsProvider);
+    final selectedTrack = ref.watch(selectedTrackProvider);
 
     return ListView.builder(
       itemCount: tracks.length,
@@ -43,17 +40,20 @@ class _TrackList extends ConsumerWidget {
       scrollCacheExtent: const ScrollCacheExtent.pixels(600),
       itemBuilder: (context, index) {
         final track = tracks[index];
+        final trackId = track.id;
+        final isSelected = selectedTrack == trackId;
         return InkWell(
           key: ValueKey(track.id),
-          onTap: () {
-            if (releaseMbid == null) return;
-            ref.read(playbackControllerProvider).playTrack(
-                  releaseMbid,
-                  albumTitle,
-                  index,
-                );
+          onTap: () => ref.read(selectedTrackProvider.notifier).select(trackId),
+          onDoubleTap: () async {
+            final path = await ref.read(trackPathFnProvider)(trackId);
+            if (path == null) return;
+            await ref.read(queueControllerProvider).append([path]);
           },
           child: Container(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primaryContainer
+                : null,
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(

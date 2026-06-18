@@ -108,6 +108,14 @@ final setSettingFnProvider = Provider<SetSettingFn>((ref) {
       rust_settings.setSetting(dbPath: db, key: key, value: value);
 });
 
+// Resolves one track's single play path (MIN path); seam for testability.
+typedef TrackPathFn = Future<String?> Function(int trackId);
+
+final trackPathFnProvider = Provider<TrackPathFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (trackId) => trackPath(dbPath: db, trackId: trackId);
+});
+
 const _languageLeadsKey = 'language_leads';
 
 class LanguageLeadsNotifier extends Notifier<LanguageLeads> {
