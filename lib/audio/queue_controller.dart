@@ -247,7 +247,12 @@ class QueueController implements ShuffleAllTarget {
 
   /// The player's current-source-index stream, surfaced so the queue view can
   /// recompute the canonical highlight when the track advances.
-  Stream<int?> get currentIndexStream => _player.currentIndexStream;
+  ///
+  /// Uses `.distinct()` as defense in depth: just_audio re-emits on every
+  /// playback event (including during loading/buffering), not only on actual
+  /// index changes. Filtering here prevents naive listeners from triggering
+  /// unnecessary work.
+  Stream<int?> get currentIndexStream => _player.currentIndexStream.distinct();
 
   /// Canonical index (into [orderedPaths]) of the entry the player is currently
   /// on. Equals `player.currentIndex` when not shuffled; when shuffled it maps
