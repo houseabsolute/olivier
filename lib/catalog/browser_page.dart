@@ -10,7 +10,12 @@ import 'package:olivier/state/scan_controller.dart';
 import 'package:olivier/widgets/now_playing_bar.dart';
 
 class BrowserPage extends ConsumerStatefulWidget {
-  const BrowserPage({super.key});
+  const BrowserPage({super.key, this.nowPlaying});
+
+  /// The bottom transport bar. Injectable so the page can be widget-tested
+  /// without the live, uninitialized global [audioHandler]. Defaults to the
+  /// real [NowPlayingBar] in production.
+  final Widget? nowPlaying;
 
   @override
   ConsumerState<BrowserPage> createState() => _BrowserPageState();
@@ -85,7 +90,8 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
         bottom: scan.scanning ? _scanProgressBar(scan) : null,
       ),
       body: MultiSplitView(controller: _splitController),
-      bottomNavigationBar: NowPlayingBar(audioHandler: audioHandler),
+      bottomNavigationBar:
+          widget.nowPlaying ?? NowPlayingBar(audioHandler: audioHandler),
     );
   }
 
