@@ -229,13 +229,12 @@ class QueueController implements ShuffleAllTarget {
     return idx < 0 ? null : idx;
   }
 
-  /// Jump to and play the entry at canonical [index].
+  /// Jump to and play the entry at canonical [index]. Translates the canonical
+  /// index to the player's source index via _playOrder (identity when not
+  /// shuffled, occurrence-aware for duplicates).
   Future<void> playAt(int index) async {
     if (index < 0 || index >= _orderedPaths.length) return;
-    final path = _orderedPaths[index];
-    // Map canonical -> player index (== index when not shuffled).
-    final playerIndex = _shuffled ? _playOrder.indexOf(path) : index;
-    if (playerIndex < 0) return;
+    final playerIndex = _playerIndexForCanonical(index);
     await _player.seek(Duration.zero, index: playerIndex);
     await _player.play();
   }

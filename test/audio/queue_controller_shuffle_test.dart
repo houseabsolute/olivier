@@ -1,7 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olivier/audio/queue_controller.dart';
+import 'package:olivier/src/rust/db.dart';
 
 import '../support/fake_queue_player.dart';
+
+/// Records every snapshot the controller persists so persistence can be
+/// asserted host-VM (no real `loadQueue` FFI / LD_LIBRARY_PATH).
+class _RecordingSaveQueue {
+  final List<QueueSnapshot> snapshots = [];
+
+  QueueSnapshot? get last => snapshots.isEmpty ? null : snapshots.last;
+
+  Future<void> call(QueueSnapshot snapshot) async {
+    snapshots.add(snapshot);
+  }
+}
 
 // Adaptation note (host-VM test rules): the plan's verbatim Task 21 test seeded
 // a real on-disk db and used RustLib.init()/loadQueue() (real Rust FFI) to read
@@ -19,12 +32,14 @@ void main() {
   const dbPath = '/unused/test.db';
 
   late FakeQueuePlayer player;
+  late _RecordingSaveQueue saved;
   late QueueController controller;
 
   setUp(() async {
     player = FakeQueuePlayer();
+    saved = _RecordingSaveQueue();
     controller = QueueController.withPlayer(player,
-        dbPath: dbPath, saveQueue: (_) async {});
+        dbPath: dbPath, saveQueue: saved.call);
     await controller.setQueue(['/a.flac', '/b.flac', '/c.flac', '/d.flac']);
   });
 
@@ -103,5 +118,73 @@ void main() {
     expect(controller.playOrder, before);
     expect(player.sources, before);
     expect(player.removedIndexes, isEmpty);
+  });
+
+  test('playAt while shuffled jumps to the right track via _playOrder',
+      () async {
+    await controller.setShuffle(true);
+    final shuffled = controller.playOrder;
+
+    const targetPath = '/c.flac';
+    final expectedPlayerIndex = shuffled.indexOf(targetPath);
+
+    await controller.playAt(2); // canonical index 2 == '/c.flac'
+
+    expect(player.seeks.length, 1);
+    expect(player.seeks.single.position, Duration.zero);
+    expect(player.seeks.single.index, expectedPlayerIndex);
+    expect(player.played, isTrue);
+  });
+
+  test(
+      'playAt while shuffled with DUPLICATE paths seeks to the player source '
+      'for the chosen canonical occurrence', () async {
+    // Canonical order has '/dup.flac' twice (indices 1 and 3).
+    await controller.setQueue(['/x.flac', '/dup.flac', '/y.flac', '/dup.flac']);
+    await controller.setShuffle(true);
+
+    final shuffled = controller.playOrder;
+
+    // Expect the SECOND '/dup.flac' (canonical index 3) to map to the 2nd
+    // '/dup.flac' encountered while scanning the player order left-to-right —
+    // occurrence-aware, not naive indexOf (which would pick the 1st).
+    var seen = 0;
+    var expectedPlayerIndex = -1;
+    for (var i = 0; i < shuffled.length; i++) {
+      if (shuffled[i] == '/dup.flac') {
+        if (seen == 1) {
+          expectedPlayerIndex = i;
+          break;
+        }
+        seen++;
+      }
+    }
+    expect(expectedPlayerIndex, greaterThanOrEqualTo(0));
+
+    await controller.playAt(3); // 2nd '/dup.flac'
+
+    expect(player.seeks.length, 1);
+    expect(player.seeks.single.position, Duration.zero);
+    expect(player.seeks.single.index, expectedPlayerIndex);
+    expect(player.played, isTrue);
+  });
+
+  test('append while shuffled adds to canonical end AND the player end',
+      () async {
+    await controller.setShuffle(true);
+    final before = controller.playOrder.length;
+
+    await controller.append(['/e.flac']);
+
+    expect(controller.orderedPaths.last, '/e.flac');
+    expect(controller.playOrder.length, before + 1);
+    expect(controller.playOrder.last, '/e.flac');
+    expect(player.sources.last, '/e.flac');
+
+    // Host-VM persistence assertion: read the recorded snapshot the controller
+    // persisted (the plan's verbatim test used the real loadQueue FFI here).
+    final snap = saved.last;
+    expect(snap!.paths.last, '/e.flac');
+    expect(snap.shuffle, isTrue);
   });
 }
