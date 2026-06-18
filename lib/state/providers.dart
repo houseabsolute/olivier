@@ -36,6 +36,8 @@ class SelectedAlbum extends Notifier<String?> {
 
   void select(String? releaseMbid) {
     state = releaseMbid;
+    // A new album resets the track highlight (mirrors artist→album).
+    ref.read(selectedTrackProvider.notifier).clear();
   }
 
   void clear() {
@@ -45,6 +47,24 @@ class SelectedAlbum extends Notifier<String?> {
 
 final selectedAlbumProvider =
     NotifierProvider<SelectedAlbum, String?>(SelectedAlbum.new);
+
+// --- Selected track ---
+
+class SelectedTrack extends Notifier<int?> {
+  @override
+  int? build() => null;
+
+  void select(int? trackId) {
+    state = trackId;
+  }
+
+  void clear() {
+    state = null;
+  }
+}
+
+final selectedTrackProvider =
+    NotifierProvider<SelectedTrack, int?>(SelectedTrack.new);
 
 // --- Artists list ---
 

@@ -317,6 +317,12 @@ final playbackControllerProvider = Provider<PlaybackController>((ref) {
   );
 });
 
+/// Exposes the [QueueController] held by the [PlaybackController] so queue
+/// panels and enqueue menus can call its ops directly.
+final queueControllerProvider = Provider<QueueController>(
+  (ref) => ref.watch(playbackControllerProvider).queueController,
+);
+
 /// Holds the currently selected [Album] object so the track column can
 /// retrieve the album title and releaseMbid when starting playback.
 class SelectedAlbumObject extends Notifier<Album?> {
