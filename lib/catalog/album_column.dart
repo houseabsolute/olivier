@@ -47,6 +47,12 @@ class _AlbumList extends ConsumerWidget {
             // Store the full album object so the track column can access title.
             ref.read(selectedAlbumObjectProvider.notifier).select(album);
           },
+          onDoubleTap: () async {
+            final paths =
+                await ref.read(albumFilePathsFnProvider)(album.releaseMbid);
+            if (paths.isEmpty) return;
+            await ref.read(queueControllerProvider).append(paths);
+          },
           child: Container(
             color: isSelected
                 ? Theme.of(context).colorScheme.primaryContainer
@@ -63,21 +69,6 @@ class _AlbumList extends ConsumerWidget {
                     leads: leads,
                     suffix: year.isNotEmpty ? ' ($year)' : null,
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.play_arrow, size: 20),
-                  tooltip: 'Play album',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
-                  ),
-                  onPressed: () {
-                    ref.read(playbackControllerProvider).playAlbum(
-                          album.releaseMbid,
-                          album.title,
-                        );
-                  },
                 ),
               ],
             ),

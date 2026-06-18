@@ -116,6 +116,14 @@ final trackPathFnProvider = Provider<TrackPathFn>((ref) {
   return (trackId) => trackPath(dbPath: db, trackId: trackId);
 });
 
+// Resolves an album's file paths (one per track, disc/position order); seam.
+typedef AlbumFilePathsFn = Future<List<String>> Function(String releaseMbid);
+
+final albumFilePathsFnProvider = Provider<AlbumFilePathsFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (releaseMbid) => albumFilePaths(dbPath: db, releaseMbid: releaseMbid);
+});
+
 const _languageLeadsKey = 'language_leads';
 
 class LanguageLeadsNotifier extends Notifier<LanguageLeads> {
