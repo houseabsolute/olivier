@@ -1,10 +1,52 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
+import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+
+/// Provider that exposes the [ShuffleAllTarget] the "Shuffle entire library"
+/// control calls. Defaults to the real controller; tests override with a fake.
+final shuffleAllTargetProvider = Provider<ShuffleAllTarget>((ref) {
+  return ref.read(playbackControllerProvider).queueController;
+});
+
+/// Resolves all library paths, optionally shows a confirm dialog when the queue
+/// is non-empty, then calls [ShuffleAllTarget.replaceLibraryShuffled].
+Future<void> shuffleEntireLibrary(BuildContext context, WidgetRef ref) async {
+  final paths = await ref.read(libraryPathsFnProvider)();
+  if (paths.isEmpty) return;
+
+  final queueIsEmpty = ref.read(queueProvider).value?.tracks.isEmpty ?? true;
+  if (!queueIsEmpty) {
+    if (!context.mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Shuffle entire library?'),
+        content: Text(
+          'This replaces the current queue with ${paths.length} tracks '
+          'and shuffles playback.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Shuffle'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+  }
+
+  await ref.read(shuffleAllTargetProvider).replaceLibraryShuffled(paths);
+}
 
 /// Normalize a `ReorderableListView` pre-removal `newIndex` to the canonical
 /// destination index. When using the legacy `onReorder` callback, Flutter
@@ -58,6 +100,12 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
               ),
             ] else
               const Spacer(),
+            // Shuffle entire library — replaces the queue and starts shuffled.
+            IconButton(
+              icon: const Icon(Icons.shuffle_on_outlined),
+              tooltip: 'Shuffle entire library',
+              onPressed: () => shuffleEntireLibrary(context, ref),
+            ),
             // Empty — clears the entire queue.
             IconButton(
               icon: const Icon(Icons.delete_outline),

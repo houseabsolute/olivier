@@ -11,9 +11,15 @@ import 'package:olivier/src/rust/db.dart';
 /// inject a fake so they don't need to load the Rust cdylib.
 typedef SaveQueueFn = Future<void> Function(QueueSnapshot snapshot);
 
+/// The single method "Shuffle entire library" needs from the queue controller.
+/// Narrowed to an interface so the action is unit-testable with a fake.
+abstract interface class ShuffleAllTarget {
+  Future<void> replaceLibraryShuffled(List<String> paths);
+}
+
 /// Holds the canonical ordered list and rebuilds the player's sources on
 /// shuffle (engine shuffle is ignored by the media_kit backend on Linux).
-class QueueController {
+class QueueController implements ShuffleAllTarget {
   QueueController(AudioPlayer player,
       {required this.dbPath, SaveQueueFn? saveQueue})
       : _player = JustAudioQueuePlayer(player),
@@ -123,6 +129,15 @@ class QueueController {
     await _player.setAudioSources([]);
     await _persist();
     revision.value++;
+  }
+
+  /// The ONE queue-replacing action: replace the queue with [paths], turn
+  /// shuffle on, and start playing. Used by "Shuffle entire library".
+  @override
+  Future<void> replaceLibraryShuffled(List<String> paths) async {
+    await setQueue(paths);
+    await setShuffle(true);
+    await _player.play();
   }
 
   Future<void> _rebuild(
