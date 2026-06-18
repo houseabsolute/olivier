@@ -14,7 +14,7 @@ Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
     ref.read(entityPathFnsProvider),
   );
   if (paths.isEmpty) return;
-  await ref.read(playbackControllerProvider).queueController.append(paths);
+  await ref.read(queueControllerProvider).append(paths);
 }
 
 class AlbumColumn extends ConsumerWidget {

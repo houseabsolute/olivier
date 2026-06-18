@@ -74,4 +74,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(fake.replaced, ['/m/1', '/m/2', '/m/3']);
   });
+
+  // Spec §6: tapping Cancel on the confirm dialog must NOT replace the queue.
+  testWidgets('non-empty queue: cancel dialog leaves queue unchanged',
+      (tester) async {
+    final fake = _FakeController();
+    await tester.pumpWidget(_host(fake, queueCount: 5));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Shuffle entire library'));
+    await tester.pumpAndSettle();
+
+    // Dialog is visible.
+    expect(find.text('Shuffle entire library?'), findsOneWidget);
+    expect(fake.replaced, isNull);
+
+    // Tap Cancel.
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    // Dialog dismissed and replace was NOT called.
+    expect(find.text('Shuffle entire library?'), findsNothing);
+    expect(fake.replaced, isNull);
+  });
 }

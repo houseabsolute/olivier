@@ -8,9 +8,10 @@ import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 
 /// Provider that exposes the [ShuffleAllTarget] the "Shuffle entire library"
-/// control calls. Defaults to the real controller; tests override with a fake.
+/// control calls. Defaults to the canonical queue controller; tests override
+/// with a fake.
 final shuffleAllTargetProvider = Provider<ShuffleAllTarget>((ref) {
-  return ref.read(playbackControllerProvider).queueController;
+  return ref.watch(queueControllerProvider);
 });
 
 /// Resolves all library paths, optionally shows a confirm dialog when the queue
@@ -48,20 +49,11 @@ Future<void> shuffleEntireLibrary(BuildContext context, WidgetRef ref) async {
   await ref.read(shuffleAllTargetProvider).replaceLibraryShuffled(paths);
 }
 
-/// Normalize a `ReorderableListView` pre-removal `newIndex` to the canonical
-/// destination index. When using the legacy `onReorder` callback, Flutter
-/// reports `newIndex` as the pre-removal slot; for a downward move that is one
-/// past the final resting slot, so we subtract one. Upward moves are
-/// unaffected. (`onReorderItem` already delivers the post-removal index and
-/// does not need this function.)
-int normalizeReorder(int oldIndex, int newIndex) =>
-    newIndex > oldIndex ? newIndex - 1 : newIndex;
-
 /// Collapsible queue panel between the browse split and the now-playing bar.
-/// Collapsed: shows the count + up-next header with Shuffle/Empty/Shuffle-all
-/// placeholder controls and an expand caret. Expanded: the header plus a
-/// ReorderableListView of queued tracks (bilingual titles, drag handle, ×
-/// remove, tap-to-play, current-track highlight).
+/// Collapsed: shows the count + up-next header with fully-wired Shuffle,
+/// Empty, and Shuffle-all controls plus an expand caret. Expanded: the header
+/// plus a ReorderableListView of queued tracks (bilingual titles, drag handle,
+/// × remove, tap-to-play, current-track highlight).
 class QueuePanel extends ConsumerStatefulWidget {
   const QueuePanel({super.key});
 
@@ -122,11 +114,13 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
               tooltip: 'Shuffle entire library',
               onPressed: () => shuffleEntireLibrary(context, ref),
             ),
-            // Empty — clears the entire queue.
+            // Empty — clears the entire queue. Disabled when already empty.
             IconButton(
               icon: const Icon(Icons.delete_outline),
               tooltip: 'Empty queue',
-              onPressed: () => ref.read(queueControllerProvider).clear(),
+              onPressed: count == 0
+                  ? null
+                  : () => ref.read(queueControllerProvider).clear(),
             ),
             // Expand / collapse caret.
             IconButton(
@@ -158,10 +152,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
           ref.read(entityPathFnsProvider),
         );
         if (paths.isEmpty) return;
-        await ref
-            .read(playbackControllerProvider)
-            .queueController
-            .append(paths);
+        await ref.read(queueControllerProvider).append(paths);
       },
       child: panel,
     );

@@ -16,14 +16,7 @@ const _album = Album(
   albumArtist: 'Artist',
 );
 
-void main() {
-  testWidgets('album rows have no play button', (tester) async {
-    final qc = QueueController.withPlayer(
-      FakeQueuePlayer(),
-      dbPath: '/x.db',
-      saveQueue: (_) async {},
-    );
-    await tester.pumpWidget(ProviderScope(
+ProviderScope _albumApp(QueueController qc) => ProviderScope(
       overrides: [
         getSettingFnProvider.overrideWithValue((key) async => null),
         albumsProvider.overrideWith((ref) => [_album]),
@@ -32,7 +25,16 @@ void main() {
             .overrideWithValue((mbid) async => ['/m/a.flac', '/m/b.flac']),
       ],
       child: const MaterialApp(home: Scaffold(body: AlbumColumn())),
-    ));
+    );
+
+void main() {
+  testWidgets('album rows have no play button', (tester) async {
+    final qc = QueueController.withPlayer(
+      FakeQueuePlayer(),
+      dbPath: '/x.db',
+      saveQueue: (_) async {},
+    );
+    await tester.pumpWidget(_albumApp(qc));
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.play_arrow), findsNothing);
   });
@@ -43,16 +45,7 @@ void main() {
       dbPath: '/x.db',
       saveQueue: (_) async {},
     );
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        getSettingFnProvider.overrideWithValue((key) async => null),
-        albumsProvider.overrideWith((ref) => [_album]),
-        queueControllerProvider.overrideWithValue(qc),
-        albumFilePathsFnProvider
-            .overrideWithValue((mbid) async => ['/m/a.flac', '/m/b.flac']),
-      ],
-      child: const MaterialApp(home: Scaffold(body: AlbumColumn())),
-    ));
+    await tester.pumpWidget(_albumApp(qc));
     await tester.pumpAndSettle();
 
     final row = find.text('Album One');
@@ -63,5 +56,42 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(qc.orderedPaths, ['/m/a.flac', '/m/b.flac']);
+  });
+
+  // Spec §4: single-click selects the album (updates selectedAlbumProvider) and
+  // must NOT enqueue/play anything — the queue stays empty.
+  testWidgets('single-tapping an album selects it without enqueueing',
+      (tester) async {
+    final qc = QueueController.withPlayer(
+      FakeQueuePlayer(),
+      dbPath: '/x.db',
+      saveQueue: (_) async {},
+    );
+    // Use a ProviderContainer so we can read selectedAlbumProvider afterward.
+    final container = ProviderContainer(overrides: [
+      getSettingFnProvider.overrideWithValue((key) async => null),
+      albumsProvider.overrideWith((ref) => [_album]),
+      queueControllerProvider.overrideWithValue(qc),
+      albumFilePathsFnProvider
+          .overrideWithValue((mbid) async => ['/m/a.flac', '/m/b.flac']),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: AlbumColumn())),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Album One'));
+    // Wait past the double-tap window so onTap fires.
+    await tester.pump(kDoubleTapTimeout);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    // Selection updated.
+    expect(container.read(selectedAlbumProvider), 'rel-1');
+    // Queue must remain empty.
+    expect(qc.orderedPaths, isEmpty);
   });
 }

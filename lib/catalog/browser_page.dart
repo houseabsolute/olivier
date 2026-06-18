@@ -102,8 +102,8 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
       body: Column(
         children: [
           Expanded(child: MultiSplitView(controller: _splitController)),
-          // Collapsed queue-panel shell between the browse split and the
-          // now-playing bar. Data/wiring arrive in later slices.
+          // Queue panel between the browse split and the now-playing bar.
+          // Collapses to a header; expands to a reorderable track list.
           const QueuePanel(),
         ],
       ),

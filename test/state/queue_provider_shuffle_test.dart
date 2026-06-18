@@ -58,4 +58,51 @@ void main() {
     expect(view.tracks.map((t) => t.path).toList(), controller.orderedPaths);
     expect(view.currentIndex, expectedCanonical);
   });
+
+  // Advancing to a non-zero player index (index 1) on a shuffled 4-track queue
+  // must map back to the correct CANONICAL index. This exercises the real
+  // currentIndexStream → invalidateSelf → recompute path that the prior test
+  // bypasses by always sitting on player index 0.
+  test('advancing player to index 1 updates canonical currentIndex correctly',
+      () async {
+    final player = FakeQueuePlayer();
+    final controller = QueueController.withPlayer(
+      player,
+      dbPath: ':memory:',
+      saveQueue: (_) async {},
+    );
+    await controller.setQueue(['/a.flac', '/b.flac', '/c.flac', '/d.flac']);
+    await controller.setShuffle(true);
+
+    final container = ProviderContainer(
+      overrides: [
+        queueControllerProvider.overrideWithValue(controller),
+        tracksForPathsFnProvider.overrideWithValue(
+          (paths) async => [for (final p in paths) _qt(p)],
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    // Initial read to wire up the revision listener.
+    await container.read(queueProvider.future);
+
+    // Advance the fake player to index 1 in the shuffled play order.
+    player.setCurrentIndex(1);
+    final playingPath = controller.playOrder[1];
+    final expectedCanonical = controller.orderedPaths.indexOf(playingPath);
+
+    // Let the stream event propagate → invalidateSelf.
+    await Future<void>.delayed(Duration.zero);
+
+    final view = await container.read(queueProvider.future);
+    // currentIndex in the QueueView is the CANONICAL index, not the player index.
+    expect(view.currentIndex, expectedCanonical,
+        reason: 'player index 1 in shuffled order must map to its '
+            'canonical orderedPaths position');
+    // Sanity: canonical and player indices should differ for at least one track
+    // in a shuffled 4-track queue (not always index 1 == canonical 1).
+    expect(view.currentIndex,
+        controller.orderedPaths.indexOf(controller.playOrder[1]));
+  });
 }

@@ -124,9 +124,44 @@ void main() {
     expect(c.player.sources, isEmpty);
   });
 
-  test('reorder index normalization (downward move drops one slot)', () {
-    expect(normalizeReorder(0, 3), 2); // move item 0 to bottom of 3-item list
-    expect(normalizeReorder(2, 0), 0); // upward move is unchanged
+  // Spec §7: the currently-playing row is visually distinguished with a
+  // primaryContainer-colored Material. The stub QueueView has currentIndex == 0,
+  // so the first row must carry the highlight and the second row must not.
+  testWidgets('current-track row has primaryContainer highlight, others do not',
+      (tester) async {
+    final c = await _seededController();
+    await tester.pumpWidget(_app(c.qc));
+    await tester.pumpAndSettle();
+    await _expand(tester);
+
+    // Locate the Material widget that wraps each row in the expanded list.
+    // Each item is keyed by '${path}#${index}'; the widget builder wraps it in
+    // a Material whose `color` is set to primaryContainer for the current row.
+    final theme = Theme.of(
+      tester.element(find.text('Kabukicho no Joo · Queen of Kabuki-cho')),
+    );
+    final highlightColor = theme.colorScheme.primaryContainer;
+
+    // Find all Material widgets that are direct wrappers of list items.
+    // The highlighted row's Material must have `color == primaryContainer`.
+    // We inspect by finding the Text for each row, then climbing to its Material.
+    final highlightedRowFinder = find.ancestor(
+      of: find.text('Kabukicho no Joo · Queen of Kabuki-cho'),
+      matching: find.byWidgetPredicate(
+        (w) => w is Material && w.color == highlightColor,
+      ),
+    );
+    final unhighlightedRowFinder = find.ancestor(
+      of: find.text('Innocence'),
+      matching: find.byWidgetPredicate(
+        (w) => w is Material && w.color == highlightColor,
+      ),
+    );
+
+    expect(highlightedRowFinder, findsWidgets,
+        reason: 'index-0 row must have primaryContainer Material');
+    expect(unhighlightedRowFinder, findsNothing,
+        reason: 'non-current row must NOT have primaryContainer Material');
   });
 
   // Regression: when QueuePanel is mounted as a non-flexed trailing child of a
