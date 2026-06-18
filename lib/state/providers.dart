@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/src/rust/api/catalog.dart';
 import 'package:olivier/src/rust/api/settings.dart' as rust_settings;
 import 'package:olivier/src/rust/catalog/schema.dart';
@@ -122,6 +123,27 @@ typedef AlbumFilePathsFn = Future<List<String>> Function(String releaseMbid);
 final albumFilePathsFnProvider = Provider<AlbumFilePathsFn>((ref) {
   final db = ref.watch(dbPathProvider);
   return (releaseMbid) => albumFilePaths(dbPath: db, releaseMbid: releaseMbid);
+});
+
+// --- Entity → paths FFI seams (overridable in tests) ---
+
+final entityPathFnsProvider = Provider<EntityPathFns>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return EntityPathFns(
+    artistPaths: (mbid) =>
+        trackPathsForArtist(dbPath: db, albumArtistMbid: mbid),
+    albumPaths: (releaseMbid) =>
+        albumFilePaths(dbPath: db, releaseMbid: releaseMbid),
+    trackPath: (id) => trackPath(dbPath: db, trackId: id),
+  );
+});
+
+/// The whole-library paths seam used by "Shuffle entire library".
+typedef LibraryPathsFn = Future<List<String>> Function();
+
+final libraryPathsFnProvider = Provider<LibraryPathsFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return () => trackPathsForLibrary(dbPath: db);
 });
 
 const _languageLeadsKey = 'language_leads';
