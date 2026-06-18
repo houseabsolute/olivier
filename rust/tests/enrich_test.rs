@@ -18,8 +18,7 @@ use rust_lib_olivier::enrich::http::{MbHttp, MbResponse};
 use rust_lib_olivier::enrich::model::{MbAlias, MbArtist, MbRelease, MbTextRepresentation};
 use rust_lib_olivier::enrich::run::enrich;
 use rust_lib_olivier::enrich::select::{
-    classify_alt, classify_from_text_representation, classify_pseudo, select_transliteration,
-    AltKind,
+    classify_from_text_representation, select_transliteration, AltKind,
 };
 use rust_lib_olivier::enrich::store;
 
@@ -85,7 +84,7 @@ fn parses_artist_aliases_fixture() {
 }
 
 #[test]
-fn parses_release_fixture_with_recordings_and_rels() {
+fn parses_release_fixture_with_recordings() {
     let r: MbRelease = serde_json::from_str(&fixture("release_muzai.json")).unwrap();
     // release-group first-release-date is present (original year source).
     assert!(r
@@ -99,8 +98,6 @@ fn parses_release_fixture_with_recordings_and_rels() {
         .iter()
         .flat_map(|m| &m.tracks)
         .any(|t| t.recording.is_some()));
-    // at least one relation carrying a target release.
-    assert!(r.relations.iter().any(|rel| rel.release.is_some()));
 }
 
 #[test]
@@ -407,22 +404,23 @@ async fn url_contains_expected_inc_params() {
         "artist URL must contain fmt=json"
     );
 
-    // Check release URL contains recordings+release-rels bundle.
+    // Check release URL contains the recordings+release-groups+artist-credits bundle
+    // and no longer requests release-rels.
     let conn2 = open(":memory:").unwrap();
     let release_url = format!(
-        "https://musicbrainz.org/ws/2/release/{release_mbid}?inc=recordings+release-rels+release-groups+artist-credits&fmt=json"
+        "https://musicbrainz.org/ws/2/release/{release_mbid}?inc=recordings+release-groups+artist-credits&fmt=json"
     );
     let http2 = FakeHttp::new().with(&release_url, 200, &fixture("release_muzai.json"));
     let client2 = rust_lib_olivier::enrich::client::MbClient::new(http2);
     let _ = client2.fetch_release(&conn2, release_mbid).await.unwrap();
     let release_call = client2.http().calls.borrow()[0].clone();
     assert!(
-        release_call.contains("recordings"),
-        "release URL must contain recordings"
+        release_call.contains("recordings+release-groups+artist-credits"),
+        "release URL must contain the recordings+release-groups+artist-credits inc bundle"
     );
     assert!(
-        release_call.contains("release-rels"),
-        "release URL must contain release-rels"
+        !release_call.contains("release-rels"),
+        "release URL must NOT contain release-rels (dropped from RELEASE_INC)"
     );
 }
 
@@ -467,86 +465,52 @@ fn classify_from_text_representation_is_the_edition_primitive() {
     assert_eq!(classify_from_text_representation(None), None);
 }
 
-// ── Alt-kind classification tests (Task 9) ────────────────────────────────
+// ── Alt-kind classification: the surviving classifier ─────────────────────
 
-fn pseudo_with_text_rep(title: &str, script: Option<&str>, language: Option<&str>) -> MbRelease {
-    MbRelease {
-        id: "p".into(),
-        title: title.into(),
-        date: None,
-        text_representation: Some(MbTextRepresentation {
-            script: script.map(str::to_string),
-            language: language.map(str::to_string),
-        }),
-        release_group: None,
-        media: vec![],
-        relations: vec![],
-    }
-}
-
+/// `classify_from_text_representation` is the ONLY classifier left after the
+/// title-pair heuristic (`classify_pseudo`/`classify_alt`) was removed: for a
+/// sibling edition the title pair (a romaji transliteration vs an English
+/// translation of a Japanese original) is ambiguous — both are ASCII — so the
+/// caller skips an edition this classifier can't resolve rather than guess.
 #[test]
-fn classify_uses_text_representation_when_present() {
-    // Latn script (romaji) => translit.
-    assert_eq!(
-        classify_pseudo(
-            "無罪モラトリアム",
-            &pseudo_with_text_rep("Muzai Moratorium", Some("Latn"), Some("jpn"))
-        ),
-        AltKind::Translit
-    );
-    // English language => translate even though script is Latn.
-    assert_eq!(
-        classify_pseudo(
-            "無罪モラトリアム",
-            &pseudo_with_text_rep("Innocence Moratorium", Some("Latn"), Some("eng"))
-        ),
-        AltKind::Translate
-    );
-    // Non-Latn script => translate.
-    assert_eq!(
-        classify_pseudo(
-            "無罪モラトリアム",
-            &pseudo_with_text_rep("무죄 모라토리엄", Some("Hang"), Some("kor"))
-        ),
-        AltKind::Translate
-    );
-}
+fn classify_from_text_representation_covers_script_and_language() {
+    let tr = |script: Option<&str>, language: Option<&str>| MbTextRepresentation {
+        script: script.map(str::to_string),
+        language: language.map(str::to_string),
+    };
 
-#[test]
-fn classify_falls_back_to_title_heuristic_without_text_representation() {
-    // text-representation absent (None) => deterministic title-pair fallback.
-    // Rule: an all-ASCII pseudo of an original that has non-ASCII characters is a
-    // romanization => Translit; otherwise Translate. The metadata-less fallback
-    // can't tell a romanization from a translation, so a genuine English
-    // translation only resolves to Translate via the primary language=eng path.
-
-    // classify_pseudo with no text-representation falls through to classify_alt.
-    let mut p = pseudo_with_text_rep("Muzai Moratorium", None, None);
-    p.text_representation = None;
-    assert_eq!(classify_pseudo("無罪モラトリアム", &p), AltKind::Translit);
-
-    // ASCII pseudo of a non-ASCII original => romanization => Translit.
+    // Latn script ⇒ transliteration.
     assert_eq!(
-        classify_alt("無罪モラトリアム", "Muzai Moratorium"),
-        AltKind::Translit
+        classify_from_text_representation(Some(&tr(Some("Latn"), Some("jpn")))),
+        Some(AltKind::Translit)
     );
-    // An English translation is also ASCII, so the metadata-less fallback can
-    // only call it Translit; its Translate verdict comes from the primary
-    // language=eng path, not here.
+    // language == "eng" ⇒ translation regardless of script (Latn here…).
     assert_eq!(
-        classify_alt("無罪モラトリアム", "Innocence Moratorium"),
-        AltKind::Translit
+        classify_from_text_representation(Some(&tr(Some("Latn"), Some("eng")))),
+        Some(AltKind::Translate)
     );
-    // Non-ASCII pseudo (e.g. a Korean rendering) => not a romanization => Translate.
+    // …and even a non-Latin script with language == "eng" ⇒ translation.
     assert_eq!(
-        classify_alt("無罪モラトリアム", "무죄 모라토리엄"),
-        AltKind::Translate
+        classify_from_text_representation(Some(&tr(Some("Hang"), Some("eng")))),
+        Some(AltKind::Translate)
     );
-    // All-ASCII original (nothing non-ASCII to romanize) => Translate.
+    // A non-Latin, non-eng script (e.g. Korean Hangul) ⇒ translation.
     assert_eq!(
-        classify_alt("Muzai Moratorium", "Innocence Moratorium"),
-        AltKind::Translate
+        classify_from_text_representation(Some(&tr(Some("Hang"), Some("kor")))),
+        Some(AltKind::Translate)
     );
+    // No script + non-eng language ⇒ None (caller skips the edition).
+    assert_eq!(
+        classify_from_text_representation(Some(&tr(None, Some("jpn")))),
+        None
+    );
+    // Empty text-representation (no script, no language) ⇒ None.
+    assert_eq!(
+        classify_from_text_representation(Some(&tr(None, None))),
+        None
+    );
+    // Absent text-representation ⇒ None.
+    assert_eq!(classify_from_text_representation(None), None);
 }
 
 // ── store.rs tests (Task 11) ──────────────────────────────────────────────
@@ -815,7 +779,7 @@ fn artist_url() -> String {
     format!("{BASE}/artist/{ARTIST_MBID}?inc=aliases&fmt=json")
 }
 fn release_url() -> String {
-    format!("{BASE}/release/{RELEASE_MBID}?inc=recordings+release-rels+release-groups+artist-credits&fmt=json")
+    format!("{BASE}/release/{RELEASE_MBID}?inc=recordings+release-groups+artist-credits&fmt=json")
 }
 /// Release-group browse (inc=recordings) — the alt-discovery path.
 fn browse_url() -> String {
@@ -1040,9 +1004,8 @@ async fn international_edition_supplies_translate_alts() {
     }
 
     let artist_url = format!("{BASE}/artist/{W_ARTIST}?inc=aliases&fmt=json");
-    let release_url = format!(
-        "{BASE}/release/{W_REL}?inc=recordings+release-rels+release-groups+artist-credits&fmt=json"
-    );
+    let release_url =
+        format!("{BASE}/release/{W_REL}?inc=recordings+release-groups+artist-credits&fmt=json");
     let browse_url =
         format!("{BASE}/release?release-group={W_RG}&inc=recordings&limit=100&offset=0&fmt=json");
     // Minimal artist body — no usable EN "Artist name" alias, so artist
@@ -1099,6 +1062,191 @@ async fn international_edition_supplies_translate_alts() {
     assert_eq!(translit_rows, 0);
 }
 
+/// A sibling edition with NO `text-representation` is silently SKIPPED: with no
+/// script/language metadata `classify_from_text_representation` returns `None`,
+/// so `apply_edition_alts` stores nothing for it. This is the correct
+/// conservative behavior — a Latin sibling title of a Japanese original could be
+/// either a romaji transliteration OR an English translation, and the old
+/// title-pair heuristic (now removed) could not tell them apart, so we refuse to
+/// guess rather than mislabel.
+#[tokio::test]
+async fn no_text_representation_edition_is_skipped() {
+    const RG: &str = "55555555-ced2-4356-ac0f-686cc9d9skip";
+    const REL: &str = "s0000000-0000-0000-0000-00000000jpan";
+    const ARTIST: &str = "aaaaaaaa-0000-0000-0000-0000000aaskip";
+    const REC_SKIP: &str = "rec00000-0000-0000-0000-00000000skip";
+
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        &format!(
+            "INSERT INTO artist(mbid,name,sort_name) VALUES ('{ARTIST}','結城アイラ','結城アイラ')"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO release_group(mbid,title) VALUES ('{RG}','スキップ')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO release(mbid,release_group_mbid,album_artist_mbid,title) VALUES ('{REL}','{RG}','{ARTIST}','スキップ')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO track(release_mbid,recording_mbid,disc,position,title) VALUES ('{REL}','{REC_SKIP}',1,1,'スキップ')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path,mtime,size,track_id,added_at,enriched) VALUES ('/m/skip.flac',0,0,1,0,0)",
+        [],
+    )
+    .unwrap();
+
+    let artist_url = format!("{BASE}/artist/{ARTIST}?inc=aliases&fmt=json");
+    let release_url =
+        format!("{BASE}/release/{REL}?inc=recordings+release-groups+artist-credits&fmt=json");
+    let browse_url =
+        format!("{BASE}/release?release-group={RG}&inc=recordings&limit=100&offset=0&fmt=json");
+    let artist_body = format!(
+        "{{\"id\":\"{ARTIST}\",\"name\":\"結城アイラ\",\"sort-name\":\"Yuki, Aira\",\"aliases\":[]}}"
+    );
+
+    // The browse returns the Japanese original PLUS a sibling that shares
+    // REC_SKIP, carries a Latin title ("Some Title"), but OMITS text-representation
+    // entirely — the case under test.
+    let http = FakeHttp::new()
+        .with(&artist_url, 200, &artist_body)
+        .with(&release_url, 200, &fixture("release_skip_jpan.json"))
+        .with(&browse_url, 200, &fixture("release_group_browse_skip.json"));
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+
+    enrich(&conn, &client, false, |_| true).await.unwrap();
+
+    // The metadata-less sibling was skipped: ZERO track-title alts for REC_SKIP.
+    let track_alts: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM track_title_alt WHERE recording_mbid=?1",
+            [REC_SKIP],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        track_alts, 0,
+        "no-text-representation edition must contribute no track alt"
+    );
+
+    // …and ZERO release-title alts for the release.
+    let release_alts: i64 = conn
+        .query_row(
+            &format!("SELECT count(*) FROM release_title_alt WHERE release_mbid='{REL}'"),
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        release_alts, 0,
+        "no-text-representation edition must contribute no release alt"
+    );
+}
+
+/// `browse_all_editions` pages `limit=100&offset=` until `offset >= release_count`.
+/// The release group reports `release-count:101`: page 1 (offset=0) is 100 filler
+/// editions (no text-representation/media ⇒ all skipped), and the ONLY alt-bearing
+/// edition — an English (Latn/eng) sibling sharing REC_PAGE — lives exclusively on
+/// page 2 (offset=100). The `translate` alt "Paged English" therefore appears ONLY
+/// if paging fetched page 2. (Verified to FAIL when paging is disabled; see report.)
+#[tokio::test]
+async fn multi_page_browse_fetches_all_pages() {
+    const RG: &str = "99999999-ced2-4356-ac0f-686cc9d9page";
+    const REL: &str = "p0000000-0000-0000-0000-00000000jpan";
+    const ARTIST: &str = "aaaaaaaa-0000-0000-0000-0000000aapage";
+    const REC_PAGE: &str = "rec00000-0000-0000-0000-00000000page";
+
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        &format!(
+            "INSERT INTO artist(mbid,name,sort_name) VALUES ('{ARTIST}','結城アイラ','結城アイラ')"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO release_group(mbid,title) VALUES ('{RG}','ページ')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO release(mbid,release_group_mbid,album_artist_mbid,title) VALUES ('{REL}','{RG}','{ARTIST}','ページ')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO track(release_mbid,recording_mbid,disc,position,title) VALUES ('{REL}','{REC_PAGE}',1,1,'ページ')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path,mtime,size,track_id,added_at,enriched) VALUES ('/m/page.flac',0,0,1,0,0)",
+        [],
+    )
+    .unwrap();
+
+    let artist_url = format!("{BASE}/artist/{ARTIST}?inc=aliases&fmt=json");
+    let release_url =
+        format!("{BASE}/release/{REL}?inc=recordings+release-groups+artist-credits&fmt=json");
+    let browse_url_p0 =
+        format!("{BASE}/release?release-group={RG}&inc=recordings&limit=100&offset=0&fmt=json");
+    let browse_url_p1 =
+        format!("{BASE}/release?release-group={RG}&inc=recordings&limit=100&offset=100&fmt=json");
+    let artist_body = format!(
+        "{{\"id\":\"{ARTIST}\",\"name\":\"結城アイラ\",\"sort-name\":\"Yuki, Aira\",\"aliases\":[]}}"
+    );
+    let release_body = format!(
+        "{{\"id\":\"{REL}\",\"title\":\"ページ\",\"date\":\"2010-01-01\",\
+          \"text-representation\":{{\"script\":\"Jpan\",\"language\":\"jpn\"}},\
+          \"release-group\":{{\"id\":\"{RG}\",\"first-release-date\":\"2010-01-01\"}},\
+          \"media\":[{{\"tracks\":[{{\"title\":\"ページ\",\"recording\":{{\"id\":\"{REC_PAGE}\"}}}}]}}]}}"
+    );
+
+    // Page 1 (offset=0): exactly 100 filler editions, built programmatically.
+    // Fillers omit text-representation/media so they're all skipped — they do not
+    // interfere with the single alt edition on page 2.
+    let fillers = (0..100)
+        .map(|i| format!(r#"{{"id":"f{i}","title":"F"}}"#))
+        .collect::<Vec<_>>()
+        .join(",");
+    let browse_body_p0 =
+        format!(r#"{{"release-count":101,"release-offset":0,"releases":[{fillers}]}}"#);
+
+    // Page 2 (offset=100): the ONE alt-bearing sibling (Latn/eng) sharing REC_PAGE.
+    let browse_body_p1 = format!(
+        r#"{{"release-count":101,"release-offset":100,"releases":[{{"id":"p0000000-0000-0000-0000-0000000paged","title":"Paged English","text-representation":{{"script":"Latn","language":"eng"}},"media":[{{"tracks":[{{"title":"Paged English","recording":{{"id":"{REC_PAGE}"}}}}]}}]}}]}}"#
+    );
+
+    let http = FakeHttp::new()
+        .with(&artist_url, 200, &artist_body)
+        .with(&release_url, 200, &release_body)
+        .with(&browse_url_p0, 200, &browse_body_p0)
+        .with(&browse_url_p1, 200, &browse_body_p1);
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+
+    enrich(&conn, &client, false, |_| true).await.unwrap();
+
+    // The page-2-only English edition's translate alt is present — proving paging
+    // fetched offset=100. Without paging this row would be absent.
+    let translate: Option<String> = conn
+        .query_row(
+            "SELECT title FROM track_title_alt WHERE recording_mbid=?1 AND kind='translate'",
+            [REC_PAGE],
+            |r| r.get::<_, String>(0),
+        )
+        .ok();
+    assert_eq!(translate.as_deref(), Some("Paged English"));
+}
+
 /// The same-script guard is load-bearing: a same-script native reissue must NOT
 /// clobber a real translation alt, even though it sorts LAST and would win the
 /// `ON CONFLICT(...,kind)` last-writer race without the guard.
@@ -1148,9 +1296,8 @@ async fn same_script_reissue_does_not_clobber_translate_alt() {
     .unwrap();
 
     let artist_url = format!("{BASE}/artist/{ARTIST}?inc=aliases&fmt=json");
-    let release_url = format!(
-        "{BASE}/release/{REL}?inc=recordings+release-rels+release-groups+artist-credits&fmt=json"
-    );
+    let release_url =
+        format!("{BASE}/release/{REL}?inc=recordings+release-groups+artist-credits&fmt=json");
     let browse_url =
         format!("{BASE}/release?release-group={RG}&inc=recordings&limit=100&offset=0&fmt=json");
     let artist_body = format!(
@@ -1334,7 +1481,7 @@ async fn enrich_after_scan_is_safe_noop_for_untagged_fixtures() {
     let fake_release_mbid = "bbbbbbbb-0000-0000-0000-000000000001";
     let artist_url = format!("{BASE_URL}/artist/{fake_artist_mbid}?inc=aliases&fmt=json");
     let release_url = format!(
-        "{BASE_URL}/release/{fake_release_mbid}?inc=recordings+release-rels+release-groups+artist-credits&fmt=json"
+        "{BASE_URL}/release/{fake_release_mbid}?inc=recordings+release-groups+artist-credits&fmt=json"
     );
 
     let dir = tempfile::tempdir().unwrap();

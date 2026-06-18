@@ -7,7 +7,7 @@ use crate::enrich::model::{MbArtist, MbRelease, MbReleaseBrowse};
 
 const BASE: &str = "https://musicbrainz.org/ws/2";
 const ARTIST_INC: &str = "aliases";
-const RELEASE_INC: &str = "recordings+release-rels+release-groups+artist-credits";
+const RELEASE_INC: &str = "recordings+release-groups+artist-credits";
 /// The release-group browse pulls every edition's full tracklist (each track's
 /// `recording.id`) so sibling editions can be classified and their titles joined
 /// to our tracks by recording MBID.
@@ -106,7 +106,7 @@ impl<H: MbHttp, P: Pacer> MbClient<H, P> {
     /// Browse every edition in a release group (one page of ≤100), each carrying
     /// its full tracklist with per-track `recording.id` and the edition's
     /// `text-representation`. The `inc_set` cache key embeds the `inc` + offset so
-    /// it never collides with the old `release-rels` browse.
+    /// each page of the browse is cached independently.
     pub async fn browse_release_group(
         &self,
         conn: &Connection,

@@ -1,0 +1,31 @@
+{
+  "release-count": 2,
+  "release-offset": 0,
+  "releases": [
+    {
+      "id": "s0000000-0000-0000-0000-00000000jpan",
+      "title": "スキップ",
+      "status": "Official",
+      "text-representation": { "script": "Jpan", "language": "jpn" },
+      "media": [
+        {
+          "tracks": [
+            { "title": "スキップ", "recording": { "id": "rec00000-0000-0000-0000-00000000skip" } }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "s0000000-0000-0000-0000-0000000notr",
+      "title": "Some Title",
+      "status": "Official",
+      "media": [
+        {
+          "tracks": [
+            { "title": "Some Title", "recording": { "id": "rec00000-0000-0000-0000-00000000skip" } }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-use crate::enrich::model::{MbAlias, MbArtist, MbRelease, MbTextRepresentation};
+use crate::enrich::model::{MbAlias, MbArtist, MbTextRepresentation};
 
 /// The chosen display transliteration for an artist (§5.1).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,30 +62,18 @@ fn chosen(a: &MbAlias) -> ChosenAlias {
 // ── Alt-kind classification ───────────────────────────────────────────────
 
 /// Which kind of alternate an edition supplies. Authoritative source is the
-/// edition's `text-representation`; the title-pair heuristic is only a documented
-/// fallback for editions that omit it.
+/// edition's `text-representation`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AltKind {
     Translit,
     Translate,
 }
 
-/// Classify a pseudo-release using its `text-representation` (preferred), or
-/// the title-pair fallback when that metadata is absent. `original_title` is
-/// only consulted by the fallback.
-pub fn classify_pseudo(original_title: &str, pseudo: &MbRelease) -> AltKind {
-    if let Some(kind) = classify_from_text_representation(pseudo.text_representation.as_ref()) {
-        return kind;
-    }
-    // No usable text-representation: deterministic title-pair fallback.
-    classify_alt(original_title, &pseudo.title)
-}
-
 /// Classify an edition by its `text-representation` (script/language): a Latin
 /// script ⇒ transliteration; `language == "eng"` (or any other non-original
 /// script) ⇒ translation. Returns `None` when `text-representation` carries no
-/// script and no language (caller then falls back to the title heuristic, or —
-/// for the sibling-edition path — skips the edition).
+/// script and no language; on the sibling-edition path the caller then skips the
+/// edition.
 pub fn classify_from_text_representation(tr: Option<&MbTextRepresentation>) -> Option<AltKind> {
     let tr = tr?;
     // English-language title is a translation regardless of script.
@@ -95,26 +83,6 @@ pub fn classify_from_text_representation(tr: Option<&MbTextRepresentation>) -> O
     match tr.script.as_deref() {
         Some("Latn") => Some(AltKind::Translit),
         Some(_) => Some(AltKind::Translate), // non-Latn script that isn't the original
-        None => None,                        // no script + non-eng language => fall back
-    }
-}
-
-/// Deterministic title-pair fallback (no MB metadata available): an all-ASCII
-/// pseudo title whose original contains non-ASCII characters is a romanization
-/// ⇒ transliteration; otherwise ⇒ translation. A genuine English semantic
-/// translation reaches `Translate` via the primary `text-representation`
-/// `language=eng` path (`classify_from_text_representation`), not this fallback —
-/// which cannot distinguish a romanization from a translation without metadata.
-///
-/// In practice this fallback is rarely reached because modern MusicBrainz
-/// releases include `text-representation` metadata that takes the primary path
-/// first.
-pub fn classify_alt(original_title: &str, pseudo_title: &str) -> AltKind {
-    // A romanization: the pseudo is plain ASCII while the original is not.
-    let romaji_like = pseudo_title.is_ascii() && !original_title.is_ascii();
-    if romaji_like {
-        AltKind::Translit
-    } else {
-        AltKind::Translate
+        None => None,                        // no script + non-eng language => skip
     }
 }

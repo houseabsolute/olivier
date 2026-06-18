@@ -27,7 +27,7 @@ pub struct MbAlias {
     pub alias_type: Option<String>,
 }
 
-// ── release?inc=recordings+release-rels+release-groups+artist-credits ────
+// ── release?inc=recordings+release-groups+artist-credits ────
 #[derive(Debug, Deserialize)]
 pub struct MbRelease {
     pub id: String,
@@ -42,8 +42,6 @@ pub struct MbRelease {
     pub release_group: Option<MbReleaseGroup>,
     #[serde(default)]
     pub media: Vec<MbMedium>,
-    #[serde(default)]
-    pub relations: Vec<MbRelation>,
 }
 
 /// MB `text-representation`: the script the titles are written in and the
@@ -75,18 +73,6 @@ pub struct MbTrack {
 
 #[derive(Debug, Deserialize)]
 pub struct MbRecording {
-    pub id: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct MbRelation {
-    #[serde(rename = "type-id")]
-    pub type_id: Option<String>,
-    pub release: Option<MbRelationRelease>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct MbRelationRelease {
     pub id: String,
 }
 
