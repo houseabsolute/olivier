@@ -128,4 +128,56 @@ void main() {
     expect(normalizeReorder(0, 3), 2); // move item 0 to bottom of 3-item list
     expect(normalizeReorder(2, 0), 0); // upward move is unchanged
   });
+
+  // Regression: when QueuePanel is mounted as a non-flexed trailing child of a
+  // Column (as in BrowserPage), the parent Column gives it unbounded height.
+  // The old implementation used Expanded(child: ReorderableListView) inside its
+  // own Column, which is illegal under an unbounded main-axis constraint and
+  // caused "RenderFlex children have non-zero flex but incoming height
+  // constraints are unbounded". This test reproduces that exact constraint.
+  testWidgets(
+      'expanding panel under unbounded-height parent does not throw '
+      'and renders track rows', (tester) async {
+    final c = await _seededController();
+    // Mirror browser_page.dart's body Column: an Expanded child first (gives
+    // the remaining space to the split view), then a bare QueuePanel that gets
+    // BoxConstraints(0<=h<=Infinity) — the previously-crashing layout.
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          getSettingFnProvider.overrideWithValue((key) async => null),
+          queueControllerProvider.overrideWithValue(c.qc),
+          queueProvider.overrideWith(
+            () => _StubQueueNotifier(
+              const QueueView(
+                tracks: _tracks,
+                currentIndex: 0,
+                shuffled: false,
+              ),
+            ),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                Expanded(child: SizedBox()),
+                QueuePanel(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _expand(tester);
+
+    expect(tester.takeException(), isNull);
+    // The expanded list rows must be present.
+    expect(find.text('Kabukicho no Joo · Queen of Kabuki-cho'), findsOneWidget);
+    expect(find.text('Innocence'), findsOneWidget);
+    // × remove buttons must be present.
+    expect(find.byTooltip('Remove from queue'), findsWidgets);
+  });
 }

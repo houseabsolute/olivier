@@ -143,9 +143,10 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
 
     final panel = _expanded
         ? Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               header,
-              Expanded(child: _expandedList(context, view)),
+              _expandedList(context, view),
             ],
           )
         : header;
@@ -171,49 +172,60 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
     final controller = ref.read(queueControllerProvider);
     final scheme = Theme.of(context).colorScheme;
 
-    return ReorderableListView.builder(
-      itemCount: view.tracks.length,
-      // onReorderItem delivers the post-removal destination index directly
-      // (unlike the deprecated onReorder which required normalizeReorder).
-      onReorderItem: (oldIndex, newIndex) {
-        controller.reorder(oldIndex, newIndex);
-      },
-      itemBuilder: (context, i) {
-        final t = view.tracks[i];
-        final selected = i == view.currentIndex;
-        return Material(
-          key: ValueKey('${t.path}#$i'),
-          color: selected ? scheme.primaryContainer : Colors.transparent,
-          child: InkWell(
-            onTap: () => controller.playAt(i),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
-                children: [
-                  ReorderableDragStartListener(
-                    index: i,
-                    child: const Icon(Icons.drag_handle),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: BilingualText(
-                      original: t.title,
-                      translit: t.titleTranslit,
-                      translate: t.titleTranslate,
-                      leads: leads,
+    // Use ConstrainedBox + shrinkWrap so the list self-bounds its height.
+    // This avoids the "RenderFlex children have non-zero flex but incoming
+    // height constraints are unbounded" crash that occurs when QueuePanel is
+    // placed as a non-flexed child of BrowserPage's body Column.
+    // The cap (40 % of screen height) lets the list scroll when long.
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.4,
+      ),
+      child: ReorderableListView.builder(
+        shrinkWrap: true,
+        itemCount: view.tracks.length,
+        // onReorderItem delivers the post-removal destination index directly
+        // (unlike the deprecated onReorder which required normalizeReorder).
+        onReorderItem: (oldIndex, newIndex) {
+          controller.reorder(oldIndex, newIndex);
+        },
+        itemBuilder: (context, i) {
+          final t = view.tracks[i];
+          final selected = i == view.currentIndex;
+          return Material(
+            key: ValueKey('${t.path}#$i'),
+            color: selected ? scheme.primaryContainer : Colors.transparent,
+            child: InkWell(
+              onTap: () => controller.playAt(i),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  children: [
+                    ReorderableDragStartListener(
+                      index: i,
+                      child: const Icon(Icons.drag_handle),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Remove from queue',
-                    onPressed: () => controller.removeAt(i),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: BilingualText(
+                        original: t.title,
+                        translit: t.titleTranslit,
+                        translate: t.titleTranslate,
+                        leads: leads,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Remove from queue',
+                      onPressed: () => controller.removeAt(i),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
