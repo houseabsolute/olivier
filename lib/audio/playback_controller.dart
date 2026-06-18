@@ -11,20 +11,62 @@ import 'package:olivier/src/rust/api/tags.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:path_provider/path_provider.dart';
 
+/// Resolves catalog metadata for a list of file paths. Defaults to the real
+/// `tracksForPaths` FFI; a test injects a fake so it can drive
+/// [PlaybackController]'s now-playing sync without the Rust bridge.
+typedef TracksForPathsFn = Future<List<QueueTrack>> Function(
+    List<String> paths);
+
+/// Builds the audio_service [MediaItem] list for a set of queue tracks.
+///
+/// Pure top-level function (no FFI, no I/O) so it is unit-testable host-VM and
+/// shared by every now-playing rebuild path. Cover art is added later,
+/// asynchronously, by [PlaybackController._enrichWithCoverArt]; this only maps
+/// the catalog fields the player and MPRIS need up front.
+List<MediaItem> mediaItemsForQueueTracks(List<QueueTrack> qts) {
+  return [
+    for (final qt in qts)
+      MediaItem(
+        id: qt.path,
+        title: qt.title,
+        artist: qt.artist,
+        album: qt.album.isEmpty ? null : qt.album,
+        duration: qt.lengthMs == null
+            ? null
+            : Duration(milliseconds: qt.lengthMs!.toInt()),
+        extras: {
+          if (qt.trackId != null) 'trackId': qt.trackId,
+          'titleTranslit': qt.titleTranslit,
+          'titleTranslate': qt.titleTranslate,
+        },
+      ),
+  ];
+}
+
 class PlaybackController {
   PlaybackController({
     required this.audioHandler,
     required this.queueController,
     required this.dbPath,
-  }) {
+    TracksForPathsFn? tracksForPathsFn,
+  }) : _tracksForPaths = tracksForPathsFn ??
+            ((paths) => tracksForPaths(dbPath: dbPath, paths: paths)) {
     _subscribeIndex();
     _subscribePlayTracking();
     _subscribeErrors();
+    // Follow the live queue: every queue mutation (append/playAt/removeAt/
+    // reorder/clear/shuffle) bumps `revision`, after which we rebuild the
+    // now-playing metadata from the player's actual order so the now-playing
+    // bar, MPRIS, and play tracking stay in sync — not just after a restore.
+    queueController.revision.addListener(_onQueueRevision);
   }
 
   final OlivierAudioHandler audioHandler;
   final QueueController queueController;
   final String dbPath;
+
+  // FFI seam for resolving catalog metadata by path (injectable for tests).
+  final TracksForPathsFn _tracksForPaths;
 
   // Mirrors the current queue's MediaItems so we can look up by index.
   List<MediaItem> _currentItems = [];
@@ -47,65 +89,55 @@ class PlaybackController {
   // Public API
   // -------------------------------------------------------------------------
 
-  Future<void> playAlbum(
-    String releaseMbid,
-    String albumTitle, {
-    int initialIndex = 0,
-  }) async {
-    final paths =
-        await albumFilePaths(dbPath: dbPath, releaseMbid: releaseMbid);
-    final tracks = await listTracks(dbPath: dbPath, releaseMbid: releaseMbid);
-
-    final items = _buildItems(paths, tracks, albumTitle);
-    await _applyQueue(items, paths, initialIndex);
-    await audioHandler.play();
-  }
-
-  Future<void> playTrack(
-    String releaseMbid,
-    String albumTitle,
-    int index,
-  ) async {
-    final paths =
-        await albumFilePaths(dbPath: dbPath, releaseMbid: releaseMbid);
-    final tracks = await listTracks(dbPath: dbPath, releaseMbid: releaseMbid);
-
-    final items = _buildItems(paths, tracks, albumTitle);
-    await _applyQueue(items, paths, index);
-    await audioHandler.player.seek(Duration.zero, index: index);
-    await audioHandler.play();
-  }
-
   /// Rebuild now-playing metadata for a queue restored from disk on startup.
   /// The queue controller has already rebuilt the player's sources; this seeds
   /// `_currentItems`, the audio_service queue, and the current media item (in
   /// the player's actual order) so the now-playing bar, MPRIS, and play tracking
-  /// work for a restored session — not just after a fresh play.
-  Future<void> restoreNowPlaying() async {
-    final order = queueController.playOrder;
-    if (order.isEmpty) return;
+  /// work for a restored session — not just after a fresh play. Shares the same
+  /// path as live queue mutations via [_syncNowPlayingFromQueue].
+  Future<void> restoreNowPlaying() => _syncNowPlayingFromQueue();
 
-    final queueTracks = await tracksForPaths(dbPath: dbPath, paths: order);
-    final items = [
-      for (final qt in queueTracks)
-        MediaItem(
-          id: qt.path,
-          title: qt.title,
-          artist: qt.artist,
-          album: qt.album.isEmpty ? null : qt.album,
-          duration: qt.lengthMs == null
-              ? null
-              : Duration(milliseconds: qt.lengthMs!.toInt()),
-          extras: {
-            if (qt.trackId != null) 'trackId': qt.trackId,
-            'titleTranslit': qt.titleTranslit,
-            'titleTranslate': qt.titleTranslate,
-          },
-        ),
-    ];
+  // -------------------------------------------------------------------------
+  // Live-queue sync
+  // -------------------------------------------------------------------------
+
+  // Serialises overlapping revision callbacks: each rebuild awaits the FFI, and
+  // revisions can arrive faster than that, so we chain them to avoid emitting a
+  // stale media item out of order.
+  Future<void> _syncChain = Future<void>.value();
+
+  void _onQueueRevision() {
+    _syncChain = _syncChain
+        .then((_) => _syncNowPlayingFromQueue())
+        .catchError((Object e, StackTrace st) {
+      developer.log(
+        'now-playing sync failed',
+        name: 'olivier.player',
+        error: e,
+        stackTrace: st,
+      );
+    });
+  }
+
+  /// Rebuild `_currentItems`, the audio_service queue, and the current media
+  /// item from the queue's LIVE play order (the player's actual order, shuffled
+  /// or canonical — NOT the displayed canonical order). Used by both startup
+  /// restore and every live queue mutation.
+  Future<void> _syncNowPlayingFromQueue() async {
+    final order = queueController.playOrder;
+    if (order.isEmpty) {
+      _currentItems = [];
+      audioHandler.queue.add(const []);
+      return;
+    }
+
+    final queueTracks = await _tracksForPaths(order);
+    final items = mediaItemsForQueueTracks(queueTracks);
 
     _currentItems = items;
     audioHandler.queue.add(items);
+    if (items.isEmpty) return;
+
     final i =
         (audioHandler.player.currentIndex ?? 0).clamp(0, items.length - 1);
     audioHandler.mediaItem.add(items[i]);
@@ -115,50 +147,6 @@ class PlaybackController {
   // -------------------------------------------------------------------------
   // Internal helpers
   // -------------------------------------------------------------------------
-
-  List<MediaItem> _buildItems(
-    List<String> paths,
-    List<Track> tracks,
-    String albumTitle,
-  ) {
-    // file_paths_for_album returns one path per track, so these line up 1:1; the
-    // min() is belt-and-suspenders so a transient mismatch degrades instead of
-    // throwing a RangeError mid-playback.
-    final n = paths.length < tracks.length ? paths.length : tracks.length;
-    return [
-      for (var i = 0; i < n; i++)
-        MediaItem(
-          id: paths[i],
-          title: tracks[i].title,
-          artist: tracks[i].artist,
-          album: albumTitle,
-          duration: tracks[i].lengthMs == null
-              ? null
-              : Duration(milliseconds: tracks[i].lengthMs!.toInt()),
-          extras: {
-            'trackId': tracks[i].id,
-            'titleTranslit': tracks[i].titleTranslit,
-            'titleTranslate': tracks[i].titleTranslate,
-          },
-        ),
-    ];
-  }
-
-  Future<void> _applyQueue(
-    List<MediaItem> items,
-    List<String> paths,
-    int initialIndex,
-  ) async {
-    _currentItems = items;
-    audioHandler.queue.add(items);
-    await queueController.setQueue(paths, initialIndex: initialIndex);
-
-    // Seed the mediaItem stream for the initial track.
-    if (items.isNotEmpty) {
-      audioHandler.mediaItem
-          .add(items[initialIndex.clamp(0, items.length - 1)]);
-    }
-  }
 
   void _subscribeIndex() {
     audioHandler.player.currentIndexStream.listen((i) {
@@ -301,6 +289,7 @@ class PlaybackController {
   }
 
   void dispose() {
+    queueController.revision.removeListener(_onQueueRevision);
     _positionSub?.cancel();
     _playerStateSub?.cancel();
     _errorSub?.cancel();
