@@ -1,16 +1,38 @@
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:olivier/src/rust/api/queue.dart';
+import 'package:olivier/audio/queue_player.dart';
+import 'package:olivier/src/rust/api/queue.dart' as rust_queue;
 import 'package:olivier/src/rust/db.dart';
+
+/// Persists a [QueueSnapshot]. Defaults to the real `saveQueue` FFI; tests
+/// inject a fake so they don't need to load the Rust cdylib.
+typedef SaveQueueFn = Future<void> Function(QueueSnapshot snapshot);
 
 /// Holds the canonical ordered list and rebuilds the player's sources on
 /// shuffle (engine shuffle is ignored by the media_kit backend on Linux).
 class QueueController {
-  QueueController(this.player, {required this.dbPath});
-  final AudioPlayer player;
+  QueueController(AudioPlayer player,
+      {required this.dbPath, SaveQueueFn? saveQueue})
+      : _player = JustAudioQueuePlayer(player),
+        _saveQueue = saveQueue ??
+            ((snap) => rust_queue.saveQueue(dbPath: dbPath, snapshot: snap));
+
+  /// Test seam: inject a [QueuePlayer] (fake) directly.
+  @visibleForTesting
+  QueueController.withPlayer(this._player,
+      {required this.dbPath, SaveQueueFn? saveQueue})
+      : _saveQueue = saveQueue ??
+            ((snap) => rust_queue.saveQueue(dbPath: dbPath, snapshot: snap));
+
+  final QueuePlayer _player;
   final String dbPath;
+  final SaveQueueFn _saveQueue;
+
+  /// Bumped after every mutation so the queue view can rebuild.
+  final ValueNotifier<int> revision = ValueNotifier(0);
 
   List<String> _orderedPaths = [];
   // The actual order the player's sources are in (shuffled or canonical), so the
@@ -23,12 +45,39 @@ class QueueController {
     _shuffled = false;
     await _rebuild(initialIndex);
     await _persist();
+    revision.value++;
   }
 
   Future<void> setShuffle(bool on) async {
     _shuffled = on;
     await _rebuild(0);
     await _persist();
+    revision.value++;
+  }
+
+  /// Append paths to the END of the queue without interrupting playback. Each
+  /// path is added to the canonical order and mirrored to the player via the
+  /// incremental `addAudioSource` op (no rebuild → current track keeps playing).
+  /// When not shuffled, `_playOrder` stays equal to `_orderedPaths`; when
+  /// shuffled, new paths join the tail of both (they were not part of the
+  /// earlier shuffle, which is acceptable — a reshuffle is a deliberate reset).
+  Future<void> append(List<String> paths) async {
+    for (final path in paths) {
+      _orderedPaths.add(path);
+      _playOrder.add(path);
+      await _player.addAudioSource(AudioSource.file(path));
+    }
+    await _persist();
+    revision.value++;
+  }
+
+  /// Empty the whole queue and stop driving the player.
+  Future<void> clear() async {
+    _orderedPaths = [];
+    _playOrder = [];
+    await _player.setAudioSources([]);
+    await _persist();
+    revision.value++;
   }
 
   Future<void> _rebuild(
@@ -38,7 +87,7 @@ class QueueController {
     final order =
         _shuffled ? (List.of(_orderedPaths)..shuffle()) : _orderedPaths;
     _playOrder = List.of(order);
-    await player.setAudioSources(
+    await _player.setAudioSources(
       [for (final p in order) AudioSource.file(p)],
       initialIndex:
           order.isEmpty ? null : initialIndex.clamp(0, order.length - 1),
@@ -49,11 +98,11 @@ class QueueController {
   Future<void> _persist() async {
     final snapshot = QueueSnapshot(
       paths: List.of(_orderedPaths),
-      currentIndex: player.currentIndex ?? 0,
-      positionMs: BigInt.from(player.position.inMilliseconds),
+      currentIndex: _player.currentIndex ?? 0,
+      positionMs: BigInt.from(_player.position.inMilliseconds),
       shuffle: _shuffled,
     );
-    await saveQueue(dbPath: dbPath, snapshot: snapshot);
+    await _saveQueue(snapshot);
   }
 
   /// Restore a previously saved snapshot without re-persisting. Files that no
