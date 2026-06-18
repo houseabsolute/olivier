@@ -45,6 +45,12 @@ class QueueNotifier extends AsyncNotifier<QueueView> {
     controller.revision.addListener(onRevision);
     ref.onDispose(() => controller.revision.removeListener(onRevision));
 
+    // Re-emit when the player advances so the canonical current-index highlight
+    // stays up-to-date (shuffle-aware via currentCanonicalIndex).
+    final sub =
+        controller.currentIndexStream.listen((_) => ref.invalidateSelf());
+    ref.onDispose(sub.cancel);
+
     return _resolve();
   }
 

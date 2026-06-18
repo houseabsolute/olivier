@@ -218,6 +218,10 @@ class QueueController implements ShuffleAllTarget {
   List<String> get playOrder => List.unmodifiable(_playOrder);
   bool get shuffled => _shuffled;
 
+  /// The player's current-source-index stream, surfaced so the queue view can
+  /// recompute the canonical highlight when the track advances.
+  Stream<int?> get currentIndexStream => _player.currentIndexStream;
+
   /// Canonical index (into [orderedPaths]) of the entry the player is currently
   /// on. Equals `player.currentIndex` when not shuffled; when shuffled it maps
   /// the player's current source back through `_playOrder`. Null when empty.
