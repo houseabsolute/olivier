@@ -100,6 +100,22 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
               ),
             ] else
               const Spacer(),
+            // Shuffle toggle — flips shuffle on/off, active state driven by
+            // QueueView.shuffled (rebuilt when revision bumps).
+            Consumer(
+              builder: (context, ref, _) {
+                final view = ref.watch(queueProvider).value;
+                final shuffled = view?.shuffled ?? false;
+                return IconButton(
+                  tooltip: 'Shuffle',
+                  isSelected: shuffled,
+                  icon: const Icon(Icons.shuffle),
+                  selectedIcon: const Icon(Icons.shuffle_on),
+                  onPressed: () =>
+                      ref.read(queueControllerProvider).setShuffle(!shuffled),
+                );
+              },
+            ),
             // Shuffle entire library — replaces the queue and starts shuffled.
             IconButton(
               icon: const Icon(Icons.shuffle_on_outlined),
