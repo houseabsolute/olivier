@@ -111,6 +111,12 @@ class QueueController {
   }
 
   /// Empty the whole queue and stop driving the player.
+  ///
+  /// Clearing the player's sources is the single source of truth: it drives
+  /// `currentIndexStream` to null, which causes the existing
+  /// `PlaybackController._subscribeIndex` guard (`if (i == null …) return`) to
+  /// stop emitting a stale media item — so now-playing also clears without any
+  /// extra teardown here.
   Future<void> clear() async {
     _orderedPaths = [];
     _playOrder = [];
