@@ -638,6 +638,46 @@ fn applies_artist_transliteration_and_sort_key() {
     assert_eq!(embedded2.as_deref(), Some("椎名林檎"));
 }
 
+/// Bug 1: the §6.1 tier-3 entity-sort-name fallback (`from_entity_sort_name`)
+/// must NOT write the "Last, First" sort string into the `transliteration`
+/// (reading) column — the sort key is not a display reading (§6.1). The
+/// bilingual row should collapse to the single original-script line, so the
+/// reading is NULL. `sort_name` (for §6.1 ordering) and `name_original` are
+/// still written.
+#[test]
+fn entity_sort_name_fallback_stores_no_reading() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid,name,sort_name) VALUES ('a1','Sheena Ringo','Ringo')",
+        [],
+    )
+    .unwrap();
+    store::apply_artist_transliteration(
+        &conn,
+        "a1",
+        &rust_lib_olivier::enrich::select::ChosenAlias {
+            name: "Sheena, Ringo".into(),
+            sort_name: "Sheena, Ringo".into(),
+            from_entity_sort_name: true,
+        },
+        "椎名林檎",
+    )
+    .unwrap();
+    let (translit, sort, name_original): (Option<String>, String, Option<String>) = conn
+        .query_row(
+            "SELECT transliteration, sort_name, name_original FROM artist WHERE mbid='a1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
+    // The sort-name fallback writes NO reading (would otherwise show "Sheena, Ringo").
+    assert_eq!(translit, None);
+    // The sort key is still set for §6.1 ordering.
+    assert_eq!(sort, "Sheena, Ringo");
+    // The original-script name is still stored for the bilingual headline.
+    assert_eq!(name_original.as_deref(), Some("椎名林檎"));
+}
+
 #[test]
 fn applies_dates_from_release_and_group() {
     let conn = open(":memory:").unwrap();
@@ -1157,6 +1197,10 @@ async fn resumes_skipping_already_enriched_and_cached() {
     let conn = open(":memory:").unwrap();
     seed_taggable_catalog(&conn);
     conn.execute("UPDATE file SET enriched = 1", []).unwrap();
+    // A fully-enriched 2b library also has name_original populated; otherwise the
+    // selector would (correctly) re-select the artist to backfill it (Bug 2).
+    conn.execute("UPDATE artist SET name_original = '椎名林檎'", [])
+        .unwrap();
     // FakeHttp with NO responses: if enrich tried to fetch anything it would error.
     let client = rust_lib_olivier::enrich::client::MbClient::new(FakeHttp::new());
     enrich(&conn, &client, false, |_| true).await.unwrap();
@@ -1165,6 +1209,71 @@ async fn resumes_skipping_already_enriched_and_cached() {
         0,
         "nothing to do => no HTTP"
     );
+}
+
+/// Bug 2: a Phase-2a-enriched library (every `file.enriched = 1`,
+/// `artist.name_original` NULL) must get `name_original` backfilled on upgrade
+/// to 2b. The non-force `artists_to_enrich` selector previously filtered on
+/// `f.enriched = 0`, so it returned no artists and `name_original` stayed NULL
+/// forever. The artist JSON is already in the permanent `mb_cache` from 2a, so
+/// re-running the artist loop is cache-backed — but here we still wire the
+/// artist fetch URL (a cold :memory: cache) to prove selection happens. Because
+/// every file is enriched=1, the non-force releases selector returns nothing, so
+/// NO release/browse URL is needed.
+#[tokio::test]
+async fn backfills_name_original_on_upgraded_2a_library() {
+    let conn = open(":memory:").unwrap();
+    // Simulate a 2a-enriched library: a real-MBID artist with a prior
+    // transliteration but NULL name_original, all files already enriched=1.
+    conn.execute(
+        &format!(
+            "INSERT INTO artist(mbid,name,sort_name,transliteration,name_original) \
+             VALUES ('{ARTIST_MBID}','椎名林檎','Sheena, Ringo','Old Reading',NULL)"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO release(mbid,album_artist_mbid,title) VALUES ('{RELEASE_MBID}','{ARTIST_MBID}','無罪モラトリアム')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO track(release_mbid,recording_mbid,disc,position,title) VALUES ('{RELEASE_MBID}','{REC_KABUKI}',1,1,'歌舞伎町の女王')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path,mtime,size,track_id,added_at,enriched) VALUES ('/m/a.flac',0,0,1,0,1)",
+        [],
+    )
+    .unwrap();
+
+    // Serve ONLY the artist fetch — the artist's MB `name` is 椎名林檎 with an en
+    // primary "Artist name" alias, so tier-1 selection populates a real reading.
+    let artist_body = format!(
+        "{{\"id\":\"{ARTIST_MBID}\",\"name\":\"椎名林檎\",\"sort-name\":\"Sheena, Ringo\",\
+          \"aliases\":[{{\"name\":\"Ringo Sheena\",\"sort-name\":\"Sheena, Ringo\",\
+          \"locale\":\"en\",\"primary\":true,\"type\":\"Artist name\"}}]}}"
+    );
+    let http = FakeHttp::new().with(&artist_url(), 200, &artist_body);
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+
+    enrich(&conn, &client, false, |_| true).await.unwrap();
+
+    // name_original is backfilled from the MB original-script name.
+    let (name_original, translit): (Option<String>, Option<String>) = conn
+        .query_row(
+            &format!(
+                "SELECT name_original, transliteration FROM artist WHERE mbid='{ARTIST_MBID}'"
+            ),
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(name_original.as_deref(), Some("椎名林檎"));
+    // The en primary "Artist name" alias is now the reading (tier-1 selection).
+    assert_eq!(translit.as_deref(), Some("Ringo Sheena"));
 }
 
 #[tokio::test]

@@ -11,16 +11,29 @@ fn is_real_mbid(mbid: &str) -> bool {
     !mbid.is_empty() && !mbid.starts_with("synth:")
 }
 
-/// Unique real-MBID album-artists owning ≥1 un-enriched file (or all, if force).
+/// Unique real-MBID album-artists needing (re)enrichment. With `force`, every
+/// real-MBID album-artist. Otherwise an album-artist owning ≥1 un-enriched file
+/// (new music) OR whose original-script name was never populated — the
+/// Phase-2a→2b upgrade case, where the migration ALTERed `name_original` in but
+/// nothing backfilled it and all files are already `enriched = 1`.
 fn artists_to_enrich(conn: &Connection, force: bool) -> anyhow::Result<Vec<String>> {
     let sql = if force {
         "SELECT DISTINCT r.album_artist_mbid FROM release r
          WHERE r.album_artist_mbid NOT LIKE 'synth:%'"
     } else {
+        // Non-force: an album-artist needs (re)enrichment when it owns an un-enriched
+        // file (new music) OR its original-script name was never populated — e.g. a
+        // Phase-2a library upgraded to 2b, where the ALTER added name_original but
+        // nothing backfilled it and all files are already enriched=1. Re-running the
+        // artist loop for the latter is cache-backed (artist JSON is in mb_cache), so
+        // it fills name_original (and corrects any tier-3 transliteration via Bug 1)
+        // without network, making the bilingual artist display appear after upgrade.
         "SELECT DISTINCT r.album_artist_mbid FROM release r
-         JOIN track t ON t.release_mbid = r.mbid
-         JOIN file f ON f.track_id = t.id
-         WHERE r.album_artist_mbid NOT LIKE 'synth:%' AND f.enriched = 0"
+         JOIN artist a ON a.mbid = r.album_artist_mbid
+         WHERE r.album_artist_mbid NOT LIKE 'synth:%'
+           AND (a.name_original IS NULL
+                OR EXISTS (SELECT 1 FROM track t JOIN file f ON f.track_id = t.id
+                           WHERE t.release_mbid = r.mbid AND f.enriched = 0))"
     };
     let mut stmt = conn.prepare(sql)?;
     let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;

@@ -35,9 +35,21 @@ pub fn apply_artist_transliteration(
     // Store the MusicBrainz original-script name (e.g. 椎名林檎) in its own column,
     // separate from the tag-derived `name` (which may be a romanization), so the
     // bilingual row can lead with the original and a re-scan can't clobber it.
+    //
+    // The §6.1 tier-3 fallback (`from_entity_sort_name`) yields a "Last, First"
+    // SORT string, not a display reading — `chosen.name == chosen.sort_name`. We
+    // must NOT store that sort key as the `transliteration` (reading) line (§6.1:
+    // sort key ≠ display reading), so in that case the reading is NULL and the
+    // bilingual row collapses to the single original-script line. `sort_name` is
+    // still written (it drives §6.1 ordering) and so is `name_original`.
+    let transliteration: Option<&str> = if chosen.from_entity_sort_name {
+        None
+    } else {
+        Some(&chosen.name)
+    };
     conn.execute(
         "UPDATE artist SET transliteration = ?1, sort_name = ?2, name_original = ?3 WHERE mbid = ?4",
-        rusqlite::params![chosen.name, chosen.sort_name, original_name, artist_mbid],
+        rusqlite::params![transliteration, chosen.sort_name, original_name, artist_mbid],
     )?;
     Ok(())
 }
