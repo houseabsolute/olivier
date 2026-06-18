@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
+import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
@@ -76,13 +77,28 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
       ),
     );
 
-    if (!_expanded) return header;
+    final panel = _expanded
+        ? Column(
+            children: [
+              header,
+              Expanded(child: _expandedList(context, view)),
+            ],
+          )
+        : header;
 
-    return Column(
-      children: [
-        header,
-        Expanded(child: _expandedList(context, view)),
-      ],
+    return QueuePanelDropTarget(
+      onEntityDropped: (entity) async {
+        final paths = await resolveEntityPaths(
+          entity,
+          ref.read(entityPathFnsProvider),
+        );
+        if (paths.isEmpty) return;
+        await ref
+            .read(playbackControllerProvider)
+            .queueController
+            .append(paths);
+      },
+      child: panel,
     );
   }
 
@@ -145,5 +161,39 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
     final nextIndex = current == null ? 0 : current + 1;
     if (nextIndex >= view.tracks.length) return null;
     return view.tracks[nextIndex].title;
+  }
+}
+
+/// Wraps the queue panel so a dragged browse entity dropped onto it is resolved
+/// and appended. Used around both the collapsed header and the expanded list.
+class QueuePanelDropTarget extends StatelessWidget {
+  const QueuePanelDropTarget({
+    super.key,
+    required this.onEntityDropped,
+    required this.child,
+  });
+
+  final ValueChanged<QueueEntityRef> onEntityDropped;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DragTarget<QueueEntityRef>(
+      onAcceptWithDetails: (d) => onEntityDropped(d.data),
+      builder: (context, candidate, rejected) {
+        final hovering = candidate.isNotEmpty;
+        return Container(
+          decoration: hovering
+              ? BoxDecoration(
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 2,
+                  ),
+                )
+              : null,
+          child: child,
+        );
+      },
+    );
   }
 }

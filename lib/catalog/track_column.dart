@@ -54,40 +54,50 @@ class _TrackList extends ConsumerWidget {
         final trackId = track.id;
         final isSelected = selectedTrack == trackId;
         final entity = QueueEntityRef.track(trackId);
-        return AddToQueueMenu(
-          entity: entity,
-          onAddToQueue: (e) => _enqueue(ref, e),
-          child: InkWell(
-            key: ValueKey(track.id),
-            onTap: () =>
-                ref.read(selectedTrackProvider.notifier).select(trackId),
-            onDoubleTap: () async {
-              final path = await ref.read(trackPathFnProvider)(trackId);
-              if (path == null) return;
-              await ref.read(queueControllerProvider).append([path]);
-            },
-            child: Container(
-              color: isSelected
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : null,
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: BilingualText(
-                      original: track.title,
-                      translit: track.titleTranslit,
-                      translate: track.titleTranslate,
-                      leads: leads,
-                      prefix: '${track.position}. ',
+        return LongPressDraggable<QueueEntityRef>(
+          data: entity,
+          feedback: Material(
+            elevation: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(track.title),
+            ),
+          ),
+          child: AddToQueueMenu(
+            entity: entity,
+            onAddToQueue: (e) => _enqueue(ref, e),
+            child: InkWell(
+              key: ValueKey(track.id),
+              onTap: () =>
+                  ref.read(selectedTrackProvider.notifier).select(trackId),
+              onDoubleTap: () async {
+                final path = await ref.read(trackPathFnProvider)(trackId);
+                if (path == null) return;
+                await ref.read(queueControllerProvider).append([path]);
+              },
+              child: Container(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primaryContainer
+                    : null,
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: BilingualText(
+                        original: track.title,
+                        translit: track.titleTranslit,
+                        translate: track.titleTranslate,
+                        leads: leads,
+                        prefix: '${track.position}. ',
+                      ),
                     ),
-                  ),
-                  Text(
-                    _formatLength(track.lengthMs),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+                    Text(
+                      _formatLength(track.lengthMs),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

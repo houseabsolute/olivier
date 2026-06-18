@@ -51,25 +51,35 @@ class _ArtistList extends ConsumerWidget {
         final artist = artists[index];
         final isSelected = selected == artist.mbid;
         final entity = QueueEntityRef.artist(artist.mbid);
-        return AddToQueueMenu(
-          entity: entity,
-          onAddToQueue: (e) => _enqueue(ref, e),
-          child: InkWell(
-            key: ValueKey(artist.mbid),
-            onTap: () =>
-                ref.read(selectedArtistProvider.notifier).select(artist.mbid),
-            onDoubleTap: () => _enqueue(ref, entity),
-            child: Container(
-              color: isSelected
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : null,
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: BilingualText(
-                original: artist.nameOriginal ?? artist.name,
-                translit: artist.transliteration,
-                translate: null, // names get a reading only (spec §6)
-                leads: leads,
+        return LongPressDraggable<QueueEntityRef>(
+          data: entity,
+          feedback: Material(
+            elevation: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(artist.nameOriginal ?? artist.name),
+            ),
+          ),
+          child: AddToQueueMenu(
+            entity: entity,
+            onAddToQueue: (e) => _enqueue(ref, e),
+            child: InkWell(
+              key: ValueKey(artist.mbid),
+              onTap: () =>
+                  ref.read(selectedArtistProvider.notifier).select(artist.mbid),
+              onDoubleTap: () => _enqueue(ref, entity),
+              child: Container(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primaryContainer
+                    : null,
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: BilingualText(
+                  original: artist.nameOriginal ?? artist.name,
+                  translit: artist.transliteration,
+                  translate: null, // names get a reading only (spec §6)
+                  leads: leads,
+                ),
               ),
             ),
           ),

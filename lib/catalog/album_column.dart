@@ -52,42 +52,52 @@ class _AlbumList extends ConsumerWidget {
         final isSelected = selected == album.releaseMbid;
         final year = album.originalYear ?? album.reissueYear ?? '';
         final entity = QueueEntityRef.album(album.releaseMbid);
-        return AddToQueueMenu(
-          entity: entity,
-          onAddToQueue: (e) => _enqueue(ref, e),
-          child: InkWell(
-            key: ValueKey(album.releaseMbid),
-            onTap: () {
-              ref
-                  .read(selectedAlbumProvider.notifier)
-                  .select(album.releaseMbid);
-              // Store the full album object so the track column can access title.
-              ref.read(selectedAlbumObjectProvider.notifier).select(album);
-            },
-            onDoubleTap: () async {
-              final paths =
-                  await ref.read(albumFilePathsFnProvider)(album.releaseMbid);
-              if (paths.isEmpty) return;
-              await ref.read(queueControllerProvider).append(paths);
-            },
-            child: Container(
-              color: isSelected
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : null,
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.only(left: 12, right: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: BilingualText(
-                      original: album.title,
-                      translit: album.titleTranslit,
-                      translate: album.titleTranslate,
-                      leads: leads,
-                      suffix: year.isNotEmpty ? ' ($year)' : null,
+        return LongPressDraggable<QueueEntityRef>(
+          data: entity,
+          feedback: Material(
+            elevation: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(album.title),
+            ),
+          ),
+          child: AddToQueueMenu(
+            entity: entity,
+            onAddToQueue: (e) => _enqueue(ref, e),
+            child: InkWell(
+              key: ValueKey(album.releaseMbid),
+              onTap: () {
+                ref
+                    .read(selectedAlbumProvider.notifier)
+                    .select(album.releaseMbid);
+                // Store the full album object so the track column can access title.
+                ref.read(selectedAlbumObjectProvider.notifier).select(album);
+              },
+              onDoubleTap: () async {
+                final paths =
+                    await ref.read(albumFilePathsFnProvider)(album.releaseMbid);
+                if (paths.isEmpty) return;
+                await ref.read(queueControllerProvider).append(paths);
+              },
+              child: Container(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primaryContainer
+                    : null,
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(left: 12, right: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: BilingualText(
+                        original: album.title,
+                        translit: album.titleTranslit,
+                        translate: album.titleTranslate,
+                        leads: leads,
+                        suffix: year.isNotEmpty ? ' ($year)' : null,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
