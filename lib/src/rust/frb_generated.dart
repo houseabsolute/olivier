@@ -80,7 +80,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 1109393172;
+  int get rustContentHash => -1838217848;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -147,6 +147,9 @@ abstract class RustLibApi extends BaseApi {
 
   Future<String?> crateApiCatalogTrackPath(
       {required String dbPath, required PlatformInt64 trackId});
+
+  Future<List<String>> crateApiCatalogTrackPathsForArtist(
+      {required String dbPath, required String albumArtistMbid});
 
   Future<List<QueueTrack>> crateApiCatalogTracksForPaths(
       {required String dbPath, required List<String> paths});
@@ -680,6 +683,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<String>> crateApiCatalogTrackPathsForArtist(
+      {required String dbPath, required String albumArtistMbid}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(dbPath, serializer);
+        sse_encode_String(albumArtistMbid, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 21, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCatalogTrackPathsForArtistConstMeta,
+      argValues: [dbPath, albumArtistMbid],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCatalogTrackPathsForArtistConstMeta =>
+      const TaskConstMeta(
+        debugName: "track_paths_for_artist",
+        argNames: ["dbPath", "albumArtistMbid"],
+      );
+
+  @override
   Future<List<QueueTrack>> crateApiCatalogTracksForPaths(
       {required String dbPath, required List<String> paths}) {
     return handler.executeNormal(NormalTask(
@@ -688,7 +718,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_list_String(paths, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 21, port: port_);
+            funcId: 22, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_queue_track,

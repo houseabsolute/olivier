@@ -1,7 +1,7 @@
 use rust_lib_olivier::catalog::ids::{album_artist_key, sort_name};
 use rust_lib_olivier::catalog::query::{
     albums_for_artist, artists_page, file_paths_for_album, record_play, track_path,
-    tracks_for_album, tracks_for_paths,
+    track_paths_for_artist, tracks_for_album, tracks_for_paths,
 };
 use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
 use rust_lib_olivier::catalog::scan::{reconcile_album_artists, scan_roots};
@@ -1019,4 +1019,114 @@ fn track_path_returns_min_path_or_none() {
     assert_eq!(track_path(&conn, 2).unwrap(), None);
     // Unknown track id → None.
     assert_eq!(track_path(&conn, 999).unwrap(), None);
+}
+
+#[test]
+fn track_paths_for_artist_ordered_album_then_disc_position() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('art', 'Artist', 'Artist')",
+        [],
+    )
+    .unwrap();
+    // Newer album (2000) and older album (1999); insert newer first so ordering
+    // is actually exercised.
+    conn.execute(
+        "INSERT INTO release_group(mbid, title, first_release_date) VALUES ('rg-new', 'New', '2000-01-01')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release_group(mbid, title, first_release_date) VALUES ('rg-old', 'Old', '1999-01-01')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, release_group_mbid, album_artist_mbid, title, date)
+         VALUES ('rel-new', 'rg-new', 'art', 'New', '2000-01-01')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, release_group_mbid, album_artist_mbid, title, date)
+         VALUES ('rel-old', 'rg-old', 'art', 'Old', '1999-01-01')",
+        [],
+    )
+    .unwrap();
+    // New album: tracks inserted position 2 then 1.
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (12, 'rel-new', 1, 2, 'N2')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (11, 'rel-new', 1, 1, 'N1')",
+        [],
+    )
+    .unwrap();
+    // Old album: positions 2 then 1.
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (2, 'rel-old', 1, 2, 'O2')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (1, 'rel-old', 1, 1, 'O1')",
+        [],
+    )
+    .unwrap();
+    for (path, tid) in [
+        ("/m/new2.flac", 12),
+        ("/m/new1.flac", 11),
+        ("/m/old2.flac", 2),
+        ("/m/old1.flac", 1),
+    ] {
+        conn.execute(
+            "INSERT INTO file(path, mtime, size, track_id, added_at) VALUES (?1, 0, 0, ?2, 0)",
+            rusqlite::params![path, tid],
+        )
+        .unwrap();
+    }
+
+    let paths = track_paths_for_artist(&conn, "art").unwrap();
+    // Old album (1999) first, then New (2000); within each, disc/position order.
+    assert_eq!(
+        paths,
+        vec![
+            "/m/old1.flac",
+            "/m/old2.flac",
+            "/m/new1.flac",
+            "/m/new2.flac",
+        ]
+    );
+}
+
+#[test]
+fn track_paths_for_artist_is_one_per_track() {
+    // A track with two files must contribute one MIN(path), like file_paths_for_album.
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('art', 'A', 'A')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('rel', 'art', 'Album')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (1, 'rel', 1, 1, 'T1')",
+        [],
+    )
+    .unwrap();
+    for (path, tid) in [("/m/a1.flac", 1), ("/m/a1.m4a", 1)] {
+        conn.execute(
+            "INSERT INTO file(path, mtime, size, track_id, added_at) VALUES (?1, 0, 0, ?2, 0)",
+            rusqlite::params![path, tid],
+        )
+        .unwrap();
+    }
+    let paths = track_paths_for_artist(&conn, "art").unwrap();
+    assert_eq!(paths, vec!["/m/a1.flac"]);
 }

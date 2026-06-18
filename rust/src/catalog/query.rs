@@ -152,6 +152,33 @@ pub fn track_path(conn: &Connection, track_id: i64) -> anyhow::Result<Option<Str
     Ok(path)
 }
 
+/// One absolute file path per track for every release by one album-artist, in the
+/// album browse order (original-year then title, case-insensitive — matching
+/// `albums_for_artist`) and within each album by disc then position. One path per
+/// track (`MIN(path)`), so an artist enqueue lines up with the displayed albums.
+pub fn track_paths_for_artist(
+    conn: &Connection,
+    album_artist_mbid: &str,
+) -> anyhow::Result<Vec<String>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT MIN(f.path)
+         FROM release r
+         JOIN track t ON t.release_mbid = r.mbid
+         JOIN file f ON f.track_id = t.id
+         LEFT JOIN release_group rg ON rg.mbid = r.release_group_mbid
+         WHERE r.album_artist_mbid = ?1
+         GROUP BY t.id
+         ORDER BY COALESCE(rg.first_release_date, r.date, '9999'),
+                  r.title COLLATE NOCASE, t.disc, t.position",
+    )?;
+    let rows = stmt.query_map([album_artist_mbid], |r| r.get::<_, String>(0))?;
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
 /// Track metadata for an explicit, ordered list of file paths — used to rebuild
 /// the now-playing items for a restored queue. Returns exactly one entry per
 /// input path, in the same order; a path no longer in the catalog gets a
