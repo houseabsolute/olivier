@@ -38,6 +38,11 @@ Future<List<QueueTrack>> tracksForPaths(
     RustLib.instance.api
         .crateApiCatalogTracksForPaths(dbPath: dbPath, paths: paths);
 
+Future<String?> trackPath(
+        {required String dbPath, required PlatformInt64 trackId}) =>
+    RustLib.instance.api
+        .crateApiCatalogTrackPath(dbPath: dbPath, trackId: trackId);
+
 Future<void> recordPlay(
         {required String dbPath,
         required PlatformInt64 trackId,

@@ -136,6 +136,22 @@ pub fn file_paths_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Re
     Ok(out)
 }
 
+/// The single play path for one track — `MIN(f.path)` so a track with several
+/// files (same rip in two formats) yields exactly one entry, matching
+/// `file_paths_for_album`. `None` when the track has no files or does not exist,
+/// so a double-click on such a row enqueues nothing.
+pub fn track_path(conn: &Connection, track_id: i64) -> anyhow::Result<Option<String>> {
+    let path = conn
+        .query_row(
+            "SELECT MIN(f.path) FROM file f WHERE f.track_id = ?1",
+            [track_id],
+            |r| r.get::<_, Option<String>>(0),
+        )
+        .optional()?
+        .flatten();
+    Ok(path)
+}
+
 /// Track metadata for an explicit, ordered list of file paths — used to rebuild
 /// the now-playing items for a restored queue. Returns exactly one entry per
 /// input path, in the same order; a path no longer in the catalog gets a

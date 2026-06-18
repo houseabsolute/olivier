@@ -1,7 +1,7 @@
 use rust_lib_olivier::catalog::ids::{album_artist_key, sort_name};
 use rust_lib_olivier::catalog::query::{
-    albums_for_artist, artists_page, file_paths_for_album, record_play, tracks_for_album,
-    tracks_for_paths,
+    albums_for_artist, artists_page, file_paths_for_album, record_play, track_path,
+    tracks_for_album, tracks_for_paths,
 };
 use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
 use rust_lib_olivier::catalog::scan::{reconcile_album_artists, scan_roots};
@@ -974,4 +974,49 @@ fn reconcile_leaves_synth_only_artist_untouched() {
         )
         .unwrap();
     assert_eq!(aa.as_deref(), Some("synth:aa:nobody"));
+}
+
+#[test]
+fn track_path_returns_min_path_or_none() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('m', 'A', 'A')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('rel', 'm', 'Album')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (1, 'rel', 1, 1, 'T1')",
+        [],
+    )
+    .unwrap();
+    // Track 1 has two files (e.g. the same rip in two formats); track_path must
+    // return exactly ONE path — the lexically-first (MIN) — so a double-click
+    // enqueues a single entry, consistent with file_paths_for_album.
+    for path in ["/m/a1.m4a", "/m/a1.flac"] {
+        conn.execute(
+            "INSERT INTO file(path, mtime, size, track_id, added_at) VALUES (?1, 0, 0, 1, 0)",
+            rusqlite::params![path],
+        )
+        .unwrap();
+    }
+    // A track with no files at all.
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (2, 'rel', 1, 2, 'T2')",
+        [],
+    )
+    .unwrap();
+
+    assert_eq!(
+        track_path(&conn, 1).unwrap(),
+        Some("/m/a1.flac".to_string())
+    );
+    // No files → None (caller appends nothing).
+    assert_eq!(track_path(&conn, 2).unwrap(), None);
+    // Unknown track id → None.
+    assert_eq!(track_path(&conn, 999).unwrap(), None);
 }

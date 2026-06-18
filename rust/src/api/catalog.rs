@@ -40,6 +40,10 @@ pub fn tracks_for_paths(db_path: String, paths: Vec<String>) -> anyhow::Result<V
     query::tracks_for_paths(&db::open(&db_path)?, &paths)
 }
 
+pub fn track_path(db_path: String, track_id: i64) -> anyhow::Result<Option<String>> {
+    query::track_path(&db::open(&db_path)?, track_id)
+}
+
 pub fn record_play(db_path: String, track_id: i64, played_at: i64) -> anyhow::Result<()> {
     query::record_play(&db::open(&db_path)?, track_id, played_at)
 }
