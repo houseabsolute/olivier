@@ -55,7 +55,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('1. Song'));
+    await tester.tap(find.text('Song'));
     // InkWell with both onTap + onDoubleTap defers onTap until the
     // double-tap window closes; advance past it before asserting.
     await tester.pump(kDoubleTapTimeout);
@@ -73,7 +73,7 @@ void main() {
     await tester.pumpWidget(_app(qc));
     await tester.pumpAndSettle();
 
-    final row = find.text('1. Song');
+    final row = find.text('Song');
     await tester.tap(row);
     await tester.pump(kDoubleTapMinTime);
     await tester.tap(row);

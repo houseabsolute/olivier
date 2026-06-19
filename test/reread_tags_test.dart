@@ -29,7 +29,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final gesture = await tester.startGesture(
-        tester.getCenter(find.text('1. Song')),
+        tester.getCenter(find.text('Song')),
         buttons: kSecondaryButton);
     await gesture.up();
     await tester.pumpAndSettle();
