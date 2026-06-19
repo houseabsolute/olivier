@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/src/rust/api/enrich.dart';
+import 'package:olivier/src/rust/enrich/progress.dart';
 import 'package:olivier/state/providers.dart';
 
 /// Sentinel so [EnrichState.copyWith] can clear [lastError] to null.
@@ -47,6 +48,17 @@ class EnrichState {
     );
   }
 }
+
+typedef EnrichEntityFn = Stream<EnrichProgress> Function(String mbid);
+
+final enrichArtistFnProvider = Provider<EnrichEntityFn>((ref) {
+  final db = ref.read(dbPathProvider);
+  return (mbid) => enrichArtist(dbPath: db, artistMbid: mbid);
+});
+final enrichAlbumFnProvider = Provider<EnrichEntityFn>((ref) {
+  final db = ref.read(dbPathProvider);
+  return (mbid) => enrichAlbum(dbPath: db, releaseMbid: mbid);
+});
 
 /// Drives MusicBrainz enrichment (fills artist transliterations, title
 /// translations, and original/reissue dates). `enrich(force: false)` is the
@@ -111,6 +123,44 @@ class EnrichController extends Notifier<EnrichState> {
   /// can't slip in between the cache wipe and the refetch.
   Future<void> refreshFromMusicBrainz() =>
       enrich(force: true, clearCache: true);
+
+  Future<void> enrichArtist(String mbid) =>
+      _runEntity(ref.read(enrichArtistFnProvider), mbid);
+  Future<void> enrichAlbum(String mbid) =>
+      _runEntity(ref.read(enrichAlbumFnProvider), mbid);
+
+  Future<void> _runEntity(EnrichEntityFn fn, String mbid) async {
+    if (_running) return;
+    _running = true;
+    if (!_disposed) {
+      state = state.copyWith(
+          running: true,
+          entitiesDone: 0,
+          entitiesTotal: 0,
+          current: '',
+          lastError: null);
+    }
+    try {
+      await for (final p in fn(mbid)) {
+        if (_disposed) return;
+        state = state.copyWith(
+            entitiesDone: p.entitiesDone.toInt(),
+            entitiesTotal: p.entitiesTotal.toInt(),
+            current: p.current);
+        if (p.done) break;
+      }
+    } catch (e) {
+      if (!_disposed) state = state.copyWith(lastError: '$e');
+    } finally {
+      _running = false;
+      if (!_disposed) {
+        state = state.copyWith(running: false);
+        ref.invalidate(artistsProvider);
+        ref.invalidate(albumsProvider);
+        ref.invalidate(tracksProvider);
+      }
+    }
+  }
 }
 
 final enrichControllerProvider =

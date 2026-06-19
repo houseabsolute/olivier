@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
+import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 import 'package:olivier/widgets/context_menu.dart';
@@ -67,6 +68,14 @@ class _AlbumList extends ConsumerWidget {
             onAddToQueue: (e) => _enqueue(ref, e),
             onInfo: (_) => showInfoDialog(context,
                 title: 'Album', fields: albumInfoFields(album)),
+            onRefetch: (_) {
+              final c = ref.read(enrichControllerProvider.notifier);
+              ScaffoldMessenger.of(context)
+                ..clearSnackBars()
+                ..showSnackBar(const SnackBar(
+                    content: Text('Re-fetching from MusicBrainz…')));
+              c.enrichAlbum(album.releaseMbid);
+            },
             child: InkWell(
               key: ValueKey(album.releaseMbid),
               onTap: () {
