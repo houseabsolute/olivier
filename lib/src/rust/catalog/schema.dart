@@ -15,6 +15,9 @@ class Album {
   final String? titleTranslit;
   final String? titleTranslate;
 
+  /// earliest file added_at across the album's tracks, unix seconds; 0 if unknown
+  final PlatformInt64 addedAt;
+
   const Album({
     required this.releaseMbid,
     required this.title,
@@ -23,6 +26,7 @@ class Album {
     this.reissueYear,
     this.titleTranslit,
     this.titleTranslate,
+    required this.addedAt,
   });
 
   @override
@@ -33,7 +37,8 @@ class Album {
       originalYear.hashCode ^
       reissueYear.hashCode ^
       titleTranslit.hashCode ^
-      titleTranslate.hashCode;
+      titleTranslate.hashCode ^
+      addedAt.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -46,7 +51,8 @@ class Album {
           originalYear == other.originalYear &&
           reissueYear == other.reissueYear &&
           titleTranslit == other.titleTranslit &&
-          titleTranslate == other.titleTranslate;
+          titleTranslate == other.titleTranslate &&
+          addedAt == other.addedAt;
 }
 
 class Artist {

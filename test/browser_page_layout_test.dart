@@ -22,6 +22,7 @@ const _album = Album(
   originalYear: '1999',
   titleTranslit: 'Muzai Moratorium',
   titleTranslate: 'Innocence Moratorium',
+  addedAt: 0,
 );
 
 final _track = Track(

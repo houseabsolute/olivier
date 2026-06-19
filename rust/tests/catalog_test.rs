@@ -320,6 +320,54 @@ fn tracks_for_album_ordered_by_disc_position() {
 }
 
 #[test]
+fn albums_for_artist_includes_date_added() {
+    let conn = open(":memory:").unwrap();
+
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('mbid-da', 'Artist DA', 'Artist DA')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release_group(mbid, title, first_release_date)
+         VALUES ('rg-da', 'Group DA', '2001')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, release_group_mbid, album_artist_mbid, title, date)
+         VALUES ('rel-da', 'rg-da', 'mbid-da', 'Album DA', '2001')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (100, 'rel-da', 1, 1, 'T1')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (101, 'rel-da', 1, 2, 'T2')",
+        [],
+    )
+    .unwrap();
+    // Two files with DISTINCT added_at; the album's date-added is the MINIMUM.
+    conn.execute(
+        "INSERT INTO file(path, mtime, size, track_id, added_at) VALUES ('/music/da1.flac', 0, 0, 100, 2000)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path, mtime, size, track_id, added_at) VALUES ('/music/da2.flac', 0, 0, 101, 1000)",
+        [],
+    )
+    .unwrap();
+
+    let albums = albums_for_artist(&conn, "mbid-da").unwrap();
+    assert_eq!(albums.len(), 1);
+    assert_eq!(albums[0].added_at, 1000);
+}
+
+#[test]
 fn file_paths_for_album_ordered_by_disc_position() {
     let conn = open(":memory:").unwrap();
 

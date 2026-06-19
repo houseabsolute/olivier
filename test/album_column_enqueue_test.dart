@@ -14,6 +14,7 @@ const _album = Album(
   releaseMbid: 'rel-1',
   title: 'Album One',
   albumArtist: 'Artist',
+  addedAt: 0,
 );
 
 ProviderScope _albumApp(QueueController qc) => ProviderScope(

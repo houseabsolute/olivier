@@ -50,6 +50,27 @@ void main() {
     expect(idxAddedAt, lessThan(idxTrackId));
   });
 
+  test('albumInfoFields includes Date added when non-zero, omits when 0', () {
+    final withDate = Album(
+      releaseMbid: 'r1',
+      title: 'Album',
+      albumArtist: 'Artist',
+      addedAt: 1718800000,
+    );
+    final withDateLabels = albumInfoFields(withDate).map((f) => f.$1).toList();
+    expect(withDateLabels, contains('Date added'));
+
+    final withoutDate = Album(
+      releaseMbid: 'r1',
+      title: 'Album',
+      albumArtist: 'Artist',
+      addedAt: 0,
+    );
+    final withoutDateLabels =
+        albumInfoFields(withoutDate).map((f) => f.$1).toList();
+    expect(withoutDateLabels, isNot(contains('Date added'))); // 0 omitted
+  });
+
   testWidgets('showInfoDialog renders values as SelectableText',
       (tester) async {
     await tester.pumpWidget(MaterialApp(

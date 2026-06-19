@@ -889,8 +889,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Album dco_decode_album(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return Album(
       releaseMbid: dco_decode_String(arr[0]),
       title: dco_decode_String(arr[1]),
@@ -899,6 +899,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       reissueYear: dco_decode_opt_String(arr[4]),
       titleTranslit: dco_decode_opt_String(arr[5]),
       titleTranslate: dco_decode_opt_String(arr[6]),
+      addedAt: dco_decode_i_64(arr[7]),
     );
   }
 
@@ -1192,6 +1193,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_reissueYear = sse_decode_opt_String(deserializer);
     var var_titleTranslit = sse_decode_opt_String(deserializer);
     var var_titleTranslate = sse_decode_opt_String(deserializer);
+    var var_addedAt = sse_decode_i_64(deserializer);
     return Album(
         releaseMbid: var_releaseMbid,
         title: var_title,
@@ -1199,7 +1201,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         originalYear: var_originalYear,
         reissueYear: var_reissueYear,
         titleTranslit: var_titleTranslit,
-        titleTranslate: var_titleTranslate);
+        titleTranslate: var_titleTranslate,
+        addedAt: var_addedAt);
   }
 
   @protected
@@ -1594,6 +1597,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.reissueYear, serializer);
     sse_encode_opt_String(self.titleTranslit, serializer);
     sse_encode_opt_String(self.titleTranslate, serializer);
+    sse_encode_i_64(self.addedAt, serializer);
   }
 
   @protected

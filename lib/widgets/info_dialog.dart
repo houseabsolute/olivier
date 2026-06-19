@@ -88,5 +88,6 @@ List<(String, String)> albumInfoFields(Album a) {
   _add(out, 'Original year', a.originalYear);
   _add(out, 'Reissue year', a.reissueYear);
   _add(out, 'Release MBID', a.releaseMbid);
+  _add(out, 'Date added', _fmtEpoch(a.addedAt));
   return out;
 }

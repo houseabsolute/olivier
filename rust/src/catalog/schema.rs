@@ -18,6 +18,8 @@ pub struct Album {
     pub reissue_year: Option<String>, // 4-char year; MP4 originals are absent so this is the only year
     pub title_translit: Option<String>,
     pub title_translate: Option<String>,
+    /// earliest file added_at across the album's tracks, unix seconds; 0 if unknown
+    pub added_at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

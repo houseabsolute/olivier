@@ -40,7 +40,9 @@ pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::
                 (SELECT title FROM release_title_alt
                    WHERE release_mbid = r.mbid AND kind = 'translit'),
                 (SELECT title FROM release_title_alt
-                   WHERE release_mbid = r.mbid AND kind = 'translate')
+                   WHERE release_mbid = r.mbid AND kind = 'translate'),
+                (SELECT MIN(f.added_at) FROM track t JOIN file f ON f.track_id = t.id
+                   WHERE t.release_mbid = r.mbid)
          FROM release r
          JOIN artist a ON a.mbid = r.album_artist_mbid
          LEFT JOIN release_group rg ON rg.mbid = r.release_group_mbid
@@ -56,6 +58,7 @@ pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::
             reissue_year: r.get(4)?,
             title_translit: r.get(5)?,
             title_translate: r.get(6)?,
+            added_at: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
         })
     })?;
     for r in rows {
