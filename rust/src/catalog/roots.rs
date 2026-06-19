@@ -1,6 +1,7 @@
 use rusqlite::Connection;
 
 use crate::catalog::scan;
+use crate::decision_log::DecisionLog;
 
 /// Persist a library root folder. Idempotent — re-adding the same path is a no-op.
 /// Only a trailing slash is trimmed; the path is otherwise stored exactly as passed
@@ -38,7 +39,7 @@ pub fn remove_root(conn: &Connection, path: &str) -> anyhow::Result<()> {
            )",
         rusqlite::params![prefix.chars().count() as i64, prefix],
     )?;
-    scan::prune_orphans(conn)?;
+    scan::prune_orphans(conn, &DecisionLog::to_path(None))?;
     Ok(())
 }
 

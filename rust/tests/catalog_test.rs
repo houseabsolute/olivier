@@ -922,7 +922,7 @@ fn reconcile_merges_synth_album_artist_into_real() {
     )
     .unwrap();
 
-    reconcile_album_artists(&conn).unwrap();
+    reconcile_album_artists(&conn, &DecisionLog::to_path(None)).unwrap();
 
     // artists_page filters to artists referenced by a release, so re-pointing the
     // release is enough for the synth row to vanish from the browse list here
@@ -1090,7 +1090,7 @@ fn reconcile_leaves_synth_only_artist_untouched() {
     )
     .unwrap();
 
-    reconcile_album_artists(&conn).unwrap();
+    reconcile_album_artists(&conn, &DecisionLog::to_path(None)).unwrap();
 
     let aa: Option<String> = conn
         .query_row(

@@ -141,16 +141,30 @@ pub fn scan_roots(
     // Japanese) paths.
     for root in roots {
         let prefix = format!("{}/", root.trim_end_matches('/'));
+        let plen = prefix.chars().count() as i64;
+        {
+            let mut stmt = conn.prepare(
+                "SELECT path FROM file WHERE scan_epoch != ?1 AND substr(path, 1, ?2) = ?3",
+            )?;
+            let gone = stmt
+                .query_map(rusqlite::params![epoch, plen, prefix], |r| {
+                    r.get::<_, String>(0)
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            for path in gone {
+                log.record(&Decision::Remove { path });
+            }
+        }
         conn.execute(
             "DELETE FROM file WHERE scan_epoch != ?1 AND substr(path, 1, ?2) = ?3",
-            rusqlite::params![epoch, prefix.chars().count() as i64, prefix],
+            rusqlite::params![epoch, plen, prefix],
         )?;
     }
     // Files missing a MusicBrainz album-artist ID get a synthetic key; merge them
     // into a real same-name artist so an album-artist tagged inconsistently across
     // its albums shows up once, not twice.
-    reconcile_album_artists(conn)?;
-    prune_orphans(conn)?;
+    reconcile_album_artists(conn, log)?;
+    prune_orphans(conn, log)?;
 
     on_progress(ScanProgress {
         files_seen,
@@ -201,8 +215,8 @@ pub fn reread_track_tags(
         }
     }
 
-    reconcile_album_artists(conn)?;
-    prune_orphans(conn)?;
+    reconcile_album_artists(conn, log)?;
+    prune_orphans(conn, log)?;
     Ok(())
 }
 
@@ -210,7 +224,40 @@ pub fn reread_track_tags(
 /// references track, so it must be deleted BEFORE the track — FKs ARE enforced
 /// here (libsqlite3-sys bundles SQLite with SQLITE_DEFAULT_FOREIGN_KEYS=1). Keying
 /// each level off the level below drops a whole orphaned album/artist together.
-pub(crate) fn prune_orphans(conn: &Connection) -> anyhow::Result<()> {
+pub(crate) fn prune_orphans(conn: &Connection, log: &DecisionLog) -> anyhow::Result<()> {
+    // Name orphaned tracks/albums/artists before deleting (child-first as before).
+    {
+        let mut stmt = conn.prepare(
+            "SELECT t.title, COALESCE(r.title, '') FROM track t \
+             LEFT JOIN release r ON r.mbid = t.release_mbid \
+             WHERE t.id NOT IN (SELECT track_id FROM file)",
+        )?;
+        for row in stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+            let (title, album) = row?;
+            log.record(&Decision::PruneTrack { title, album });
+        }
+    }
+    {
+        let mut stmt = conn.prepare(
+            "SELECT r.title, COALESCE(a.name, '') FROM release r \
+             LEFT JOIN artist a ON a.mbid = r.album_artist_mbid \
+             WHERE r.mbid NOT IN (SELECT release_mbid FROM track)",
+        )?;
+        for row in stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+            let (title, artist) = row?;
+            log.record(&Decision::PruneAlbum { title, artist });
+        }
+    }
+    {
+        let mut stmt = conn.prepare(
+            "SELECT name FROM artist \
+             WHERE mbid NOT IN (SELECT album_artist_mbid FROM release WHERE album_artist_mbid IS NOT NULL)",
+        )?;
+        for row in stmt.query_map([], |r| r.get::<_, String>(0))? {
+            log.record(&Decision::PruneArtist { name: row? });
+        }
+    }
+
     conn.execute(
         "DELETE FROM track_stats WHERE track_id NOT IN (SELECT track_id FROM file)",
         [],
@@ -245,7 +292,7 @@ pub(crate) fn prune_orphans(conn: &Connection) -> anyhow::Result<()> {
 /// than a SQL name comparison) means case/whitespace tagging differences can't
 /// cause a missed merge, and a synth release with no real counterpart is simply
 /// never touched.
-pub fn reconcile_album_artists(conn: &Connection) -> anyhow::Result<()> {
+pub fn reconcile_album_artists(conn: &Connection, log: &DecisionLog) -> anyhow::Result<()> {
     let mut reals: Vec<(String, String)> = Vec::new();
     {
         let mut stmt =
@@ -258,10 +305,17 @@ pub fn reconcile_album_artists(conn: &Connection) -> anyhow::Result<()> {
     let tx = conn.unchecked_transaction()?;
     for (mbid, name) in &reals {
         let synth_key = format!("synth:aa:{}", ids::normalize(name));
-        tx.execute(
+        let moved = tx.execute(
             "UPDATE release SET album_artist_mbid = ?1 WHERE album_artist_mbid = ?2",
             rusqlite::params![mbid, synth_key],
         )?;
+        if moved > 0 {
+            log.record(&Decision::Merge {
+                synth_name: name.clone(),
+                real_name: name.clone(),
+                real_mbid: mbid.clone(),
+            });
+        }
     }
     tx.commit()?;
     Ok(())
