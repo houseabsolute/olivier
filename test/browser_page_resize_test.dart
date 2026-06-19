@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:multi_split_view/multi_split_view.dart';
 import 'package:olivier/catalog/browser_page.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/state/scan_controller.dart';
+import 'package:olivier/widgets/resizable_split.dart';
 
 const _artist = Artist(
   mbid: 'a1',
@@ -92,7 +92,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.byType(MultiSplitView), findsNWidgets(2));
+    expect(find.byType(ResizableSplit), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 }

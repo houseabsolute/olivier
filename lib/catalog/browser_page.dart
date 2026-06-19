@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:multi_split_view/multi_split_view.dart';
 import 'package:olivier/catalog/album_column.dart';
 import 'package:olivier/catalog/artist_column.dart';
 import 'package:olivier/catalog/queue_panel.dart';
@@ -11,6 +10,10 @@ import 'package:olivier/state/layout_settings.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/scan_controller.dart';
 import 'package:olivier/widgets/now_playing_bar.dart';
+import 'package:olivier/widgets/resizable_split.dart';
+
+/// The first pane's fraction of a persisted `(f0, f1)` flex pair.
+double _ratioOf((double, double) flex) => flex.$1 / (flex.$1 + flex.$2);
 
 class BrowserPage extends ConsumerStatefulWidget {
   const BrowserPage({super.key, this.nowPlaying});
@@ -25,90 +28,32 @@ class BrowserPage extends ConsumerStatefulWidget {
 }
 
 class _BrowserPageState extends ConsumerState<BrowserPage> {
-  late final MultiSplitViewController _rightController;
-  late final MultiSplitViewController _splitController;
+  // Fraction (0..1) of the available extent given to the FIRST pane of each
+  // split (artist of artist|right; album of album|track), seeded from the
+  // persisted flex pairs.
+  double _artistRatio = _ratioOf(defaultArtistFlex);
+  double _albumRatio = _ratioOf(defaultRightPaneFlex);
 
   @override
   void initState() {
     super.initState();
-    // Album over Track (vertical). Created first — referenced by the outer split.
-    _rightController = MultiSplitViewController(areas: [
-      Area(
-        flex: defaultRightPaneFlex.$1,
-        min: 80,
-        builder: (c, a) => const AlbumColumn(),
-      ),
-      Area(
-        flex: defaultRightPaneFlex.$2,
-        min: 80,
-        builder: (c, a) => const TrackColumn(),
-      ),
-    ]);
-    // Artist | right pane (horizontal).
-    _splitController = MultiSplitViewController(areas: [
-      Area(
-        flex: defaultArtistFlex.$1,
-        min: 220,
-        builder: (c, a) => const ArtistColumn(),
-      ),
-      Area(
-        flex: defaultArtistFlex.$2,
-        min: 320,
-        builder: (c, a) => _RightPane(
-          controller: _rightController,
-          onDragEnd: _saveRightPaneFlex,
-        ),
-      ),
-    ]);
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       ref.read(scanControllerProvider.notifier).loadRoots();
       try {
         final s = await ref.read(layoutSettingsProvider.future);
         if (!mounted) return;
-        // Update flex in place rather than replacing the area lists. Replacing
-        // the outer areas would mint a fresh `_RightPane` (new Area id) and
-        // re-bind `_rightController` to a second MultiSplitView before the old
-        // one deactivates, which the controller's sharing guard rejects.
-        _splitController.areas[0].flex = s.artistFlex.$1;
-        _splitController.areas[1].flex = s.artistFlex.$2;
-        _rightController.areas[0].flex = s.rightPaneFlex.$1;
-        _rightController.areas[1].flex = s.rightPaneFlex.$2;
+        setState(() {
+          _artistRatio = _ratioOf(s.artistFlex);
+          _albumRatio = _ratioOf(s.rightPaneFlex);
+        });
       } catch (_) {
-        // Best-effort: keep the default flex already seeded above. Mirrors
-        // QueuePanel's defensive load.
+        // Best-effort: keep the defaults already seeded above.
       }
     });
   }
 
-  void _saveArtistFlex() {
-    final a = _splitController.areas;
-    ref.read(setSettingFnProvider)(
-      layoutArtistsKey,
-      formatFlexPair(
-        (a[0].flex ?? defaultArtistFlex.$1, a[1].flex ?? defaultArtistFlex.$2),
-      ),
-    );
-  }
-
-  void _saveRightPaneFlex() {
-    final a = _rightController.areas;
-    ref.read(setSettingFnProvider)(
-      layoutRightPaneKey,
-      formatFlexPair(
-        (
-          a[0].flex ?? defaultRightPaneFlex.$1,
-          a[1].flex ?? defaultRightPaneFlex.$2,
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _splitController.dispose();
-    _rightController.dispose();
-    super.dispose();
+  void _saveRatio(String key, double ratio) {
+    ref.read(setSettingFnProvider)(key, formatFlexPair((ratio, 1 - ratio)));
   }
 
   @override
@@ -157,9 +102,32 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
       body: Column(
         children: [
           Expanded(
-            child: MultiSplitView(
-              controller: _splitController,
-              onDividerDragEnd: (_) => _saveArtistFlex(),
+            // Artist | right pane (horizontal), with the right pane stacking
+            // Album over Track (vertical). Custom ResizableSplit (opaque drag
+            // handle) — see its doc for why multi_split_view's translucent
+            // divider didn't resize here.
+            child: ResizableSplit(
+              axis: Axis.horizontal,
+              ratio: _artistRatio,
+              minFirst: 220,
+              minSecond: 320,
+              onRatioSettled: (r) {
+                _artistRatio = r;
+                _saveRatio(layoutArtistsKey, r);
+              },
+              first: const ArtistColumn(),
+              second: ResizableSplit(
+                axis: Axis.vertical,
+                ratio: _albumRatio,
+                minFirst: 80,
+                minSecond: 80,
+                onRatioSettled: (r) {
+                  _albumRatio = r;
+                  _saveRatio(layoutRightPaneKey, r);
+                },
+                first: const AlbumColumn(),
+                second: const TrackColumn(),
+              ),
             ),
           ),
           // Queue panel between the browse split and the now-playing bar.
@@ -192,24 +160,6 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// The right pane of the browse split: Album over Track as a vertical
-/// MultiSplitView with a draggable, persisted divider.
-class _RightPane extends StatelessWidget {
-  const _RightPane({required this.controller, required this.onDragEnd});
-
-  final MultiSplitViewController controller;
-  final VoidCallback onDragEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    return MultiSplitView(
-      axis: Axis.vertical,
-      controller: controller,
-      onDividerDragEnd: (_) => onDragEnd(),
     );
   }
 }
