@@ -63,16 +63,21 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       ref.read(scanControllerProvider.notifier).loadRoots();
-      final s = await ref.read(layoutSettingsProvider.future);
-      if (!mounted) return;
-      // Update flex in place rather than replacing the area lists. Replacing
-      // the outer areas would mint a fresh `_RightPane` (new Area id) and
-      // re-bind `_rightController` to a second MultiSplitView before the old
-      // one deactivates, which the controller's sharing guard rejects.
-      _splitController.areas[0].flex = s.artistFlex.$1;
-      _splitController.areas[1].flex = s.artistFlex.$2;
-      _rightController.areas[0].flex = s.rightPaneFlex.$1;
-      _rightController.areas[1].flex = s.rightPaneFlex.$2;
+      try {
+        final s = await ref.read(layoutSettingsProvider.future);
+        if (!mounted) return;
+        // Update flex in place rather than replacing the area lists. Replacing
+        // the outer areas would mint a fresh `_RightPane` (new Area id) and
+        // re-bind `_rightController` to a second MultiSplitView before the old
+        // one deactivates, which the controller's sharing guard rejects.
+        _splitController.areas[0].flex = s.artistFlex.$1;
+        _splitController.areas[1].flex = s.artistFlex.$2;
+        _rightController.areas[0].flex = s.rightPaneFlex.$1;
+        _rightController.areas[1].flex = s.rightPaneFlex.$2;
+      } catch (_) {
+        // Best-effort: keep the default flex already seeded above. Mirrors
+        // QueuePanel's defensive load.
+      }
     });
   }
 
