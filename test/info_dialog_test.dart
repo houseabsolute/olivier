@@ -91,4 +91,28 @@ void main() {
     expect(find.byType(SelectableText), findsWidgets);
     expect(find.text('歌舞伎町の女王'), findsOneWidget);
   });
+
+  testWidgets('showInfoDialog renders an optional header above the fields',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              onPressed: () => showInfoDialog(
+                context,
+                title: 'Album',
+                fields: const [('Title', 'X')],
+                header: const Text('HEADER', key: Key('hdr')),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('hdr')), findsOneWidget);
+  });
 }

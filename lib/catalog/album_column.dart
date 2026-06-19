@@ -68,7 +68,9 @@ class _AlbumList extends ConsumerWidget {
             entity: entity,
             onAddToQueue: (e) => _enqueue(ref, e),
             onInfo: (_) => showInfoDialog(context,
-                title: 'Album', fields: albumInfoFields(album)),
+                title: 'Album',
+                fields: albumInfoFields(album),
+                header: AlbumCover(releaseMbid: album.releaseMbid, size: 220)),
             onRefetch: (_) {
               final c = ref.read(enrichControllerProvider.notifier);
               ScaffoldMessenger.of(context)

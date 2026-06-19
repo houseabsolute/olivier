@@ -7,6 +7,7 @@ Future<void> showInfoDialog(
   BuildContext context, {
   required String title,
   required List<(String, String)> fields,
+  Widget? header,
 }) {
   return showDialog<void>(
     context: context,
@@ -19,6 +20,10 @@ Future<void> showInfoDialog(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (header != null) ...[
+                Center(child: header),
+                const SizedBox(height: 12),
+              ],
               for (final (label, value) in fields)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
