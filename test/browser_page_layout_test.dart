@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:multi_split_view/multi_split_view.dart';
 import 'package:olivier/catalog/browser_page.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
@@ -116,8 +117,9 @@ void main() {
       expect(find.text('無罪モラトリアム'), findsOneWidget);
       expect(find.text('歌舞伎町の女王'), findsOneWidget);
 
-      // The stacked right pane separates album from track with a Divider.
-      expect(find.byType(Divider), findsWidgets);
+      // The right pane stacks album over track as a nested vertical split,
+      // so the page renders two MultiSplitViews (artist|right and album|track).
+      expect(find.byType(MultiSplitView), findsNWidgets(2));
 
       // The collapsed queue-panel header is present, above the now-playing bar.
       expect(find.textContaining('0 tracks'), findsOneWidget);

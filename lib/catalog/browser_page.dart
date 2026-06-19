@@ -7,6 +7,8 @@ import 'package:olivier/catalog/queue_panel.dart';
 import 'package:olivier/catalog/track_column.dart';
 import 'package:olivier/main.dart' show audioHandler;
 import 'package:olivier/settings/settings_page.dart';
+import 'package:olivier/state/layout_settings.dart';
+import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/scan_controller.dart';
 import 'package:olivier/widgets/now_playing_bar.dart';
 
@@ -23,36 +25,84 @@ class BrowserPage extends ConsumerStatefulWidget {
 }
 
 class _BrowserPageState extends ConsumerState<BrowserPage> {
+  late final MultiSplitViewController _rightController;
   late final MultiSplitViewController _splitController;
 
   @override
   void initState() {
     super.initState();
-    _splitController = MultiSplitViewController(
-      areas: [
-        // Wide Artist column (≈ 33% default).
-        Area(
-          flex: 1,
-          min: 220,
-          builder: (ctx, area) => const ArtistColumn(),
+    // Album over Track (vertical). Created first — referenced by the outer split.
+    _rightController = MultiSplitViewController(areas: [
+      Area(
+        flex: defaultRightPaneFlex.$1,
+        min: 80,
+        builder: (c, a) => const AlbumColumn(),
+      ),
+      Area(
+        flex: defaultRightPaneFlex.$2,
+        min: 80,
+        builder: (c, a) => const TrackColumn(),
+      ),
+    ]);
+    // Artist | right pane (horizontal).
+    _splitController = MultiSplitViewController(areas: [
+      Area(
+        flex: defaultArtistFlex.$1,
+        min: 220,
+        builder: (c, a) => const ArtistColumn(),
+      ),
+      Area(
+        flex: defaultArtistFlex.$2,
+        min: 320,
+        builder: (c, a) => _RightPane(
+          controller: _rightController,
+          onDragEnd: _saveRightPaneFlex,
         ),
-        // Right pane (≈ 67% default): Albums stacked over Tracks.
-        Area(
-          flex: 2,
-          min: 320,
-          builder: (ctx, area) => const _RightPane(),
-        ),
-      ],
-    );
-    // Hydrate persisted root folders after the first frame.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ),
+    ]);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       ref.read(scanControllerProvider.notifier).loadRoots();
+      final s = await ref.read(layoutSettingsProvider.future);
+      if (!mounted) return;
+      // Update flex in place rather than replacing the area lists. Replacing
+      // the outer areas would mint a fresh `_RightPane` (new Area id) and
+      // re-bind `_rightController` to a second MultiSplitView before the old
+      // one deactivates, which the controller's sharing guard rejects.
+      _splitController.areas[0].flex = s.artistFlex.$1;
+      _splitController.areas[1].flex = s.artistFlex.$2;
+      _rightController.areas[0].flex = s.rightPaneFlex.$1;
+      _rightController.areas[1].flex = s.rightPaneFlex.$2;
     });
+  }
+
+  void _saveArtistFlex() {
+    final a = _splitController.areas;
+    ref.read(setSettingFnProvider)(
+      layoutArtistsKey,
+      formatFlexPair(
+        (a[0].flex ?? defaultArtistFlex.$1, a[1].flex ?? defaultArtistFlex.$2),
+      ),
+    );
+  }
+
+  void _saveRightPaneFlex() {
+    final a = _rightController.areas;
+    ref.read(setSettingFnProvider)(
+      layoutRightPaneKey,
+      formatFlexPair(
+        (
+          a[0].flex ?? defaultRightPaneFlex.$1,
+          a[1].flex ?? defaultRightPaneFlex.$2,
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _splitController.dispose();
+    _rightController.dispose();
     super.dispose();
   }
 
@@ -101,7 +151,12 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
       ),
       body: Column(
         children: [
-          Expanded(child: MultiSplitView(controller: _splitController)),
+          Expanded(
+            child: MultiSplitView(
+              controller: _splitController,
+              onDividerDragEnd: (_) => _saveArtistFlex(),
+            ),
+          ),
           // Queue panel between the browse split and the now-playing bar.
           // Collapses to a header; expands to a reorderable track list.
           const QueuePanel(),
@@ -136,19 +191,20 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
   }
 }
 
-/// The right pane of the browse split: the album list stacked over the track
-/// list, separated by a hairline divider. Each list takes half the height.
+/// The right pane of the browse split: Album over Track as a vertical
+/// MultiSplitView with a draggable, persisted divider.
 class _RightPane extends StatelessWidget {
-  const _RightPane();
+  const _RightPane({required this.controller, required this.onDragEnd});
+
+  final MultiSplitViewController controller;
+  final VoidCallback onDragEnd;
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      children: [
-        Expanded(child: AlbumColumn()),
-        Divider(height: 1),
-        Expanded(child: TrackColumn()),
-      ],
+    return MultiSplitView(
+      axis: Axis.vertical,
+      controller: controller,
+      onDividerDragEnd: (_) => onDragEnd(),
     );
   }
 }
