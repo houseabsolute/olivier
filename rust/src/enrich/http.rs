@@ -13,6 +13,13 @@ pub struct MbResponse {
 #[async_trait::async_trait(?Send)]
 pub trait MbHttp {
     async fn get(&self, url: &str) -> anyhow::Result<MbResponse>;
+
+    /// Fetch raw bytes (e.g. Cover Art Archive images, which are not UTF-8).
+    /// The default errors so existing text-only fakes need no change; real
+    /// transports override it.
+    async fn get_bytes(&self, _url: &str) -> anyhow::Result<(u16, Vec<u8>)> {
+        anyhow::bail!("get_bytes not implemented for this MbHttp")
+    }
 }
 
 /// Production HTTP via reqwest with the MusicBrainz-required User-Agent.
@@ -45,5 +52,61 @@ impl MbHttp for ReqwestHttp {
         let status = resp.status().as_u16();
         let body = resp.text().await?;
         Ok(MbResponse { status, body })
+    }
+
+    async fn get_bytes(&self, url: &str) -> anyhow::Result<(u16, Vec<u8>)> {
+        let resp = self
+            .client
+            .get(url)
+            .header(reqwest::header::USER_AGENT, &self.user_agent)
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        let bytes = resp.bytes().await?.to_vec();
+        Ok((status, bytes))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct OverrideFake;
+    #[async_trait::async_trait(?Send)]
+    impl MbHttp for OverrideFake {
+        async fn get(&self, _url: &str) -> anyhow::Result<MbResponse> {
+            anyhow::bail!("unused")
+        }
+        async fn get_bytes(&self, _url: &str) -> anyhow::Result<(u16, Vec<u8>)> {
+            Ok((200, vec![0xFF, 0xD8, 0xFF]))
+        }
+    }
+
+    struct DefaultFake;
+    #[async_trait::async_trait(?Send)]
+    impl MbHttp for DefaultFake {
+        async fn get(&self, _url: &str) -> anyhow::Result<MbResponse> {
+            anyhow::bail!("unused")
+        }
+        // get_bytes intentionally NOT overridden -> uses the trait default.
+    }
+
+    fn block<F: std::future::Future>(f: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(f)
+    }
+
+    #[test]
+    fn get_bytes_override_returns_bytes() {
+        let (status, bytes) = block(OverrideFake.get_bytes("x")).unwrap();
+        assert_eq!(status, 200);
+        assert_eq!(bytes, vec![0xFF, 0xD8, 0xFF]);
+    }
+
+    #[test]
+    fn get_bytes_default_impl_errors() {
+        assert!(block(DefaultFake.get_bytes("x")).is_err());
     }
 }
