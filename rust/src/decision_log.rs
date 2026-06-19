@@ -144,14 +144,14 @@ impl DecisionLog {
 
     /// Write a run-delimiter header line.
     pub fn header(&self, text: &str) {
-        self.write_line(&format!("=== {text} @ {} ===", fmt_utc(now_secs())));
+        self.write_line(&format!("=== {text} @ {} ===", now_local()));
     }
 
     /// Record one decision (timestamp + padded category + detail).
     pub fn record(&self, d: &Decision) {
         self.write_line(&format!(
             "{}  {:<7} {}",
-            fmt_utc(now_secs()),
+            now_local(),
             d.category(),
             d.detail()
         ));
@@ -167,32 +167,11 @@ impl DecisionLog {
     }
 }
 
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-}
-
-/// Format a unix-seconds instant as UTC `YYYY-MM-DD HH:MM:SS` (no deps;
-/// Howard Hinnant's civil-from-days algorithm).
-fn fmt_utc(secs: i64) -> String {
-    let days = secs.div_euclid(86_400);
-    let sod = secs.rem_euclid(86_400);
-    let (h, mi, s) = (sod / 3600, (sod % 3600) / 60, sod % 60);
-
-    let z = days + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = if m <= 2 { y + 1 } else { y };
-
-    format!("{year:04}-{m:02}-{d:02} {h:02}:{mi:02}:{s:02}")
+/// Current local wall-clock time formatted `YYYY-MM-DD HH:MM:SS`. jiff reads the
+/// system time zone, falling back to UTC if it can't be determined — it never
+/// panics, so the best-effort logging guarantee holds.
+fn now_local() -> String {
+    jiff::Zoned::now().strftime("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 #[cfg(test)]
@@ -201,10 +180,17 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn fmt_utc_formats_known_epochs() {
-        assert_eq!(fmt_utc(0), "1970-01-01 00:00:00");
-        assert_eq!(fmt_utc(86400), "1970-01-02 00:00:00");
-        assert_eq!(fmt_utc(1_700_000_000), "2023-11-14 22:13:20");
+    fn now_local_has_the_expected_shape() {
+        // Local time depends on the machine's tz, so assert the FORMAT shape
+        // (YYYY-MM-DD HH:MM:SS), not a specific value.
+        let ts = now_local();
+        assert_eq!(ts.len(), 19, "got: {ts}");
+        let b = ts.as_bytes();
+        assert_eq!(b[4], b'-');
+        assert_eq!(b[7], b'-');
+        assert_eq!(b[10], b' ');
+        assert_eq!(b[13], b':');
+        assert_eq!(b[16], b':');
     }
 
     #[test]
