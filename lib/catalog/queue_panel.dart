@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/audio/queue_entity.dart';
+import 'package:olivier/state/layout_settings.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/widgets/album_cover.dart';
@@ -64,6 +65,20 @@ class QueuePanel extends ConsumerStatefulWidget {
 
 class _QueuePanelState extends ConsumerState<QueuePanel> {
   bool _expanded = false;
+  double? _queueHeight;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final s = await ref.read(layoutSettingsProvider.future);
+        if (mounted) setState(() => _queueHeight = s.queueHeight);
+      } catch (_) {
+        // Fall back to the default; provider may be unavailable in some tests.
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -183,60 +198,97 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
     final controller = ref.read(queueControllerProvider);
     final scheme = Theme.of(context).colorScheme;
 
-    // Use ConstrainedBox + shrinkWrap so the list self-bounds its height.
-    // This avoids the "RenderFlex children have non-zero flex but incoming
-    // height constraints are unbounded" crash that occurs when QueuePanel is
-    // placed as a non-flexed child of BrowserPage's body Column.
-    // The cap (40 % of screen height) lets the list scroll when long.
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.4,
-      ),
-      child: ReorderableListView.builder(
-        shrinkWrap: true,
-        itemCount: view.tracks.length,
-        // onReorderItem delivers the post-removal destination index directly
-        // (unlike the deprecated onReorder which required normalizeReorder).
-        onReorderItem: (oldIndex, newIndex) {
-          controller.reorder(oldIndex, newIndex);
-        },
-        itemBuilder: (context, i) {
-          final t = view.tracks[i];
-          final selected = i == view.currentIndex;
-          return Material(
-            key: ValueKey('${t.path}#$i'),
-            color: selected ? scheme.primaryContainer : Colors.transparent,
-            child: InkWell(
-              onTap: () => controller.playAt(i),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(
-                  children: [
-                    ReorderableDragStartListener(
-                      index: i,
-                      child: const Icon(Icons.drag_handle),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: BilingualText(
-                        original: t.title,
-                        translit: t.titleTranslit,
-                        translate: t.titleTranslate,
-                        leads: leads,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      tooltip: 'Remove from queue',
-                      onPressed: () => controller.removeAt(i),
-                    ),
-                  ],
+    final maxH = MediaQuery.sizeOf(context).height * 0.6;
+    final height =
+        (_queueHeight ?? defaultQueueHeight).clamp(minQueueHeight, maxH);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        MouseRegion(
+          cursor: SystemMouseCursors.resizeRow,
+          child: GestureDetector(
+            key: const ValueKey('queue-resize-handle'),
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragUpdate: (d) {
+              final max = MediaQuery.sizeOf(context).height * 0.6;
+              setState(() {
+                _queueHeight =
+                    ((_queueHeight ?? defaultQueueHeight) - d.delta.dy)
+                        .clamp(minQueueHeight, max);
+              });
+            },
+            onVerticalDragEnd: (_) {
+              ref.read(setSettingFnProvider)(
+                layoutQueueHeightKey,
+                (_queueHeight ?? defaultQueueHeight).toStringAsFixed(0),
+              );
+            },
+            child: Container(
+              height: 8,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              alignment: Alignment.center,
+              child: Container(
+                width: 36,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outline,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
-          );
-        },
-      ),
+          ),
+        ),
+        SizedBox(
+          height: height,
+          child: ReorderableListView.builder(
+            shrinkWrap: true,
+            itemCount: view.tracks.length,
+            // onReorderItem delivers the post-removal destination index directly
+            // (unlike the deprecated onReorder which required normalizeReorder).
+            onReorderItem: (oldIndex, newIndex) {
+              controller.reorder(oldIndex, newIndex);
+            },
+            itemBuilder: (context, i) {
+              final t = view.tracks[i];
+              final selected = i == view.currentIndex;
+              return Material(
+                key: ValueKey('${t.path}#$i'),
+                color: selected ? scheme.primaryContainer : Colors.transparent,
+                child: InkWell(
+                  onTap: () => controller.playAt(i),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      children: [
+                        ReorderableDragStartListener(
+                          index: i,
+                          child: const Icon(Icons.drag_handle),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: BilingualText(
+                            original: t.title,
+                            translit: t.titleTranslit,
+                            translate: t.titleTranslate,
+                            leads: leads,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          tooltip: 'Remove from queue',
+                          onPressed: () => controller.removeAt(i),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
