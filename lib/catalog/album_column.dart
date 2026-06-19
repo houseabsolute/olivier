@@ -6,6 +6,7 @@ import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/widgets/album_cover.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 import 'package:olivier/widgets/context_menu.dart';
 import 'package:olivier/widgets/info_dialog.dart';
@@ -99,6 +100,8 @@ class _AlbumList extends ConsumerWidget {
                 padding: const EdgeInsets.only(left: 12, right: 4),
                 child: Row(
                   children: [
+                    AlbumCover(releaseMbid: album.releaseMbid, size: 40),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: BilingualText(
                         original: album.title,
