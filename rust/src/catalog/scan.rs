@@ -96,8 +96,25 @@ pub fn scan_roots(
                 }
             }
 
-            // Parse tags and upsert
-            let tags = read_tags(path).with_context(|| format!("read_tags for {path_str}"))?;
+            // Parse tags and upsert. A single unreadable file is logged and
+            // skipped — it must not abort the whole scan.
+            let tags = match read_tags(path) {
+                Ok(t) => t,
+                Err(e) => {
+                    log.record(&Decision::Fail {
+                        path: path_str.clone(),
+                        error: e.to_string(),
+                    });
+                    files_seen += 1;
+                    on_progress(ScanProgress {
+                        files_seen,
+                        files_changed,
+                        current: path_str,
+                        done: false,
+                    });
+                    continue;
+                }
+            };
             let tx = conn.transaction()?;
             let decisions = upsert_file(&tx, &tags, &path_str, mtime, size, epoch, now_secs)?;
             tx.commit()?;
