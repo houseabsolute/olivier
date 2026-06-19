@@ -2,6 +2,7 @@ pub mod api;
 pub mod catalog;
 pub mod cover;
 pub mod db;
+pub mod decision_log;
 pub mod enrich;
 mod frb_generated;
 pub mod settings;
