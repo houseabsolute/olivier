@@ -7,6 +7,7 @@ import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 import 'package:olivier/widgets/context_menu.dart';
+import 'package:olivier/widgets/info_dialog.dart';
 
 Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
   final paths = await resolveEntityPaths(
@@ -66,6 +67,8 @@ class _TrackList extends ConsumerWidget {
           child: RowContextMenu(
             entity: entity,
             onAddToQueue: (e) => _enqueue(ref, e),
+            onInfo: (_) => showInfoDialog(context,
+                title: 'Track', fields: trackInfoFields(track)),
             child: InkWell(
               key: ValueKey(track.id),
               onTap: () =>
