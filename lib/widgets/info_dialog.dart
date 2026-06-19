@@ -83,6 +83,21 @@ List<(String, String)> trackInfoFields(Track t) {
   return out;
 }
 
+/// Non-empty info fields for a queued track, in display order.
+List<(String, String)> queueTrackInfoFields(QueueTrack t) {
+  final out = <(String, String)>[];
+  _add(out, 'Title', t.title);
+  _add(out, 'Reading', t.titleTranslit);
+  _add(out, 'Translation', t.titleTranslate);
+  _add(out, 'Artist', t.artist);
+  _add(out, 'Album', t.album);
+  _add(out, 'Length', _fmtLen(t.lengthMs));
+  _add(out, 'Date added', _fmtEpoch(t.addedAt));
+  _add(out, 'Last played', _fmtEpoch(t.lastPlayed));
+  _add(out, 'Path', t.path);
+  return out;
+}
+
 /// Non-empty info fields for an album, in display order.
 List<(String, String)> albumInfoFields(Album a) {
   final out = <(String, String)>[];

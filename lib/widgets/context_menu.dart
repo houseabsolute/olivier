@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:olivier/audio/queue_entity.dart';
 
 /// Wraps [child] so a right-click (secondary tap) opens a context menu. The
-/// "Add to queue" entry is always present; the optional [onInfo]/[onReadTags]/
-/// [onRefetch] entries appear only when their callback is non-null, so each
-/// column shows the actions appropriate to its entity.
+/// optional [onAddToQueue]/[onInfo]/[onReadTags]/[onRefetch] entries appear
+/// only when their callback is non-null, so each column shows the actions
+/// appropriate to its entity.
 class RowContextMenu extends StatelessWidget {
   const RowContextMenu({
     super.key,
     required this.entity,
-    required this.onAddToQueue,
+    this.onAddToQueue,
     this.onInfo,
     this.onReadTags,
     this.onRefetch,
@@ -17,7 +17,7 @@ class RowContextMenu extends StatelessWidget {
   });
 
   final QueueEntityRef entity;
-  final ValueChanged<QueueEntityRef> onAddToQueue;
+  final ValueChanged<QueueEntityRef>? onAddToQueue;
   final ValueChanged<QueueEntityRef>? onInfo;
   final ValueChanged<QueueEntityRef>? onReadTags;
   final ValueChanged<QueueEntityRef>? onRefetch;
@@ -33,7 +33,9 @@ class RowContextMenu extends StatelessWidget {
         Offset.zero & overlay.size,
       ),
       items: [
-        const PopupMenuItem<String>(value: 'add', child: Text('Add to queue')),
+        if (onAddToQueue != null)
+          const PopupMenuItem<String>(
+              value: 'add', child: Text('Add to queue')),
         if (onInfo != null)
           const PopupMenuItem<String>(value: 'info', child: Text('Info')),
         if (onReadTags != null)
@@ -46,7 +48,7 @@ class RowContextMenu extends StatelessWidget {
     );
     switch (selected) {
       case 'add':
-        onAddToQueue(entity);
+        onAddToQueue?.call(entity);
       case 'info':
         onInfo?.call(entity);
       case 'reread':

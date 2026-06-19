@@ -8,6 +8,8 @@ import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/widgets/album_cover.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+import 'package:olivier/widgets/context_menu.dart';
+import 'package:olivier/widgets/info_dialog.dart';
 import 'package:olivier/widgets/track_meta.dart';
 
 /// Whether the queue panel is expanded to fill the browse area. Lifted out of
@@ -210,59 +212,69 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
       itemBuilder: (context, i) {
         final t = view.tracks[i];
         final selected = i == view.currentIndex;
-        return Material(
+        return RowContextMenu(
           key: ValueKey('${t.path}#$i'),
-          color: selected ? scheme.primaryContainer : Colors.transparent,
-          child: InkWell(
-            onTap: () => controller.playAt(i),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
-                children: [
-                  ReorderableDragStartListener(
-                    index: i,
-                    child: const Icon(Icons.drag_handle),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        BilingualText(
-                          original: t.title,
-                          translit: t.titleTranslit,
-                          translate: t.titleTranslate,
-                          leads: leads,
-                        ),
-                        if (_artistAlbum(t).isNotEmpty)
-                          Text(
-                            _artistAlbum(t),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
-                          ),
-                      ],
+          entity: QueueEntityRef.track(t.trackId ?? 0),
+          onInfo: (_) => showInfoDialog(
+            context,
+            title: 'Track',
+            fields: queueTrackInfoFields(t),
+          ),
+          child: Material(
+            color: selected ? scheme.primaryContainer : Colors.transparent,
+            child: InkWell(
+              onTap: () => controller.playAt(i),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  children: [
+                    ReorderableDragStartListener(
+                      index: i,
+                      child: const Icon(Icons.drag_handle),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  TrackMeta(
-                    lengthMs: t.lengthMs,
-                    addedAt: t.addedAt,
-                    lastPlayed: t.lastPlayed,
-                  ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Remove from queue',
-                    onPressed: () => controller.removeAt(i),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          BilingualText(
+                            original: t.title,
+                            translit: t.titleTranslit,
+                            translate: t.titleTranslate,
+                            leads: leads,
+                          ),
+                          if (_artistAlbum(t).isNotEmpty)
+                            Text(
+                              _artistAlbum(t),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TrackMeta(
+                      lengthMs: t.lengthMs,
+                      addedAt: t.addedAt,
+                      lastPlayed: t.lastPlayed,
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Remove from queue',
+                      onPressed: () => controller.removeAt(i),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

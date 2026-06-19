@@ -71,6 +71,29 @@ void main() {
     expect(withoutDateLabels, isNot(contains('Date added'))); // 0 omitted
   });
 
+  test('queueTrackInfoFields includes present fields and omits null/empty', () {
+    final t = QueueTrack(
+      path: '/m/a.flac',
+      trackId: 7,
+      title: 'T',
+      artist: 'A',
+      album: 'Al',
+      lengthMs: BigInt.from(258000),
+      titleTranslit: 'Reading',
+      titleTranslate: null,
+      addedAt: 1718800000,
+      lastPlayed: null,
+    );
+    final fields = queueTrackInfoFields(t);
+    final labels = fields.map((f) => f.$1).toList();
+    expect(labels, contains('Artist'));
+    expect(labels, contains('Album'));
+    expect(labels, contains('Path'));
+    expect(labels, contains('Date added'));
+    expect(labels, isNot(contains('Translation'))); // null omitted
+    expect(labels, isNot(contains('Last played'))); // null omitted
+  });
+
   testWidgets('showInfoDialog renders values as SelectableText',
       (tester) async {
     await tester.pumpWidget(MaterialApp(
