@@ -8,6 +8,7 @@ import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 import 'package:olivier/widgets/context_menu.dart';
 import 'package:olivier/widgets/info_dialog.dart';
+import 'package:olivier/widgets/track_meta.dart';
 
 Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
   final paths = await resolveEntityPaths(
@@ -106,9 +107,10 @@ class _TrackList extends ConsumerWidget {
                         prefix: '${track.position}. ',
                       ),
                     ),
-                    Text(
-                      _formatLength(track.lengthMs),
-                      style: Theme.of(context).textTheme.bodySmall,
+                    TrackMeta(
+                      lengthMs: track.lengthMs,
+                      addedAt: track.addedAt,
+                      lastPlayed: track.lastPlayed,
                     ),
                   ],
                 ),
@@ -118,13 +120,5 @@ class _TrackList extends ConsumerWidget {
         );
       },
     );
-  }
-
-  String _formatLength(BigInt? lengthMs) {
-    if (lengthMs == null) return '';
-    final totalSeconds = (lengthMs ~/ BigInt.from(1000)).toInt();
-    final minutes = totalSeconds ~/ 60;
-    final seconds = totalSeconds % 60;
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }
