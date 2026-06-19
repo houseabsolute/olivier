@@ -152,6 +152,25 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
         let mb = client.fetch_artist(conn, artist_mbid).await?;
         if let Some(chosen) = select_transliteration(&mb) {
             store::apply_artist_transliteration(conn, artist_mbid, &chosen, &mb.name)?;
+            if chosen.from_entity_sort_name {
+                log.line(
+                    "APPLY",
+                    &format!(
+                        "artist \"{}\": sort name = \"{}\"",
+                        mb.name, chosen.sort_name
+                    ),
+                );
+            } else {
+                log.line(
+                    "APPLY",
+                    &format!("artist \"{}\": reading = \"{}\"", mb.name, chosen.name),
+                );
+            }
+        } else {
+            log.line(
+                "NOMATCH",
+                &format!("artist \"{}\": no reading from MusicBrainz", mb.name),
+            );
         }
         done += 1;
         if !on_progress(EnrichProgress {
@@ -215,6 +234,12 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
                 rg.first_release_date.as_deref(),
                 release.date.as_deref(),
             )?;
+            if let Some(d) = rg.first_release_date.as_deref() {
+                log.line("APPLY", &format!("release \"{title}\": original date {d}"));
+            }
+            if let Some(d) = release.date.as_deref() {
+                log.line("APPLY", &format!("release \"{title}\": reissue date {d}"));
+            }
         }
 
         apply_edition_alts(
@@ -222,6 +247,8 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
             rel_mbid,
             release.text_representation.as_ref(),
             &editions,
+            log,
+            title,
         )?;
 
         store::mark_release_files_enriched(&tx, rel_mbid)?;
@@ -346,6 +373,8 @@ fn apply_edition_alts(
     release_mbid: &str,
     original_text_rep: Option<&MbTextRepresentation>,
     editions: &[MbRelease],
+    log: &DecisionLog,
+    title: &str,
 ) -> anyhow::Result<()> {
     let original_script = original_text_rep.and_then(|tr| tr.script.as_deref());
 
@@ -378,13 +407,26 @@ fn apply_edition_alts(
             continue;
         };
         store::upsert_release_alt(conn, release_mbid, kind, &ed.title)?;
+        let mut n_tracks = 0usize;
         for medium in &ed.media {
             for tr in &medium.tracks {
                 if let Some(rec) = &tr.recording {
                     store::upsert_track_alt(conn, &rec.id, kind, &tr.title)?;
+                    n_tracks += 1;
                 }
             }
         }
+        let kind_label = match kind {
+            crate::enrich::select::AltKind::Translit => "reading",
+            crate::enrich::select::AltKind::Translate => "translation",
+        };
+        log.line(
+            "APPLY",
+            &format!(
+                "release \"{title}\": {kind_label} title \"{}\" (+{n_tracks} track titles)",
+                ed.title
+            ),
+        );
     }
     Ok(())
 }

@@ -1528,6 +1528,11 @@ async fn enrich_logs_a_header_and_fetch_decision() {
         body.contains(ARTIST_MBID),
         "the fetched artist mbid should appear: {body}"
     );
+    // The chosen en alias is applied as the artist's reading — log it.
+    assert!(
+        body.contains("APPLY") && body.contains("reading = \"Ringo Sheena\""),
+        "expected an APPLY line for the artist reading: {body}"
+    );
 }
 
 // ── Task 15: post-scan enrich contract ───────────────────────────────────
