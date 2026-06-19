@@ -7,7 +7,7 @@ import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
 
 QueueTrack _qt(String title) =>
-    QueueTrack(path: '/m/$title', title: title, album: 'Album');
+    QueueTrack(path: '/m/$title', title: title, album: 'Album', addedAt: 0);
 
 class _StubQueue extends QueueNotifier {
   _StubQueue(this._view);

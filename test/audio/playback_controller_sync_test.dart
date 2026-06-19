@@ -32,6 +32,7 @@ void main() {
         artist: 'Artist $path',
         album: 'Album $path',
         lengthMs: BigInt.from(1000),
+        addedAt: 0,
         titleTranslit: null,
         titleTranslate: null,
       );

@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/audio/queue_entity.dart';
+import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/widgets/album_cover.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+import 'package:olivier/widgets/track_meta.dart';
 
 /// Whether the queue panel is expanded to fill the browse area. Lifted out of
 /// the panel so BrowserPage can hide the browse panes while it's expanded.
@@ -59,6 +61,14 @@ Future<void> shuffleEntireLibrary(BuildContext context, WidgetRef ref) async {
   }
 
   await ref.read(shuffleAllTargetProvider).replaceLibraryShuffled(paths);
+}
+
+/// "Artist — Album" (whichever is present) for the queue-row subtitle.
+String _artistAlbum(QueueTrack t) {
+  final artist = t.artist?.trim() ?? '';
+  final album = t.album.trim();
+  if (artist.isNotEmpty && album.isNotEmpty) return '$artist — $album';
+  return artist.isNotEmpty ? artist : album;
 }
 
 /// Collapsible queue panel between the browse split and the now-playing bar.
@@ -215,13 +225,38 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: BilingualText(
-                      original: t.title,
-                      translit: t.titleTranslit,
-                      translate: t.titleTranslate,
-                      leads: leads,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        BilingualText(
+                          original: t.title,
+                          translit: t.titleTranslit,
+                          translate: t.titleTranslate,
+                          leads: leads,
+                        ),
+                        if (_artistAlbum(t).isNotEmpty)
+                          Text(
+                            _artistAlbum(t),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                          ),
+                      ],
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  TrackMeta(
+                    lengthMs: t.lengthMs,
+                    addedAt: t.addedAt,
+                    lastPlayed: t.lastPlayed,
+                  ),
+                  const SizedBox(width: 4),
                   IconButton(
                     icon: const Icon(Icons.close),
                     tooltip: 'Remove from queue',

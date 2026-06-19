@@ -1075,6 +1075,44 @@ fn tracks_for_paths_returns_title_alts() {
 }
 
 #[test]
+fn tracks_for_paths_returns_added_at_and_last_played() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('m', 'A', 'A')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('rel', 'm', 'Album')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (1, 'rel', 1, 1, 'Song')",
+        [],
+    )
+    .unwrap();
+    // The file carries the date-added; track_stats carries the last-played.
+    conn.execute(
+        "INSERT INTO file(path, mtime, size, track_id, added_at) VALUES ('/m/a.flac', 0, 0, 1, 1700)",
+        [],
+    )
+    .unwrap();
+    record_play(&conn, 1, 4242).unwrap();
+
+    let paths = vec!["/m/a.flac".to_string(), "/m/missing.mp3".to_string()];
+    let got = tracks_for_paths(&conn, &paths).unwrap();
+
+    // Catalogued path: added_at from the file, last_played from track_stats.
+    assert_eq!(got[0].added_at, 1700);
+    assert_eq!(got[0].last_played, Some(4242));
+
+    // A path not in the catalog gets the placeholder defaults.
+    assert_eq!(got[1].added_at, 0);
+    assert_eq!(got[1].last_played, None);
+}
+
+#[test]
 fn reconcile_leaves_synth_only_artist_untouched() {
     let conn = open(":memory:").unwrap();
     // An album-artist with NO real-MBID counterpart must keep its synth key

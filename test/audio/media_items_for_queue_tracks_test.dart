@@ -14,6 +14,7 @@ void main() {
         artist: 'Artist A',
         album: 'Album A',
         lengthMs: BigInt.from(123456),
+        addedAt: 0,
         titleTranslit: 'Song A translit',
         titleTranslate: 'Song A translate',
       ),
@@ -33,14 +34,16 @@ void main() {
 
   test('empty album maps to null (so MPRIS shows no album)', () {
     final items = mediaItemsForQueueTracks([
-      const QueueTrack(path: '/music/b.flac', title: 'B', album: ''),
+      const QueueTrack(
+          path: '/music/b.flac', title: 'B', album: '', addedAt: 0),
     ]);
     expect(items.single.album, isNull);
   });
 
   test('null lengthMs maps to null duration', () {
     final items = mediaItemsForQueueTracks([
-      const QueueTrack(path: '/music/c.flac', title: 'C', album: 'Album C'),
+      const QueueTrack(
+          path: '/music/c.flac', title: 'C', album: 'Album C', addedAt: 0),
     ]);
     expect(items.single.duration, isNull);
   });
@@ -51,6 +54,7 @@ void main() {
         path: '/music/d.flac',
         title: 'D',
         album: 'Album D',
+        addedAt: 0,
         titleTranslit: 'tl',
         titleTranslate: 'tt',
       ),
@@ -64,16 +68,17 @@ void main() {
 
   test('null artist passes through as null', () {
     final items = mediaItemsForQueueTracks([
-      const QueueTrack(path: '/music/e.flac', title: 'E', album: 'Album E'),
+      const QueueTrack(
+          path: '/music/e.flac', title: 'E', album: 'Album E', addedAt: 0),
     ]);
     expect(items.single.artist, isNull);
   });
 
   test('maps multiple tracks 1:1 in order', () {
     final items = mediaItemsForQueueTracks([
-      const QueueTrack(path: '/1.flac', title: 'One', album: 'X'),
-      const QueueTrack(path: '/2.flac', title: 'Two', album: 'X'),
-      const QueueTrack(path: '/3.flac', title: 'Three', album: 'X'),
+      const QueueTrack(path: '/1.flac', title: 'One', album: 'X', addedAt: 0),
+      const QueueTrack(path: '/2.flac', title: 'Two', album: 'X', addedAt: 0),
+      const QueueTrack(path: '/3.flac', title: 'Three', album: 'X', addedAt: 0),
     ]);
     expect(items.map((i) => i.id).toList(), ['/1.flac', '/2.flac', '/3.flac']);
     expect(items.map((i) => i.title).toList(), ['One', 'Two', 'Three']);

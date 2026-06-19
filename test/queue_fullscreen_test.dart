@@ -69,6 +69,8 @@ QueueTrack _qt(String path, String title) => QueueTrack(
       path: path,
       title: title,
       album: '',
+      addedAt: 0,
+      lastPlayed: null,
       titleTranslit: null,
       titleTranslate: null,
     );

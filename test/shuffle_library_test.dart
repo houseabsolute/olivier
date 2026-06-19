@@ -22,7 +22,7 @@ class _FakeQueueNotifier extends QueueNotifier {
   Future<QueueView> build() async => QueueView(
         tracks: [
           for (var i = 0; i < _count; i++)
-            QueueTrack(path: '/q/$i', title: 'T$i', album: 'A'),
+            QueueTrack(path: '/q/$i', title: 'T$i', album: 'A', addedAt: 0),
         ],
         currentIndex: _count == 0 ? null : 0,
         shuffled: false,

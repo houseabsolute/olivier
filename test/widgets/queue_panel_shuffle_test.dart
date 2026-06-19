@@ -18,7 +18,8 @@ import 'package:olivier/state/queue_provider.dart';
 
 import '../support/fake_queue_player.dart';
 
-QueueTrack _qt(String p) => QueueTrack(path: p, title: p, album: '');
+QueueTrack _qt(String p) =>
+    QueueTrack(path: p, title: p, album: '', addedAt: 0);
 
 void main() {
   testWidgets('header Shuffle toggle calls setShuffle and shows active state',

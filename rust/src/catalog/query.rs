@@ -210,9 +210,11 @@ pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<V
                 (SELECT title FROM track_title_alt
                    WHERE recording_mbid = t.recording_mbid AND kind = 'translit'),
                 (SELECT title FROM track_title_alt
-                   WHERE recording_mbid = t.recording_mbid AND kind = 'translate')
+                   WHERE recording_mbid = t.recording_mbid AND kind = 'translate'),
+                f.added_at, s.last_played
          FROM file f JOIN track t ON t.id = f.track_id
          JOIN release r ON r.mbid = t.release_mbid
+         LEFT JOIN track_stats s ON s.track_id = t.id
          WHERE f.path = ?1",
     )?;
     let mut out = Vec::with_capacity(paths.len());
@@ -226,6 +228,8 @@ pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<V
                     artist: r.get(2)?,
                     album: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
                     length_ms: r.get::<_, Option<i64>>(3)?.map(|v| v as u64),
+                    added_at: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
+                    last_played: r.get(8)?,
                     title_translit: r.get(5)?,
                     title_translate: r.get(6)?,
                 })
@@ -238,6 +242,8 @@ pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<V
             artist: None,
             album: String::new(),
             length_ms: None,
+            added_at: 0,
+            last_played: None,
             title_translit: None,
             title_translate: None,
         }));

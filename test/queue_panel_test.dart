@@ -15,6 +15,7 @@ const _tracks = [
     path: '/a.flac',
     title: '歌舞伎町の女王',
     album: '無罪モラトリアム',
+    addedAt: 0,
     titleTranslit: 'Kabukicho no Joo',
     titleTranslate: 'Queen of Kabuki-cho',
   ),
@@ -22,6 +23,7 @@ const _tracks = [
     path: '/b.flac',
     title: 'Innocence',
     album: '無罪モラトリアム',
+    addedAt: 0,
   ),
 ];
 

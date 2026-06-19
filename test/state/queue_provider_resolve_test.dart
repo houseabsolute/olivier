@@ -7,7 +7,8 @@ import 'package:olivier/state/queue_provider.dart';
 
 import '../support/fake_queue_player.dart';
 
-QueueTrack _qt(String path) => QueueTrack(path: path, title: path, album: '');
+QueueTrack _qt(String path) =>
+    QueueTrack(path: path, title: path, album: '', addedAt: 0);
 
 Future<void> _settle() async {
   for (var i = 0; i < 8; i++) {

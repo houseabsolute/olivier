@@ -11,6 +11,7 @@ QueueTrack _qt(String path, String title) => QueueTrack(
       path: path,
       title: title,
       album: 'Album',
+      addedAt: 0,
     );
 
 void main() {
