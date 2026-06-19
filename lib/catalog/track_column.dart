@@ -75,6 +75,7 @@ class _TrackList extends ConsumerWidget {
               ref.invalidate(artistsProvider);
               ref.invalidate(albumsProvider);
               ref.invalidate(tracksProvider);
+              ref.read(selectedTrackProvider.notifier).clear();
               messenger
                 ..clearSnackBars()
                 ..showSnackBar(const SnackBar(content: Text('Tags re-read')));

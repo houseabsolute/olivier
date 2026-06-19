@@ -65,6 +65,9 @@ final enrichAlbumFnProvider = Provider<EnrichEntityFn>((ref) {
 /// resumable path auto-run after a scan and from the Settings "Enrich library"
 /// action (skips already-enriched files + cached entities);
 /// `refreshFromMusicBrainz()` empties the cache and refetches from the network.
+/// `enrichArtist(mbid)` / `enrichAlbum(mbid)` re-fetch a single artist/album
+/// (scoped MusicBrainz cache-clear + constrained re-enrich), sharing the same
+/// single-flight guard.
 /// Single-flight; streams progress; refreshes the browse columns when new
 /// bilingual data lands.
 class EnrichController extends Notifier<EnrichState> {

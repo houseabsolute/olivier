@@ -51,6 +51,13 @@ String _fmtLen(BigInt? ms) {
   return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
 }
 
+String _fmtEpoch(int? secs) {
+  if (secs == null || secs == 0) return '';
+  final d = DateTime.fromMillisecondsSinceEpoch(secs * 1000); // local time
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
+}
+
 void _add(List<(String, String)> out, String label, String? value) {
   final v = (value ?? '').trim();
   if (v.isNotEmpty) out.add((label, v));
@@ -65,6 +72,8 @@ List<(String, String)> trackInfoFields(Track t) {
   _add(out, 'Artist', t.artist);
   _add(out, 'Disc / Track', '${t.disc} / ${t.position}');
   _add(out, 'Length', _fmtLen(t.lengthMs));
+  _add(out, 'Last played', _fmtEpoch(t.lastPlayed));
+  _add(out, 'Added at', _fmtEpoch(t.addedAt));
   _add(out, 'Track id', t.id.toString());
   return out;
 }

@@ -15,13 +15,39 @@ void main() {
       lengthMs: BigInt.from(258000),
       titleTranslit: 'Kabukicho no Joo',
       // titleTranslate omitted (null) → must not appear
+      // lastPlayed omitted (null) → must not appear
     );
     final fields = trackInfoFields(t);
     final labels = fields.map((f) => f.$1).toList();
     expect(labels, contains('Title'));
     expect(labels, contains('Reading'));
     expect(labels, isNot(contains('Translation'))); // null omitted
+    expect(labels, isNot(contains('Last played'))); // null omitted
+    expect(labels, isNot(contains('Added at'))); // 0 omitted
     expect(fields.firstWhere((f) => f.$1 == 'Length').$2, '4:18');
+  });
+
+  test('trackInfoFields includes Last played and Added at when non-zero', () {
+    final t = Track(
+      id: 42,
+      disc: 1,
+      position: 1,
+      title: 'Test Song',
+      addedAt: 1718800000,
+      lastPlayed: 1718900000,
+    );
+    final fields = trackInfoFields(t);
+    final labels = fields.map((f) => f.$1).toList();
+    expect(labels, contains('Added at'));
+    expect(labels, contains('Last played'));
+    // Track id must still appear after the timestamp rows
+    expect(labels, contains('Track id'));
+    // Order: Last played before Added at before Track id
+    final idxLastPlayed = labels.indexOf('Last played');
+    final idxAddedAt = labels.indexOf('Added at');
+    final idxTrackId = labels.indexOf('Track id');
+    expect(idxLastPlayed, lessThan(idxAddedAt));
+    expect(idxAddedAt, lessThan(idxTrackId));
   });
 
   testWidgets('showInfoDialog renders values as SelectableText',
