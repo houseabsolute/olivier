@@ -7,7 +7,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:olivier/audio/audio_handler.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/src/rust/api/catalog.dart';
-import 'package:olivier/src/rust/api/tags.dart';
+import 'package:olivier/src/rust/api/cover.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -175,7 +175,8 @@ class PlaybackController {
     } else {
       try {
         final cacheDir = await _resolveCacheDir();
-        coverPath = await extractCover(filePath: filePath, cacheDir: cacheDir);
+        coverPath = await coverForPath(
+            dbPath: dbPath, filePath: filePath, cacheDir: cacheDir);
       } catch (_) {
         // Cover extraction failure must never break playback.
         coverPath = null;

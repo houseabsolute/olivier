@@ -5,6 +5,7 @@ import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
+import 'package:olivier/widgets/album_cover.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 
 /// Provider that exposes the [ShuffleAllTarget] the "Shuffle entire library"
@@ -78,6 +79,13 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
+            if (view.currentIndex != null) ...[
+              PathCover(
+                filePath: view.tracks[view.currentIndex!].path,
+                size: 36,
+              ),
+              const SizedBox(width: 8),
+            ],
             const Icon(Icons.queue_music, size: 20),
             const SizedBox(width: 8),
             Text('Queue · $count tracks', style: theme.textTheme.bodyMedium),
