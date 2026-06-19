@@ -16,6 +16,7 @@
 use rust_lib_olivier::db::open;
 use rust_lib_olivier::enrich::http::{MbHttp, MbResponse};
 use rust_lib_olivier::enrich::model::{MbAlias, MbArtist, MbRelease, MbTextRepresentation};
+use rust_lib_olivier::enrich::run;
 use rust_lib_olivier::enrich::run::enrich;
 use rust_lib_olivier::enrich::select::{
     classify_from_text_representation, select_transliteration, AltKind,
@@ -1533,5 +1534,123 @@ async fn enrich_after_scan_is_safe_noop_for_untagged_fixtures() {
         client2.http().calls.borrow().len(),
         0,
         "second call must make no HTTP requests (already enriched)"
+    );
+}
+
+// ── Task 6: per-entity enrich (enrich_artist) ─────────────────────────────
+
+/// A second real-MBID artist used as the "untouched" control: re-enriching
+/// artist A must not touch artist B.
+const ARTIST_B_MBID: &str = "83d91898-7763-47d7-b03b-b92132375c47"; // (Pink Floyd, arbitrary real MBID)
+
+/// `enrich_artist` re-enriches ONE artist: it (a) applies that artist's data,
+/// (b) leaves every other artist untouched, and (c) clears that artist's stale
+/// `mb_cache` row FIRST so the refetch hits the network. Artist A is seeded with
+/// no releases, so only the artist loop runs — but the single-artist scoping and
+/// the scoped cache-clear are both exercised. Artist B is fully populated and
+/// must be byte-for-byte unchanged afterward.
+#[tokio::test]
+async fn enrich_artist_processes_only_that_artist_and_clears_its_cache() {
+    let conn = open(":memory:").unwrap();
+
+    // Artist A: real MBID, NULL name_original (to be backfilled), no releases.
+    conn.execute(
+        &format!(
+            "INSERT INTO artist(mbid,name,sort_name,transliteration,name_original) \
+             VALUES ('{ARTIST_MBID}','椎名林檎','Sheena, Ringo','Old Reading',NULL)"
+        ),
+        [],
+    )
+    .unwrap();
+    // Artist B: a fully-populated control row that must NOT change.
+    conn.execute(
+        &format!(
+            "INSERT INTO artist(mbid,name,sort_name,transliteration,name_original) \
+             VALUES ('{ARTIST_B_MBID}','Pink Floyd','Pink Floyd','B Reading','B Original')"
+        ),
+        [],
+    )
+    .unwrap();
+
+    // A STALE cached artist row for A: if the cache were NOT cleared, this body
+    // would be served on the cache hit and FakeHttp's fresh response ignored,
+    // leaving name_original NULL. clear_artist_cache must delete it first.
+    conn.execute(
+        &format!(
+            "INSERT INTO mb_cache(entity_type,mbid,inc_set,json,fetched_at) \
+             VALUES ('artist','{ARTIST_MBID}','aliases','{{\"id\":\"{ARTIST_MBID}\",\"name\":\"STALE\",\"sort-name\":\"STALE\",\"aliases\":[]}}',0)"
+        ),
+        [],
+    )
+    .unwrap();
+
+    // Fresh artist body served only over HTTP (FakeHttp). 椎名林檎 + en primary
+    // "Artist name" alias ⇒ tier-1 selection populates the real reading.
+    let artist_body = format!(
+        "{{\"id\":\"{ARTIST_MBID}\",\"name\":\"椎名林檎\",\"sort-name\":\"Sheena, Ringo\",\
+          \"aliases\":[{{\"name\":\"Ringo Sheena\",\"sort-name\":\"Sheena, Ringo\",\
+          \"locale\":\"en\",\"primary\":true,\"type\":\"Artist name\"}}]}}"
+    );
+    let http = FakeHttp::new().with(&artist_url(), 200, &artist_body);
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+
+    run::enrich_artist(&conn, &client, ARTIST_MBID, |_| true)
+        .await
+        .unwrap();
+
+    // (a) A's data was applied from the FRESH network body (not the STALE cache).
+    let (a_name_original, a_translit): (Option<String>, Option<String>) = conn
+        .query_row(
+            &format!(
+                "SELECT name_original, transliteration FROM artist WHERE mbid='{ARTIST_MBID}'"
+            ),
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(a_name_original.as_deref(), Some("椎名林檎"));
+    assert_eq!(a_translit.as_deref(), Some("Ringo Sheena"));
+
+    // (b) B is completely untouched — every column identical to its seed.
+    let (b_name, b_sort, b_translit, b_original): (String, String, Option<String>, Option<String>) =
+        conn.query_row(
+            &format!(
+                "SELECT name, sort_name, transliteration, name_original \
+                 FROM artist WHERE mbid='{ARTIST_B_MBID}'"
+            ),
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
+        .unwrap();
+    assert_eq!(b_name, "Pink Floyd");
+    assert_eq!(b_sort, "Pink Floyd");
+    assert_eq!(b_translit.as_deref(), Some("B Reading"));
+    assert_eq!(b_original.as_deref(), Some("B Original"));
+
+    // (c) The stale cache row was deleted, then refetched fresh: exactly one
+    // artist cache row for A, and its JSON is the FRESH body (no "STALE").
+    let cached_json: String = conn
+        .query_row(
+            &format!(
+                "SELECT json FROM mb_cache WHERE entity_type='artist' AND mbid='{ARTIST_MBID}'"
+            ),
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(
+        !cached_json.contains("STALE"),
+        "stale cache row must have been cleared before the refetch"
+    );
+    assert!(
+        cached_json.contains("Ringo Sheena"),
+        "cache must hold the freshly-fetched body"
+    );
+
+    // The fresh artist body was fetched over the network (cache was cold).
+    assert_eq!(
+        client.http().calls.borrow().len(),
+        1,
+        "enrich_artist must fetch A once over the network after clearing its cache"
     );
 }

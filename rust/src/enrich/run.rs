@@ -74,10 +74,56 @@ pub async fn enrich<H: MbHttp, P: Pacer>(
     conn: &Connection,
     client: &MbClient<H, P>,
     force: bool,
-    mut on_progress: impl FnMut(EnrichProgress) -> bool,
+    on_progress: impl FnMut(EnrichProgress) -> bool,
 ) -> anyhow::Result<()> {
     let artists = artists_to_enrich(conn, force)?;
     let releases = releases_to_enrich(conn, force)?;
+    enrich_lists(conn, client, artists, releases, on_progress).await
+}
+
+/// Re-enrich ONE artist and all of its releases, refetching from the network.
+/// The artist's cached MB responses are cleared first so the refetch is fresh.
+pub async fn enrich_artist<H: MbHttp, P: Pacer>(
+    conn: &Connection,
+    client: &MbClient<H, P>,
+    artist_mbid: &str,
+    on_progress: impl FnMut(EnrichProgress) -> bool,
+) -> anyhow::Result<()> {
+    clear_artist_cache(conn, artist_mbid)?;
+    let releases = artist_releases(conn, artist_mbid)?;
+    enrich_lists(
+        conn,
+        client,
+        vec![artist_mbid.to_string()],
+        releases,
+        on_progress,
+    )
+    .await
+}
+
+/// Re-enrich ONE release (and its sibling editions), refetching from the network.
+/// The release's cached MB responses are cleared first so the refetch is fresh.
+pub async fn enrich_album<H: MbHttp, P: Pacer>(
+    conn: &Connection,
+    client: &MbClient<H, P>,
+    release_mbid: &str,
+    on_progress: impl FnMut(EnrichProgress) -> bool,
+) -> anyhow::Result<()> {
+    clear_album_cache(conn, release_mbid)?;
+    let releases = one_release(conn, release_mbid)?;
+    enrich_lists(conn, client, Vec::new(), releases, on_progress).await
+}
+
+/// The shared artist-loop + release-loop body. `enrich` (full library) and the
+/// per-entity entry points (`enrich_artist`/`enrich_album`) all gather their
+/// artist/release lists and delegate here so the network + DB logic lives once.
+async fn enrich_lists<H: MbHttp, P: Pacer>(
+    conn: &Connection,
+    client: &MbClient<H, P>,
+    artists: Vec<String>,
+    releases: Vec<(String, Option<String>, String)>,
+    mut on_progress: impl FnMut(EnrichProgress) -> bool,
+) -> anyhow::Result<()> {
     let total = (artists.len() + releases.len()) as u64;
     let mut done = 0u64;
 
@@ -173,6 +219,76 @@ pub async fn enrich<H: MbHttp, P: Pacer>(
         current: String::new(),
         done: true,
     });
+    Ok(())
+}
+
+/// The real-MBID releases owned by one album-artist (skipping synthetic keys).
+/// Mirrors `releases_to_enrich`'s tuple shape — the stored `release_group_mbid`
+/// is carried but, as there, no longer drives any fetch (the release loop reads
+/// the REAL release group from the fetched JSON).
+fn artist_releases(
+    conn: &Connection,
+    artist_mbid: &str,
+) -> anyhow::Result<Vec<(String, Option<String>, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT r.mbid, r.release_group_mbid, COALESCE(r.title,'')
+         FROM release r WHERE r.album_artist_mbid = ?1 AND r.mbid NOT LIKE 'synth:%'",
+    )?;
+    let rows = stmt.query_map([artist_mbid], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, Option<String>>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// One release as a single-element list (empty if the MBID is unknown), in the
+/// same tuple shape `enrich_lists` consumes.
+fn one_release(
+    conn: &Connection,
+    release_mbid: &str,
+) -> anyhow::Result<Vec<(String, Option<String>, String)>> {
+    let row = conn.query_row(
+        "SELECT r.mbid, r.release_group_mbid, COALESCE(r.title,'') FROM release r WHERE r.mbid = ?1",
+        [release_mbid],
+        |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, String>(2)?,
+            ))
+        },
+    );
+    match row {
+        Ok(t) => Ok(vec![t]),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(Vec::new()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Drop the cached MB responses for one artist (its artist fetch, its releases,
+/// and their release-groups) so the re-enrich hits the network fresh.
+fn clear_artist_cache(conn: &Connection, artist_mbid: &str) -> anyhow::Result<()> {
+    conn.execute(
+        "DELETE FROM mb_cache WHERE mbid = ?1
+           OR mbid IN (SELECT mbid FROM release WHERE album_artist_mbid = ?1)
+           OR mbid IN (SELECT release_group_mbid FROM release
+                       WHERE album_artist_mbid = ?1 AND release_group_mbid IS NOT NULL)",
+        [artist_mbid],
+    )?;
+    Ok(())
+}
+
+/// Drop the cached MB responses for one release (and its release-group browse).
+fn clear_album_cache(conn: &Connection, release_mbid: &str) -> anyhow::Result<()> {
+    conn.execute(
+        "DELETE FROM mb_cache WHERE mbid = ?1
+           OR mbid IN (SELECT release_group_mbid FROM release
+                       WHERE mbid = ?1 AND release_group_mbid IS NOT NULL)",
+        [release_mbid],
+    )?;
     Ok(())
 }
 

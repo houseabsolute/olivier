@@ -22,6 +22,22 @@ Stream<EnrichProgress> enrichLibrary(
     RustLib.instance.api
         .crateApiEnrichEnrichLibrary(dbPath: dbPath, force: force);
 
+/// Re-enrich ONE artist (and all of its releases), refetching from the network.
+/// The artist's cached MB responses are cleared first (scoped cache-clear), then
+/// the artist + its releases are re-fetched. Same sync/`block_on` shape as
+/// `enrich_library` (the non-`Send` `Connection` can't cross frb's executor).
+Stream<EnrichProgress> enrichArtist(
+        {required String dbPath, required String artistMbid}) =>
+    RustLib.instance.api
+        .crateApiEnrichEnrichArtist(dbPath: dbPath, artistMbid: artistMbid);
+
+/// Re-enrich ONE release (and its sibling editions), refetching from the network.
+/// The release's cached MB responses are cleared first (scoped cache-clear).
+Stream<EnrichProgress> enrichAlbum(
+        {required String dbPath, required String releaseMbid}) =>
+    RustLib.instance.api
+        .crateApiEnrichEnrichAlbum(dbPath: dbPath, releaseMbid: releaseMbid);
+
 /// Empty the MusicBrainz response cache so the next enrich refetches from the
 /// network (spec §4: manual refresh only).
 Future<void> clearMbCache({required String dbPath}) =>

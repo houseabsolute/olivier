@@ -30,6 +30,42 @@ pub fn enrich_library(
     rt.block_on(run::enrich(&conn, &client, force, |p| sink.add(p).is_ok()))
 }
 
+/// Re-enrich ONE artist (and all of its releases), refetching from the network.
+/// The artist's cached MB responses are cleared first (scoped cache-clear), then
+/// the artist + its releases are re-fetched. Same sync/`block_on` shape as
+/// `enrich_library` (the non-`Send` `Connection` can't cross frb's executor).
+pub fn enrich_artist(
+    db_path: String,
+    artist_mbid: String,
+    sink: StreamSink<EnrichProgress>,
+) -> anyhow::Result<()> {
+    let conn = db::open(&db_path)?;
+    let email = settings::get_setting_or_default(&conn, "mb_contact_email")?;
+    let http = ReqwestHttp::new(env!("CARGO_PKG_VERSION"), &email)?;
+    let client = MbClient::with_pacer(http, WallClockPacer::default());
+    let rt = enrich_runtime()?;
+    rt.block_on(run::enrich_artist(&conn, &client, &artist_mbid, |p| {
+        sink.add(p).is_ok()
+    }))
+}
+
+/// Re-enrich ONE release (and its sibling editions), refetching from the network.
+/// The release's cached MB responses are cleared first (scoped cache-clear).
+pub fn enrich_album(
+    db_path: String,
+    release_mbid: String,
+    sink: StreamSink<EnrichProgress>,
+) -> anyhow::Result<()> {
+    let conn = db::open(&db_path)?;
+    let email = settings::get_setting_or_default(&conn, "mb_contact_email")?;
+    let http = ReqwestHttp::new(env!("CARGO_PKG_VERSION"), &email)?;
+    let client = MbClient::with_pacer(http, WallClockPacer::default());
+    let rt = enrich_runtime()?;
+    rt.block_on(run::enrich_album(&conn, &client, &release_mbid, |p| {
+        sink.add(p).is_ok()
+    }))
+}
+
 /// Build the current-thread runtime that drives enrichment. `enable_all()` turns
 /// on BOTH IO (reqwest/hyper open a TCP connection to MusicBrainz) AND time (the
 /// pacer calls `tokio::time::sleep`). `enable_time()` alone panics with "A Tokio
