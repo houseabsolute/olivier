@@ -125,6 +125,14 @@ final albumFilePathsFnProvider = Provider<AlbumFilePathsFn>((ref) {
   return (releaseMbid) => albumFilePaths(dbPath: db, releaseMbid: releaseMbid);
 });
 
+// Re-read one track's tags (re-homes it if the album/artist changed). Seam.
+typedef RereadTrackTagsFn = Future<void> Function(int trackId);
+
+final rereadTrackTagsFnProvider = Provider<RereadTrackTagsFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (trackId) => rereadTrackTags(dbPath: db, trackId: trackId);
+});
+
 // --- Entity → paths FFI seams (overridable in tests) ---
 
 final entityPathFnsProvider = Provider<EntityPathFns>((ref) {

@@ -69,6 +69,16 @@ class _TrackList extends ConsumerWidget {
             onAddToQueue: (e) => _enqueue(ref, e),
             onInfo: (_) => showInfoDialog(context,
                 title: 'Track', fields: trackInfoFields(track)),
+            onReadTags: (_) async {
+              final messenger = ScaffoldMessenger.of(context);
+              await ref.read(rereadTrackTagsFnProvider)(track.id);
+              ref.invalidate(artistsProvider);
+              ref.invalidate(albumsProvider);
+              ref.invalidate(tracksProvider);
+              messenger
+                ..clearSnackBars()
+                ..showSnackBar(const SnackBar(content: Text('Tags re-read')));
+            },
             child: InkWell(
               key: ValueKey(track.id),
               onTap: () =>
