@@ -50,4 +50,11 @@ fn deleting_a_file_then_rescanning_logs_remove_and_prune() {
         body.contains("PRUNE"),
         "expected PRUNE of the now-orphaned track/album: {body}"
     );
+    // The track, its album, AND its artist all become orphaned by the removal —
+    // each must be logged (the prune cascade must not silently drop the album
+    // and artist that vanish with the track).
+    assert!(
+        body.matches("(no files remain)").count() >= 3,
+        "expected the orphaned track, album, AND artist to each be pruned-and-logged: {body}"
+    );
 }

@@ -225,7 +225,9 @@ pub fn reread_track_tags(
 /// here (libsqlite3-sys bundles SQLite with SQLITE_DEFAULT_FOREIGN_KEYS=1). Keying
 /// each level off the level below drops a whole orphaned album/artist together.
 pub(crate) fn prune_orphans(conn: &Connection, log: &DecisionLog) -> anyhow::Result<()> {
-    // Name orphaned tracks/albums/artists before deleting (child-first as before).
+    // Prune child-first, interleaving SELECT→log→DELETE at each level so a row
+    // orphaned BY the level below is still named: an album is only orphaned once
+    // its last track is gone, and an artist once its last release is gone.
     {
         let mut stmt = conn.prepare(
             "SELECT t.title, COALESCE(r.title, '') FROM track t \
@@ -237,6 +239,15 @@ pub(crate) fn prune_orphans(conn: &Connection, log: &DecisionLog) -> anyhow::Res
             log.record(&Decision::PruneTrack { title, album });
         }
     }
+    conn.execute(
+        "DELETE FROM track_stats WHERE track_id NOT IN (SELECT track_id FROM file)",
+        [],
+    )?;
+    conn.execute(
+        "DELETE FROM track WHERE id NOT IN (SELECT track_id FROM file)",
+        [],
+    )?;
+
     {
         let mut stmt = conn.prepare(
             "SELECT r.title, COALESCE(a.name, '') FROM release r \
@@ -248,6 +259,15 @@ pub(crate) fn prune_orphans(conn: &Connection, log: &DecisionLog) -> anyhow::Res
             log.record(&Decision::PruneAlbum { title, artist });
         }
     }
+    conn.execute(
+        "DELETE FROM release WHERE mbid NOT IN (SELECT release_mbid FROM track)",
+        [],
+    )?;
+    conn.execute(
+        "DELETE FROM release_group WHERE mbid NOT IN (SELECT release_group_mbid FROM release WHERE release_group_mbid IS NOT NULL)",
+        [],
+    )?;
+
     {
         let mut stmt = conn.prepare(
             "SELECT name FROM artist \
@@ -257,23 +277,6 @@ pub(crate) fn prune_orphans(conn: &Connection, log: &DecisionLog) -> anyhow::Res
             log.record(&Decision::PruneArtist { name: row? });
         }
     }
-
-    conn.execute(
-        "DELETE FROM track_stats WHERE track_id NOT IN (SELECT track_id FROM file)",
-        [],
-    )?;
-    conn.execute(
-        "DELETE FROM track WHERE id NOT IN (SELECT track_id FROM file)",
-        [],
-    )?;
-    conn.execute(
-        "DELETE FROM release WHERE mbid NOT IN (SELECT release_mbid FROM track)",
-        [],
-    )?;
-    conn.execute(
-        "DELETE FROM release_group WHERE mbid NOT IN (SELECT release_group_mbid FROM release WHERE release_group_mbid IS NOT NULL)",
-        [],
-    )?;
     conn.execute(
         "DELETE FROM artist WHERE mbid NOT IN (SELECT album_artist_mbid FROM release WHERE album_artist_mbid IS NOT NULL)",
         [],
