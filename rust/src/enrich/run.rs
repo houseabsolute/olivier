@@ -1,5 +1,6 @@
 use rusqlite::Connection;
 
+use crate::decision_log::DecisionLog;
 use crate::enrich::client::{MbClient, Pacer};
 use crate::enrich::http::MbHttp;
 use crate::enrich::model::{MbRelease, MbTextRepresentation};
@@ -74,11 +75,13 @@ pub async fn enrich<H: MbHttp, P: Pacer>(
     conn: &Connection,
     client: &MbClient<H, P>,
     force: bool,
+    log: &DecisionLog,
     on_progress: impl FnMut(EnrichProgress) -> bool,
 ) -> anyhow::Result<()> {
     let artists = artists_to_enrich(conn, force)?;
     let releases = releases_to_enrich(conn, force)?;
-    enrich_lists(conn, client, artists, releases, on_progress).await
+    log.header("Enrich library");
+    enrich_lists(conn, client, artists, releases, log, on_progress).await
 }
 
 /// Re-enrich ONE artist and all of its releases, refetching from the network.
@@ -87,15 +90,18 @@ pub async fn enrich_artist<H: MbHttp, P: Pacer>(
     conn: &Connection,
     client: &MbClient<H, P>,
     artist_mbid: &str,
+    log: &DecisionLog,
     on_progress: impl FnMut(EnrichProgress) -> bool,
 ) -> anyhow::Result<()> {
     clear_artist_cache(conn, artist_mbid)?;
     let releases = artist_releases(conn, artist_mbid)?;
+    log.header(&format!("Enrich artist {artist_mbid}"));
     enrich_lists(
         conn,
         client,
         vec![artist_mbid.to_string()],
         releases,
+        log,
         on_progress,
     )
     .await
@@ -107,11 +113,13 @@ pub async fn enrich_album<H: MbHttp, P: Pacer>(
     conn: &Connection,
     client: &MbClient<H, P>,
     release_mbid: &str,
+    log: &DecisionLog,
     on_progress: impl FnMut(EnrichProgress) -> bool,
 ) -> anyhow::Result<()> {
     clear_album_cache(conn, release_mbid)?;
     let releases = one_release(conn, release_mbid)?;
-    enrich_lists(conn, client, Vec::new(), releases, on_progress).await
+    log.header(&format!("Enrich album {release_mbid}"));
+    enrich_lists(conn, client, Vec::new(), releases, log, on_progress).await
 }
 
 /// The shared artist-loop + release-loop body. `enrich` (full library) and the
@@ -122,6 +130,7 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
     client: &MbClient<H, P>,
     artists: Vec<String>,
     releases: Vec<(String, Option<String>, String)>,
+    log: &DecisionLog,
     mut on_progress: impl FnMut(EnrichProgress) -> bool,
 ) -> anyhow::Result<()> {
     let total = (artists.len() + releases.len()) as u64;
@@ -132,6 +141,14 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
         if !is_real_mbid(artist_mbid) {
             continue;
         }
+        log.line(
+            if client.is_cached_artist(conn, artist_mbid) {
+                "CACHE"
+            } else {
+                "FETCH"
+            },
+            &format!("artist {artist_mbid}"),
+        );
         let mb = client.fetch_artist(conn, artist_mbid).await?;
         if let Some(chosen) = select_transliteration(&mb) {
             store::apply_artist_transliteration(conn, artist_mbid, &chosen, &mb.name)?;
@@ -155,6 +172,14 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
         // Network fetches happen OUTSIDE the per-release transaction (a tokio
         // sleep must not hold a SQLite write lock). The release + its sibling
         // editions are fetched first, then all DB writes commit atomically.
+        log.line(
+            if client.is_cached_release(conn, rel_mbid) {
+                "CACHE"
+            } else {
+                "FETCH"
+            },
+            &format!("release {rel_mbid}"),
+        );
         let release = client.fetch_release(conn, rel_mbid).await?;
 
         // Title alts come from this release's SIBLING EDITIONS in the same

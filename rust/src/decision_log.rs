@@ -157,6 +157,12 @@ impl DecisionLog {
         ));
     }
 
+    /// Record a free-form line (timestamp + padded category + detail). Used by
+    /// the enrich pipeline, whose decisions don't map onto the scan `Decision`.
+    pub fn line(&self, category: &str, detail: &str) {
+        self.write_line(&format!("{}  {:<7} {}", now_local(), category, detail));
+    }
+
     fn write_line(&self, line: &str) {
         let Some(path) = &self.path else { return };
         // Best-effort: ignore every IO error.

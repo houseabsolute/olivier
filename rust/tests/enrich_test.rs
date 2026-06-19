@@ -14,6 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 use rust_lib_olivier::db::open;
+use rust_lib_olivier::decision_log::DecisionLog;
 use rust_lib_olivier::enrich::http::{MbHttp, MbResponse};
 use rust_lib_olivier::enrich::model::{MbAlias, MbArtist, MbRelease, MbTextRepresentation};
 use rust_lib_olivier::enrich::run;
@@ -847,7 +848,7 @@ async fn enriches_catalog_end_to_end() {
     let client = rust_lib_olivier::enrich::client::MbClient::new(http);
 
     let mut last: Option<rust_lib_olivier::enrich::progress::EnrichProgress> = None;
-    enrich(&conn, &client, false, |p| {
+    enrich(&conn, &client, false, &DecisionLog::to_path(None), |p| {
         last = Some(p.clone());
         true
     })
@@ -1025,7 +1026,9 @@ async fn international_edition_supplies_translate_alts() {
         );
     let client = rust_lib_olivier::enrich::client::MbClient::new(http);
 
-    enrich(&conn, &client, false, |_| true).await.unwrap();
+    enrich(&conn, &client, false, &DecisionLog::to_path(None), |_| true)
+        .await
+        .unwrap();
 
     // The English international edition's titles land as `translate` track alts,
     // keyed by the SHARED recording MBIDs of the original's tracks.
@@ -1124,7 +1127,9 @@ async fn no_text_representation_edition_is_skipped() {
         .with(&browse_url, 200, &fixture("release_group_browse_skip.json"));
     let client = rust_lib_olivier::enrich::client::MbClient::new(http);
 
-    enrich(&conn, &client, false, |_| true).await.unwrap();
+    enrich(&conn, &client, false, &DecisionLog::to_path(None), |_| true)
+        .await
+        .unwrap();
 
     // The metadata-less sibling was skipped: ZERO track-title alts for REC_SKIP.
     let track_alts: i64 = conn
@@ -1234,7 +1239,9 @@ async fn multi_page_browse_fetches_all_pages() {
         .with(&browse_url_p1, 200, &browse_body_p1);
     let client = rust_lib_olivier::enrich::client::MbClient::new(http);
 
-    enrich(&conn, &client, false, |_| true).await.unwrap();
+    enrich(&conn, &client, false, &DecisionLog::to_path(None), |_| true)
+        .await
+        .unwrap();
 
     // The page-2-only English edition's translate alt is present — proving paging
     // fetched offset=100. Without paging this row would be absent.
@@ -1315,7 +1322,9 @@ async fn same_script_reissue_does_not_clobber_translate_alt() {
         );
     let client = rust_lib_olivier::enrich::client::MbClient::new(http);
 
-    enrich(&conn, &client, false, |_| true).await.unwrap();
+    enrich(&conn, &client, false, &DecisionLog::to_path(None), |_| true)
+        .await
+        .unwrap();
 
     // The English edition's translate alt survives — the same-script Japanese
     // reissue (which sorts last) was skipped by the guard, not stored.
@@ -1351,7 +1360,9 @@ async fn resumes_skipping_already_enriched_and_cached() {
         .unwrap();
     // FakeHttp with NO responses: if enrich tried to fetch anything it would error.
     let client = rust_lib_olivier::enrich::client::MbClient::new(FakeHttp::new());
-    enrich(&conn, &client, false, |_| true).await.unwrap();
+    enrich(&conn, &client, false, &DecisionLog::to_path(None), |_| true)
+        .await
+        .unwrap();
     assert_eq!(
         client.http().calls.borrow().len(),
         0,
@@ -1407,7 +1418,9 @@ async fn backfills_name_original_on_upgraded_2a_library() {
     let http = FakeHttp::new().with(&artist_url(), 200, &artist_body);
     let client = rust_lib_olivier::enrich::client::MbClient::new(http);
 
-    enrich(&conn, &client, false, |_| true).await.unwrap();
+    enrich(&conn, &client, false, &DecisionLog::to_path(None), |_| true)
+        .await
+        .unwrap();
 
     // name_original is backfilled from the MB original-script name.
     let (name_original, translit): (Option<String>, Option<String>) = conn
@@ -1449,7 +1462,9 @@ async fn synthetic_mbids_are_skipped() {
     )
     .unwrap();
     let client = rust_lib_olivier::enrich::client::MbClient::new(FakeHttp::new());
-    enrich(&conn, &client, false, |_| true).await.unwrap();
+    enrich(&conn, &client, false, &DecisionLog::to_path(None), |_| true)
+        .await
+        .unwrap();
     assert_eq!(client.http().calls.borrow().len(), 0);
     // Synthetic file stays unenriched (correctly — no MB data exists).
     let e: i64 = conn
@@ -1460,6 +1475,59 @@ async fn synthetic_mbids_are_skipped() {
         )
         .unwrap();
     assert_eq!(e, 0);
+}
+
+#[tokio::test]
+async fn enrich_logs_a_header_and_fetch_decision() {
+    use tempfile::TempDir;
+
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        &format!("INSERT INTO artist(mbid,name,sort_name) VALUES ('{ARTIST_MBID}','椎名林檎','Sheena, Ringo')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO release(mbid,album_artist_mbid,title) VALUES ('{RELEASE_MBID}','{ARTIST_MBID}','無罪モラトリアム')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO track(release_mbid,disc,position,title) VALUES ('{RELEASE_MBID}',1,1,'歌舞伎町の女王')"),
+        [],
+    )
+    .unwrap();
+    // enriched=1 so only the ARTIST is processed (no release fetch to mock).
+    conn.execute(
+        "INSERT INTO file(path,mtime,size,track_id,added_at,enriched) VALUES ('/m/a.flac',0,0,1,0,1)",
+        [],
+    )
+    .unwrap();
+
+    let artist_body = format!(
+        "{{\"id\":\"{ARTIST_MBID}\",\"name\":\"椎名林檎\",\"sort-name\":\"Sheena, Ringo\",\
+          \"aliases\":[{{\"name\":\"Ringo Sheena\",\"sort-name\":\"Sheena, Ringo\",\
+          \"locale\":\"en\",\"primary\":true,\"type\":\"Artist name\"}}]}}"
+    );
+    let http = FakeHttp::new().with(&artist_url(), 200, &artist_body);
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+
+    let tmp = TempDir::new().unwrap();
+    let log_path = tmp.path().join("import-log.log");
+    let log = DecisionLog::to_path(Some(log_path.clone()));
+
+    enrich(&conn, &client, false, &log, |_| true).await.unwrap();
+
+    let body = std::fs::read_to_string(&log_path).unwrap();
+    assert!(body.contains("=== Enrich library @ "), "got: {body}");
+    assert!(
+        body.contains("FETCH"),
+        "first run should FETCH from the network: {body}"
+    );
+    assert!(
+        body.contains(ARTIST_MBID),
+        "the fetched artist mbid should appear: {body}"
+    );
 }
 
 // ── Task 15: post-scan enrich contract ───────────────────────────────────
@@ -1517,7 +1585,7 @@ async fn enrich_after_scan_is_safe_noop_for_untagged_fixtures() {
     let client = rust_lib_olivier::enrich::client::MbClient::new(http);
 
     let mut saw_done = false;
-    enrich(&conn, &client, false, |p| {
+    enrich(&conn, &client, false, &DecisionLog::to_path(None), |p| {
         saw_done |= p.done;
         true
     })
@@ -1528,7 +1596,7 @@ async fn enrich_after_scan_is_safe_noop_for_untagged_fixtures() {
     // (A second call with the same conn is idempotent: files are now enriched.)
     let mut saw_done2 = false;
     let client2 = rust_lib_olivier::enrich::client::MbClient::new(FakeHttp::new());
-    enrich(&conn, &client2, false, |p| {
+    enrich(&conn, &client2, false, &DecisionLog::to_path(None), |p| {
         saw_done2 |= p.done;
         true
     })
@@ -1599,9 +1667,15 @@ async fn enrich_artist_processes_only_that_artist_and_clears_its_cache() {
     let http = FakeHttp::new().with(&artist_url(), 200, &artist_body);
     let client = rust_lib_olivier::enrich::client::MbClient::new(http);
 
-    run::enrich_artist(&conn, &client, ARTIST_MBID, |_| true)
-        .await
-        .unwrap();
+    run::enrich_artist(
+        &conn,
+        &client,
+        ARTIST_MBID,
+        &DecisionLog::to_path(None),
+        |_| true,
+    )
+    .await
+    .unwrap();
 
     // (a) A's data was applied from the FRESH network body (not the STALE cache).
     let (a_name_original, a_translit): (Option<String>, Option<String>) = conn

@@ -1,4 +1,5 @@
 use crate::db;
+use crate::decision_log::DecisionLog;
 use crate::enrich::client::{MbClient, WallClockPacer};
 use crate::enrich::http::ReqwestHttp;
 use crate::enrich::progress::EnrichProgress;
@@ -23,11 +24,14 @@ pub fn enrich_library(
     let email = settings::get_setting_or_default(&conn, "mb_contact_email")?;
     let http = ReqwestHttp::new(env!("CARGO_PKG_VERSION"), &email)?;
     let client = MbClient::with_pacer(http, WallClockPacer::default());
+    let log = DecisionLog::for_db(&db_path);
 
     // Private current-thread runtime: single thread, never crosses an executor
     // boundary, so `Connection`/`RefCell`/`?Send` stay valid.
     let rt = enrich_runtime()?;
-    rt.block_on(run::enrich(&conn, &client, force, |p| sink.add(p).is_ok()))
+    rt.block_on(run::enrich(&conn, &client, force, &log, |p| {
+        sink.add(p).is_ok()
+    }))
 }
 
 /// Re-enrich ONE artist (and all of its releases), refetching from the network.
@@ -43,10 +47,15 @@ pub fn enrich_artist(
     let email = settings::get_setting_or_default(&conn, "mb_contact_email")?;
     let http = ReqwestHttp::new(env!("CARGO_PKG_VERSION"), &email)?;
     let client = MbClient::with_pacer(http, WallClockPacer::default());
+    let log = DecisionLog::for_db(&db_path);
     let rt = enrich_runtime()?;
-    rt.block_on(run::enrich_artist(&conn, &client, &artist_mbid, |p| {
-        sink.add(p).is_ok()
-    }))
+    rt.block_on(run::enrich_artist(
+        &conn,
+        &client,
+        &artist_mbid,
+        &log,
+        |p| sink.add(p).is_ok(),
+    ))
 }
 
 /// Re-enrich ONE release (and its sibling editions), refetching from the network.
@@ -60,10 +69,15 @@ pub fn enrich_album(
     let email = settings::get_setting_or_default(&conn, "mb_contact_email")?;
     let http = ReqwestHttp::new(env!("CARGO_PKG_VERSION"), &email)?;
     let client = MbClient::with_pacer(http, WallClockPacer::default());
+    let log = DecisionLog::for_db(&db_path);
     let rt = enrich_runtime()?;
-    rt.block_on(run::enrich_album(&conn, &client, &release_mbid, |p| {
-        sink.add(p).is_ok()
-    }))
+    rt.block_on(run::enrich_album(
+        &conn,
+        &client,
+        &release_mbid,
+        &log,
+        |p| sink.add(p).is_ok(),
+    ))
 }
 
 /// Build the current-thread runtime that drives enrichment. `enable_all()` turns

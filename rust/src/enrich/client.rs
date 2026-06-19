@@ -123,6 +123,21 @@ impl<H: MbHttp, P: Pacer> MbClient<H, P> {
         Ok(serde_json::from_str(&body)?)
     }
 
+    /// Whether this artist's response is already in `mb_cache` (so the next
+    /// enrich serves it without a network fetch). For FETCH/CACHE logging.
+    pub fn is_cached_artist(&self, conn: &Connection, mbid: &str) -> bool {
+        self.cache_get(conn, "artist", mbid, ARTIST_INC)
+            .map(|o| o.is_some())
+            .unwrap_or(false)
+    }
+
+    /// Whether this release's response is already in `mb_cache`.
+    pub fn is_cached_release(&self, conn: &Connection, mbid: &str) -> bool {
+        self.cache_get(conn, "release", mbid, RELEASE_INC)
+            .map(|o| o.is_some())
+            .unwrap_or(false)
+    }
+
     /// Cache read-through. On miss: pace, fetch (retrying 503), store, return.
     async fn get_cached(
         &self,
