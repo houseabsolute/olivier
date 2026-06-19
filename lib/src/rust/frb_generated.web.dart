@@ -7,6 +7,7 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api/catalog.dart';
+import 'api/cover.dart';
 import 'api/enrich.dart';
 import 'api/queue.dart';
 import 'api/settings.dart';

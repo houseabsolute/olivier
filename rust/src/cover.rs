@@ -1,4 +1,5 @@
 use crate::enrich::http::MbHttp;
+use rusqlite::{Connection, OptionalExtension};
 use std::path::Path;
 
 /// Sniff an image extension from magic bytes; default to jpg.
@@ -70,4 +71,54 @@ pub async fn resolve_cover(
     std::fs::create_dir_all(cache_dir)?;
     std::fs::write(&miss, b"")?;
     Ok(None)
+}
+
+/// The lexically-first file backing any track of the release — the source for
+/// embedded cover extraction. None when the release has no files.
+pub fn representative_file(
+    conn: &Connection,
+    release_mbid: &str,
+) -> anyhow::Result<Option<String>> {
+    let path: Option<String> = conn.query_row(
+        "SELECT MIN(f.path) FROM track t JOIN file f ON f.track_id = t.id \
+         WHERE t.release_mbid = ?1",
+        [release_mbid],
+        |r| r.get(0),
+    )?;
+    Ok(path)
+}
+
+/// The release-group MBID for a release (for the CAA release-group fallback).
+pub fn release_group_mbid(
+    conn: &Connection,
+    release_mbid: &str,
+) -> anyhow::Result<Option<String>> {
+    let rg: Option<Option<String>> = conn
+        .query_row(
+            "SELECT release_group_mbid FROM release WHERE mbid = ?1",
+            [release_mbid],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(rg.flatten())
+}
+
+/// The (release_mbid, release_group_mbid) backing a file path. None when the
+/// path is not in the catalog.
+pub fn release_and_group_for_path(
+    conn: &Connection,
+    file_path: &str,
+) -> anyhow::Result<Option<(String, Option<String>)>> {
+    let row = conn
+        .query_row(
+            "SELECT t.release_mbid, r.release_group_mbid \
+             FROM file f \
+             JOIN track t ON t.id = f.track_id \
+             JOIN release r ON r.mbid = t.release_mbid \
+             WHERE f.path = ?1 LIMIT 1",
+            [file_path],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+    Ok(row)
 }

@@ -147,3 +147,78 @@ fn records_a_miss_and_does_not_refetch() {
     assert!(r2.is_none());
     assert_eq!(http.call_count(), 2, "a recorded miss must not re-fetch");
 }
+
+use rust_lib_olivier::cover::{
+    release_and_group_for_path, release_group_mbid, representative_file,
+};
+use rust_lib_olivier::db::open;
+
+fn seed_release(conn: &rusqlite::Connection) {
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('a', 'A', 'A')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release_group(mbid, title, first_release_date) VALUES ('rg', 'G', '2000')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, release_group_mbid, album_artist_mbid, title) \
+         VALUES ('rel', 'rg', 'a', 'T')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title) \
+         VALUES (1, 'rel', 1, 1, 'Tk')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path, mtime, size, track_id, added_at, has_cover, scan_epoch) \
+         VALUES ('/m/z.flac', 0, 0, 1, 0, 0, 0)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path, mtime, size, track_id, added_at, has_cover, scan_epoch) \
+         VALUES ('/m/a.flac', 0, 0, 1, 0, 0, 0)",
+        [],
+    )
+    .unwrap();
+}
+
+#[test]
+fn representative_file_is_lexically_first() {
+    let conn = open(":memory:").unwrap();
+    seed_release(&conn);
+    assert_eq!(
+        representative_file(&conn, "rel").unwrap(),
+        Some("/m/a.flac".to_string())
+    );
+    assert_eq!(representative_file(&conn, "nope").unwrap(), None);
+}
+
+#[test]
+fn release_group_mbid_is_resolved() {
+    let conn = open(":memory:").unwrap();
+    seed_release(&conn);
+    assert_eq!(release_group_mbid(&conn, "rel").unwrap(), Some("rg".to_string()));
+    assert_eq!(release_group_mbid(&conn, "nope").unwrap(), None);
+}
+
+#[test]
+fn release_and_group_for_path_is_resolved() {
+    let conn = open(":memory:").unwrap();
+    seed_release(&conn);
+    assert_eq!(
+        release_and_group_for_path(&conn, "/m/a.flac").unwrap(),
+        Some(("rel".to_string(), Some("rg".to_string())))
+    );
+    assert_eq!(
+        release_and_group_for_path(&conn, "/m/missing.flac").unwrap(),
+        None
+    );
+}
