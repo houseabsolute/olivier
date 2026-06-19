@@ -26,7 +26,10 @@ struct FakeCoverHttp {
 
 impl FakeCoverHttp {
     fn new() -> Self {
-        Self { responses: HashMap::new(), calls: RefCell::new(Vec::new()) }
+        Self {
+            responses: HashMap::new(),
+            calls: RefCell::new(Vec::new()),
+        }
     }
     fn with(mut self, url: &str, status: u16, bytes: Vec<u8>) -> Self {
         self.responses.insert(url.to_string(), (status, bytes));
@@ -71,7 +74,11 @@ fn embedded_art_is_used_without_network() {
 
     let path = result.expect("embedded art should resolve");
     assert!(std::path::Path::new(&path).exists());
-    assert_eq!(http.call_count(), 0, "embedded art must not hit the network");
+    assert_eq!(
+        http.call_count(),
+        0,
+        "embedded art must not hit the network"
+    );
 }
 
 #[test]
@@ -83,7 +90,11 @@ fn caa_release_front_is_fetched_and_cached() {
     let http = FakeCoverHttp::new().with(url, 200, JPEG.to_vec());
 
     let r1 = block(resolve_cover(
-        &http, Some(no_art.to_str().unwrap()), "rel-2", None, cache,
+        &http,
+        Some(no_art.to_str().unwrap()),
+        "rel-2",
+        None,
+        cache,
     ))
     .unwrap();
     let p1 = r1.expect("CAA cover should resolve");
@@ -92,7 +103,11 @@ fn caa_release_front_is_fetched_and_cached() {
     assert_eq!(http.call_count(), 1);
 
     let r2 = block(resolve_cover(
-        &http, Some(no_art.to_str().unwrap()), "rel-2", None, cache,
+        &http,
+        Some(no_art.to_str().unwrap()),
+        "rel-2",
+        None,
+        cache,
     ))
     .unwrap();
     assert_eq!(r2.unwrap(), p1);
@@ -111,7 +126,11 @@ fn falls_back_to_release_group_front() {
         .with(rg_url, 200, PNG.to_vec());
 
     let r = block(resolve_cover(
-        &http, Some(no_art.to_str().unwrap()), "rel-3", Some("rg-3"), cache,
+        &http,
+        Some(no_art.to_str().unwrap()),
+        "rel-3",
+        Some("rg-3"),
+        cache,
     ))
     .unwrap();
     let p = r.expect("release-group cover should resolve");
@@ -131,7 +150,11 @@ fn records_a_miss_and_does_not_refetch() {
         .with(rg_url, 404, vec![]);
 
     let r1 = block(resolve_cover(
-        &http, Some(no_art.to_str().unwrap()), "rel-4", Some("rg-4"), cache,
+        &http,
+        Some(no_art.to_str().unwrap()),
+        "rel-4",
+        Some("rg-4"),
+        cache,
     ))
     .unwrap();
     assert!(r1.is_none());
@@ -141,7 +164,11 @@ fn records_a_miss_and_does_not_refetch() {
     assert_eq!(http.call_count(), 2);
 
     let r2 = block(resolve_cover(
-        &http, Some(no_art.to_str().unwrap()), "rel-4", Some("rg-4"), cache,
+        &http,
+        Some(no_art.to_str().unwrap()),
+        "rel-4",
+        Some("rg-4"),
+        cache,
     ))
     .unwrap();
     assert!(r2.is_none());
@@ -205,7 +232,10 @@ fn representative_file_is_lexically_first() {
 fn release_group_mbid_is_resolved() {
     let conn = open(":memory:").unwrap();
     seed_release(&conn);
-    assert_eq!(release_group_mbid(&conn, "rel").unwrap(), Some("rg".to_string()));
+    assert_eq!(
+        release_group_mbid(&conn, "rel").unwrap(),
+        Some("rg".to_string())
+    );
     assert_eq!(release_group_mbid(&conn, "nope").unwrap(), None);
 }
 

@@ -59,8 +59,7 @@ pub async fn resolve_cover(
             if !bytes.is_empty() {
                 let ext = sniff_ext(&bytes);
                 std::fs::create_dir_all(cache_dir)?;
-                let out =
-                    Path::new(cache_dir).join(format!("olivier-caa-{release_mbid}.{ext}"));
+                let out = Path::new(cache_dir).join(format!("olivier-caa-{release_mbid}.{ext}"));
                 std::fs::write(&out, &bytes)?;
                 return Ok(Some(out.to_string_lossy().into_owned()));
             }
@@ -89,10 +88,7 @@ pub fn representative_file(
 }
 
 /// The release-group MBID for a release (for the CAA release-group fallback).
-pub fn release_group_mbid(
-    conn: &Connection,
-    release_mbid: &str,
-) -> anyhow::Result<Option<String>> {
+pub fn release_group_mbid(conn: &Connection, release_mbid: &str) -> anyhow::Result<Option<String>> {
     let rg: Option<Option<String>> = conn
         .query_row(
             "SELECT release_group_mbid FROM release WHERE mbid = ?1",
