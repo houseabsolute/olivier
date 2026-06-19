@@ -73,15 +73,27 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
     final upNext = _upNext(view);
     final theme = Theme.of(context);
 
+    // Bounds-guard the now-playing index: the cheap index-update path in
+    // queue_provider can momentarily pair a fresh currentIndex with stale
+    // (shorter) tracks — e.g. right after appending an album, before _resolve()
+    // repopulates tracks. Indexing without the range check threw a RangeError
+    // during build, flashing Flutter's red error screen for a frame.
+    final currentIndex = view.currentIndex;
+    final nowPlaying = (currentIndex != null &&
+            currentIndex >= 0 &&
+            currentIndex < view.tracks.length)
+        ? view.tracks[currentIndex]
+        : null;
+
     final header = Material(
       color: theme.colorScheme.surfaceContainerHighest,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
-            if (view.currentIndex != null) ...[
+            if (nowPlaying != null) ...[
               PathCover(
-                filePath: view.tracks[view.currentIndex!].path,
+                filePath: nowPlaying.path,
                 size: 36,
               ),
               const SizedBox(width: 8),

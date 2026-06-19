@@ -49,6 +49,32 @@ void main() {
 
     expect(find.byType(PathCover), findsNothing);
   });
+
+  // Regression: the cheap index-update path in queue_provider can momentarily
+  // emit a QueueView whose currentIndex is set while tracks is still the stale
+  // (shorter/empty) cached list — e.g. right after appending an album, before
+  // _resolve() repopulates tracks. Indexing tracks[currentIndex] unguarded threw
+  // a RangeError during build, painting Flutter's red ErrorWidget for a frame
+  // (a full-app red flash). The header must tolerate an out-of-range index.
+  testWidgets('queue header does not crash when currentIndex is out of range',
+      (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        queueProvider.overrideWith(() => _FakeQueue(const QueueView(
+              tracks: [],
+              currentIndex: 0,
+              shuffled: false,
+            ))),
+        coverForPathFnProvider.overrideWithValue((_) async => null),
+      ],
+      child: const MaterialApp(home: Scaffold(body: QueuePanel())),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(PathCover), findsNothing);
+  });
 }
 
 class _FakeQueue extends QueueNotifier {
