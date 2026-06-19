@@ -16,6 +16,11 @@ pub fn scan_library(
     })
 }
 
+pub fn reread_track_tags(db_path: String, track_id: i64) -> anyhow::Result<()> {
+    let mut conn = db::open(&db_path)?;
+    scan::reread_track_tags(&mut conn, track_id)
+}
+
 pub fn list_artists(
     db_path: String,
     after: Option<String>,

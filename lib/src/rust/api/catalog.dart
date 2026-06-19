@@ -13,6 +13,11 @@ Stream<ScanProgress> scanLibrary(
     RustLib.instance.api
         .crateApiCatalogScanLibrary(dbPath: dbPath, roots: roots);
 
+Future<void> rereadTrackTags(
+        {required String dbPath, required PlatformInt64 trackId}) =>
+    RustLib.instance.api
+        .crateApiCatalogRereadTrackTags(dbPath: dbPath, trackId: trackId);
+
 Future<List<Artist>> listArtists(
         {required String dbPath, String? after, required int limit}) =>
     RustLib.instance.api

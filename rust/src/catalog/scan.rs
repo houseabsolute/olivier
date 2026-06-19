@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::Context;
 use rusqlite::{Connection, Transaction};
 
@@ -133,6 +135,43 @@ pub fn scan_roots(
         done: true,
     });
 
+    Ok(())
+}
+
+/// Re-read the tags of every file backing one track and re-upsert it, re-homing
+/// the track to the correct album/artist if the tags changed, then clean up any
+/// now-orphaned rows. Local tags only (MusicBrainz re-fetch is a separate action).
+pub fn reread_track_tags(conn: &mut Connection, track_id: i64) -> anyhow::Result<()> {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?;
+    let epoch = now.as_nanos() as i64;
+    let now_secs = now.as_secs() as i64;
+
+    let paths: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT path FROM file WHERE track_id = ?1")?;
+        let rows = stmt.query_map([track_id], |r| r.get::<_, String>(0))?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+
+    for path in &paths {
+        // The file may have moved/vanished since the scan; skip missing ones (a
+        // future full scan's deletion sweep removes them).
+        let meta = match std::fs::metadata(path) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let mtime = meta
+            .modified()?
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs() as i64;
+        let size = meta.len() as i64;
+        let tags = read_tags(Path::new(path)).with_context(|| format!("read_tags for {path}"))?;
+        let tx = conn.transaction()?;
+        upsert_file(&tx, &tags, path, mtime, size, epoch, now_secs)?;
+        tx.commit()?;
+    }
+
+    reconcile_album_artists(conn)?;
+    prune_orphans(conn)?;
     Ok(())
 }
 

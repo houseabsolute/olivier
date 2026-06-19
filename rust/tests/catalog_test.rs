@@ -4,7 +4,7 @@ use rust_lib_olivier::catalog::query::{
     track_paths_for_artist, track_paths_for_library, tracks_for_album, tracks_for_paths,
 };
 use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
-use rust_lib_olivier::catalog::scan::{reconcile_album_artists, scan_roots};
+use rust_lib_olivier::catalog::scan::{reconcile_album_artists, reread_track_tags, scan_roots};
 use rust_lib_olivier::db::open;
 
 #[test]
@@ -1180,4 +1180,143 @@ fn track_paths_for_library_covers_every_track_one_per_track() {
     // Empty library → empty result.
     let empty = open(":memory:").unwrap();
     assert!(track_paths_for_library(&empty).unwrap().is_empty());
+}
+
+// ── reread_track_tags ───────────────────────────────────────────────────────
+
+/// Copy `sample.flac` into `dir`, scan it, and return (conn, track_id). The
+/// fixture is a real tagged FLAC, so the scan populates artist/release/track/file
+/// exactly as a normal library scan would.
+fn seed_one_flac(dir: &std::path::Path) -> (rusqlite::Connection, i64) {
+    std::fs::copy(
+        format!("{}/tests/fixtures/sample.flac", env!("CARGO_MANIFEST_DIR")),
+        dir.join("sample.flac"),
+    )
+    .unwrap();
+    let mut conn = open(":memory:").unwrap();
+    let root = dir.to_string_lossy().to_string();
+    scan_roots(&mut conn, &[root], |_| {}).unwrap();
+    let track_id: i64 = conn
+        .query_row("SELECT id FROM track", [], |r| r.get(0))
+        .unwrap();
+    (conn, track_id)
+}
+
+#[test]
+fn reread_track_tags_is_a_noop_when_tags_unchanged() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut conn, track_id) = seed_one_flac(dir.path());
+
+    let release_before: String = conn
+        .query_row(
+            "SELECT release_mbid FROM track WHERE id = ?1",
+            [track_id],
+            |r| r.get(0),
+        )
+        .unwrap();
+
+    // Re-read without touching the file → nothing should move.
+    reread_track_tags(&mut conn, track_id).unwrap();
+
+    let release_after: String = conn
+        .query_row(
+            "SELECT release_mbid FROM track WHERE id = ?1",
+            [track_id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(release_before, release_after, "release must be unchanged");
+
+    let tracks: i64 = conn
+        .query_row("SELECT count(*) FROM track", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(tracks, 1, "still exactly one track");
+    let files: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM file WHERE track_id = ?1",
+            [track_id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(files, 1, "file still linked to the track");
+}
+
+#[test]
+fn reread_track_tags_rehomes_when_album_changes() {
+    use lofty::config::{ParseOptions, WriteOptions};
+    use lofty::file::AudioFile;
+    use lofty::flac::FlacFile;
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut conn, track_id) = seed_one_flac(dir.path());
+    let path = dir.path().join("sample.flac");
+
+    // The fixture carries a real MUSICBRAINZ_ALBUMID, so the release key is driven
+    // by that MBID (see ids::release_key). To make the track land on a *different*
+    // release we rewrite both the album NAME and the MUSICBRAINZ_ALBUMID Vorbis
+    // comment to new values, then re-read.
+    let release_before: String = conn
+        .query_row(
+            "SELECT release_mbid FROM track WHERE id = ?1",
+            [track_id],
+            |r| r.get(0),
+        )
+        .unwrap();
+
+    {
+        let mut f = std::fs::File::open(&path).unwrap();
+        let mut flac = FlacFile::read_from(&mut f, ParseOptions::new()).unwrap();
+        let vc = flac.vorbis_comments_mut().unwrap();
+        vc.insert("ALBUM".to_string(), "Some Other Album".to_string());
+        // Real MB album id drives the release key — swap it so the key changes.
+        vc.insert(
+            "MUSICBRAINZ_ALBUMID".to_string(),
+            "ffffffff-0000-0000-0000-000000000099".to_string(),
+        );
+        flac.save_to_path(&path, WriteOptions::default()).unwrap();
+    }
+
+    reread_track_tags(&mut conn, track_id).unwrap();
+
+    // Re-homing onto a new release means a new track row (the upsert keys tracks
+    // by (release_mbid, disc, position), and the new release_mbid doesn't conflict
+    // with the old row). The file is the stable identity, so resolve the track
+    // through the file's current track_id.
+    let path_str = path.to_string_lossy().to_string();
+    let (new_track_id, release_after): (i64, String) = conn
+        .query_row(
+            "SELECT t.id, t.release_mbid
+             FROM file f JOIN track t ON t.id = f.track_id
+             WHERE f.path = ?1",
+            [&path_str],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_ne!(release_before, release_after, "track must re-home");
+    assert_eq!(release_after, "ffffffff-0000-0000-0000-000000000099");
+
+    // The old, now-empty release row was pruned.
+    let old_rows: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM release WHERE mbid = ?1",
+            [&release_before],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(old_rows, 0, "old release must be pruned");
+
+    // The file resolves to exactly one track, and there's only one track total
+    // (the orphaned old track row was pruned).
+    let files: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM file WHERE track_id = ?1",
+            [new_track_id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(files, 1, "file still resolves to one track");
+    let tracks: i64 = conn
+        .query_row("SELECT count(*) FROM track", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(tracks, 1, "still exactly one track");
 }
