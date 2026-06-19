@@ -5,33 +5,38 @@ import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/widgets/context_menu.dart';
 
 void main() {
-  testWidgets('right-click shows "Add to queue" and fires callback',
+  testWidgets('shows Add to queue + only the provided optional actions',
       (tester) async {
     QueueEntityRef? added;
+    QueueEntityRef? infoed;
+    const entity = QueueEntityRef.album('rel-1');
+
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: AddToQueueMenu(
-          entity: const QueueEntityRef.album('rel-1'),
+        body: RowContextMenu(
+          entity: entity,
           onAddToQueue: (e) => added = e,
+          onInfo: (e) => infoed = e,
           child: const SizedBox(width: 200, height: 40, child: Text('row')),
         ),
       ),
     ));
 
-    // Secondary (right) tap opens the menu.
     final gesture = await tester.startGesture(
       tester.getCenter(find.text('row')),
-      kind: PointerDeviceKind.mouse,
-      buttons: kSecondaryMouseButton,
+      buttons: kSecondaryButton,
     );
     await gesture.up();
     await tester.pumpAndSettle();
 
     expect(find.text('Add to queue'), findsOneWidget);
-    await tester.tap(find.text('Add to queue'));
-    await tester.pumpAndSettle();
+    expect(find.text('Info'), findsOneWidget);
+    expect(find.text('Re-read tags'), findsNothing); // no onReadTags given
+    expect(find.text('Re-fetch from MusicBrainz'), findsNothing);
 
-    expect(added, isA<AlbumEntity>());
-    expect((added! as AlbumEntity).releaseMbid, 'rel-1');
+    await tester.tap(find.text('Info'));
+    await tester.pumpAndSettle();
+    expect(infoed, entity);
+    expect(added, isNull);
   });
 }

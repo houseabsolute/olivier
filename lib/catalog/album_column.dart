@@ -61,7 +61,7 @@ class _AlbumList extends ConsumerWidget {
               child: Text(album.title),
             ),
           ),
-          child: AddToQueueMenu(
+          child: RowContextMenu(
             entity: entity,
             onAddToQueue: (e) => _enqueue(ref, e),
             child: InkWell(

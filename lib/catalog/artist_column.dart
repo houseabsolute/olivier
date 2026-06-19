@@ -60,7 +60,7 @@ class _ArtistList extends ConsumerWidget {
               child: Text(artist.nameOriginal ?? artist.name),
             ),
           ),
-          child: AddToQueueMenu(
+          child: RowContextMenu(
             entity: entity,
             onAddToQueue: (e) => _enqueue(ref, e),
             child: InkWell(

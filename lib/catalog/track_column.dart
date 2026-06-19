@@ -63,7 +63,7 @@ class _TrackList extends ConsumerWidget {
               child: Text(track.title),
             ),
           ),
-          child: AddToQueueMenu(
+          child: RowContextMenu(
             entity: entity,
             onAddToQueue: (e) => _enqueue(ref, e),
             child: InkWell(
