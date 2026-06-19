@@ -20,11 +20,6 @@ void main() {
       expect(parseFlexPair(formatFlexPair((1.0, 2.0)), defaultArtistFlex),
           (1.0, 2.0));
     });
-    test('parseQueueHeight parses or defaults', () {
-      expect(parseQueueHeight('320'), 320.0);
-      expect(parseQueueHeight(null), defaultQueueHeight);
-      expect(parseQueueHeight('nope'), defaultQueueHeight);
-    });
   });
 
   test('layoutSettingsProvider loads + parses from the seam', () async {
@@ -32,7 +27,6 @@ void main() {
       getSettingFnProvider.overrideWithValue((key) async => switch (key) {
             'layout.artists' => '1,3',
             'layout.right_pane' => '2,1',
-            'layout.queue_height' => '300',
             _ => null,
           }),
     ]);
@@ -41,7 +35,6 @@ void main() {
     final s = await container.read(layoutSettingsProvider.future);
     expect(s.artistFlex, (1.0, 3.0));
     expect(s.rightPaneFlex, (2.0, 1.0));
-    expect(s.queueHeight, 300.0);
   });
 
   test('layoutSettingsProvider uses defaults when unset', () async {
@@ -53,6 +46,5 @@ void main() {
     final s = await container.read(layoutSettingsProvider.future);
     expect(s.artistFlex, defaultArtistFlex);
     expect(s.rightPaneFlex, defaultRightPaneFlex);
-    expect(s.queueHeight, defaultQueueHeight);
   });
 }
