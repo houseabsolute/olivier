@@ -3,11 +3,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/audio/queue_entity.dart';
-import 'package:olivier/state/layout_settings.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/widgets/album_cover.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+
+/// Whether the queue panel is expanded to fill the browse area. Lifted out of
+/// the panel so BrowserPage can hide the browse panes while it's expanded.
+class QueueExpanded extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void toggle() => state = !state;
+}
+
+final queueExpandedProvider =
+    NotifierProvider<QueueExpanded, bool>(QueueExpanded.new);
 
 /// Provider that exposes the [ShuffleAllTarget] the "Shuffle entire library"
 /// control calls. Defaults to the canonical queue controller; tests override
@@ -64,24 +74,9 @@ class QueuePanel extends ConsumerStatefulWidget {
 }
 
 class _QueuePanelState extends ConsumerState<QueuePanel> {
-  bool _expanded = false;
-  double? _queueHeight;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      try {
-        final s = await ref.read(layoutSettingsProvider.future);
-        if (mounted) setState(() => _queueHeight = s.queueHeight);
-      } catch (_) {
-        // Fall back to the default; provider may be unavailable in some tests.
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
+    final expanded = ref.watch(queueExpandedProvider);
     final queueAsync = ref.watch(queueProvider);
     final view = queueAsync.value ?? QueueView.empty;
     final count = view.tracks.length;
@@ -160,23 +155,20 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
             // Expand / collapse caret.
             IconButton(
               icon: Icon(
-                _expanded ? Icons.expand_more : Icons.expand_less,
+                expanded ? Icons.expand_more : Icons.expand_less,
               ),
-              tooltip: _expanded ? 'Collapse queue' : 'Expand queue',
-              onPressed: () => setState(() => _expanded = !_expanded),
+              tooltip: expanded ? 'Collapse queue' : 'Expand queue',
+              onPressed: () =>
+                  ref.read(queueExpandedProvider.notifier).toggle(),
             ),
           ],
         ),
       ),
     );
 
-    final panel = _expanded
+    final panel = expanded
         ? Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              header,
-              _expandedList(context, view),
-            ],
+            children: [header, Expanded(child: _expandedList(context, view))],
           )
         : header;
 
@@ -198,97 +190,49 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
     final controller = ref.read(queueControllerProvider);
     final scheme = Theme.of(context).colorScheme;
 
-    final maxH = MediaQuery.sizeOf(context).height * 0.6;
-    final height =
-        (_queueHeight ?? defaultQueueHeight).clamp(minQueueHeight, maxH);
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        MouseRegion(
-          cursor: SystemMouseCursors.resizeRow,
-          child: GestureDetector(
-            key: const ValueKey('queue-resize-handle'),
-            behavior: HitTestBehavior.opaque,
-            onVerticalDragUpdate: (d) {
-              final max = MediaQuery.sizeOf(context).height * 0.6;
-              setState(() {
-                _queueHeight =
-                    ((_queueHeight ?? defaultQueueHeight) - d.delta.dy)
-                        .clamp(minQueueHeight, max);
-              });
-            },
-            onVerticalDragEnd: (_) {
-              ref.read(setSettingFnProvider)(
-                layoutQueueHeightKey,
-                (_queueHeight ?? defaultQueueHeight).toStringAsFixed(0),
-              );
-            },
-            child: Container(
-              height: 8,
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              alignment: Alignment.center,
-              child: Container(
-                width: 36,
-                height: 3,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.outline,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+    return ReorderableListView.builder(
+      itemCount: view.tracks.length,
+      // onReorderItem delivers the post-removal destination index directly
+      // (unlike the deprecated onReorder which required normalizeReorder).
+      onReorderItem: (oldIndex, newIndex) {
+        controller.reorder(oldIndex, newIndex);
+      },
+      itemBuilder: (context, i) {
+        final t = view.tracks[i];
+        final selected = i == view.currentIndex;
+        return Material(
+          key: ValueKey('${t.path}#$i'),
+          color: selected ? scheme.primaryContainer : Colors.transparent,
+          child: InkWell(
+            onTap: () => controller.playAt(i),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  ReorderableDragStartListener(
+                    index: i,
+                    child: const Icon(Icons.drag_handle),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: BilingualText(
+                      original: t.title,
+                      translit: t.titleTranslit,
+                      translate: t.titleTranslate,
+                      leads: leads,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Remove from queue',
+                    onPressed: () => controller.removeAt(i),
+                  ),
+                ],
               ),
             ),
           ),
-        ),
-        SizedBox(
-          height: height,
-          child: ReorderableListView.builder(
-            shrinkWrap: true,
-            itemCount: view.tracks.length,
-            // onReorderItem delivers the post-removal destination index directly
-            // (unlike the deprecated onReorder which required normalizeReorder).
-            onReorderItem: (oldIndex, newIndex) {
-              controller.reorder(oldIndex, newIndex);
-            },
-            itemBuilder: (context, i) {
-              final t = view.tracks[i];
-              final selected = i == view.currentIndex;
-              return Material(
-                key: ValueKey('${t.path}#$i'),
-                color: selected ? scheme.primaryContainer : Colors.transparent,
-                child: InkWell(
-                  onTap: () => controller.playAt(i),
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Row(
-                      children: [
-                        ReorderableDragStartListener(
-                          index: i,
-                          child: const Icon(Icons.drag_handle),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: BilingualText(
-                            original: t.title,
-                            translit: t.titleTranslit,
-                            translate: t.titleTranslate,
-                            leads: leads,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          tooltip: 'Remove from queue',
-                          onPressed: () => controller.removeAt(i),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 

@@ -164,19 +164,14 @@ void main() {
         reason: 'non-current row must NOT have primaryContainer Material');
   });
 
-  // Regression: when QueuePanel is mounted as a non-flexed trailing child of a
-  // Column (as in BrowserPage), the parent Column gives it unbounded height.
-  // The old implementation used Expanded(child: ReorderableListView) inside its
-  // own Column, which is illegal under an unbounded main-axis constraint and
-  // caused "RenderFlex children have non-zero flex but incoming height
-  // constraints are unbounded". This test reproduces that exact constraint.
+  // When the queue is expanded, BrowserPage wraps QueuePanel in Expanded so it
+  // fills all available vertical space. This test reproduces that bounded layout
+  // to confirm the panel renders its track rows without throwing.
   testWidgets(
-      'expanding panel under unbounded-height parent does not throw '
+      'expanding panel under bounded-height parent does not throw '
       'and renders track rows', (tester) async {
     final c = await _seededController();
-    // Mirror browser_page.dart's body Column: an Expanded child first (gives
-    // the remaining space to the split view), then a bare QueuePanel that gets
-    // BoxConstraints(0<=h<=Infinity) — the previously-crashing layout.
+    // Mirror browser_page.dart's expanded layout: QueuePanel inside Expanded.
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -196,8 +191,7 @@ void main() {
           home: Scaffold(
             body: Column(
               children: [
-                Expanded(child: SizedBox()),
-                QueuePanel(),
+                Expanded(child: QueuePanel()),
               ],
             ),
           ),

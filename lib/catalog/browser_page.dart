@@ -85,6 +85,8 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
       }
     });
 
+    final queueExpanded = ref.watch(queueExpandedProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Olivier'),
@@ -101,38 +103,40 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
       ),
       body: Column(
         children: [
-          Expanded(
-            // Artist | right pane (horizontal), with the right pane stacking
-            // Album over Track (vertical). Custom ResizableSplit (opaque drag
-            // handle) — see its doc for why multi_split_view's translucent
-            // divider didn't resize here.
-            child: ResizableSplit(
-              axis: Axis.horizontal,
-              ratio: _artistRatio,
-              minFirst: 220,
-              minSecond: 320,
-              onRatioSettled: (r) {
-                _artistRatio = r;
-                _saveRatio(layoutArtistsKey, r);
-              },
-              first: const ArtistColumn(),
-              second: ResizableSplit(
-                axis: Axis.vertical,
-                ratio: _albumRatio,
-                minFirst: 80,
-                minSecond: 80,
+          if (!queueExpanded)
+            Expanded(
+              // Artist | right pane (horizontal), with the right pane stacking
+              // Album over Track (vertical). Custom ResizableSplit (opaque drag
+              // handle) — see its doc for why multi_split_view's translucent
+              // divider didn't resize here.
+              child: ResizableSplit(
+                axis: Axis.horizontal,
+                ratio: _artistRatio,
+                minFirst: 220,
+                minSecond: 320,
                 onRatioSettled: (r) {
-                  _albumRatio = r;
-                  _saveRatio(layoutRightPaneKey, r);
+                  _artistRatio = r;
+                  _saveRatio(layoutArtistsKey, r);
                 },
-                first: const AlbumColumn(),
-                second: const TrackColumn(),
+                first: const ArtistColumn(),
+                second: ResizableSplit(
+                  axis: Axis.vertical,
+                  ratio: _albumRatio,
+                  minFirst: 80,
+                  minSecond: 80,
+                  onRatioSettled: (r) {
+                    _albumRatio = r;
+                    _saveRatio(layoutRightPaneKey, r);
+                  },
+                  first: const AlbumColumn(),
+                  second: const TrackColumn(),
+                ),
               ),
             ),
-          ),
-          // Queue panel between the browse split and the now-playing bar.
-          // Collapses to a header; expands to a reorderable track list.
-          const QueuePanel(),
+          if (queueExpanded)
+            const Expanded(child: QueuePanel())
+          else
+            const QueuePanel(),
         ],
       ),
       bottomNavigationBar:
