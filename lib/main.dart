@@ -3,6 +3,7 @@ import 'dart:io' show Directory, File, Platform;
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_service_mpris/audio_service_mpris.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:olivier/audio/audio_handler.dart';
@@ -149,12 +150,29 @@ Future<void> _migrateLegacyDb(String newDbPath) async {
 }
 
 class OlivierApp extends StatelessWidget {
-  const OlivierApp({super.key});
+  const OlivierApp({super.key, this.onQuit, this.home});
+
+  /// Injectable so the Ctrl-Q binding is testable; defaults to quitting.
+  final VoidCallback? onQuit;
+
+  /// Injectable home widget so the app can be widget-tested without the full
+  /// BrowserPage + Riverpod provider stack. Defaults to [BrowserPage].
+  final Widget? home;
+
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      title: 'Olivier',
-      home: BrowserPage(),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyQ, control: true):
+            onQuit ?? () => SystemNavigator.pop(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: MaterialApp(
+          title: 'Olivier',
+          home: home ?? const BrowserPage(),
+        ),
+      ),
     );
   }
 }
