@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:olivier/settings/import_log_page.dart';
 import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/scan_controller.dart';
@@ -190,6 +191,21 @@ class SettingsPage extends ConsumerWidget {
             selected: {leads},
             onSelectionChanged: (sel) =>
                 ref.read(languageLeadsProvider.notifier).set(sel.first),
+          ),
+          const SizedBox(height: 24),
+          Text('Diagnostics', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.receipt_long_outlined),
+            title: const Text('Import log'),
+            subtitle: const Text(
+              'What the scanner and enricher decided — de-dupe, removals, failures.',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const ImportLogPage()),
+            ),
           ),
         ],
       ),
