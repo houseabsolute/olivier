@@ -3,6 +3,7 @@ use crate::catalog::roots;
 use crate::catalog::scan::{self, ScanProgress};
 use crate::catalog::schema::{Album, Artist, QueueTrack, Track};
 use crate::db;
+use crate::decision_log::DecisionLog;
 use crate::frb_generated::StreamSink;
 
 pub fn scan_library(
@@ -11,14 +12,16 @@ pub fn scan_library(
     sink: StreamSink<ScanProgress>,
 ) -> anyhow::Result<()> {
     let mut conn = db::open(&db_path)?;
-    scan::scan_roots(&mut conn, &roots, |p| {
+    let log = DecisionLog::for_db(&db_path);
+    scan::scan_roots(&mut conn, &roots, &log, |p| {
         let _ = sink.add(p);
     })
 }
 
 pub fn reread_track_tags(db_path: String, track_id: i64) -> anyhow::Result<()> {
     let mut conn = db::open(&db_path)?;
-    scan::reread_track_tags(&mut conn, track_id)
+    let log = DecisionLog::for_db(&db_path);
+    scan::reread_track_tags(&mut conn, track_id, &log)
 }
 
 pub fn list_artists(

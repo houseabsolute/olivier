@@ -1495,8 +1495,13 @@ async fn enrich_after_scan_is_safe_noop_for_untagged_fixtures() {
     }
     let mut conn = open(":memory:").unwrap();
     let root = dir.path().to_string_lossy().to_string();
-    rust_lib_olivier::catalog::scan::scan_roots(&mut conn, std::slice::from_ref(&root), |_| {})
-        .unwrap();
+    rust_lib_olivier::catalog::scan::scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root),
+        &rust_lib_olivier::decision_log::DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
 
     // Provide canned responses for the fake MBIDs so enrich can complete.
     // release_muzai.json's release-group is the real muzai RG, so enrich browses

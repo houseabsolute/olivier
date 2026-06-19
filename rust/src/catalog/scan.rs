@@ -1,9 +1,10 @@
 use std::path::Path;
 
 use anyhow::Context;
-use rusqlite::{Connection, Transaction};
+use rusqlite::{Connection, OptionalExtension, Transaction};
 
 use crate::catalog::ids;
+use crate::decision_log::{Decision, DecisionLog};
 use crate::tags::{read_tags, TrackTags};
 
 const AUDIO_EXTENSIONS: &[&str] = &["mp3", "flac", "m4a", "ogg", "oga", "opus"];
@@ -19,6 +20,7 @@ pub struct ScanProgress {
 pub fn scan_roots(
     conn: &mut Connection,
     roots: &[String],
+    log: &DecisionLog,
     mut on_progress: impl FnMut(ScanProgress),
 ) -> anyhow::Result<()> {
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?;
@@ -30,6 +32,8 @@ pub fn scan_roots(
 
     let mut files_seen: u64 = 0;
     let mut files_changed: u64 = 0;
+
+    log.header(&format!("Scan {}", roots.join(", ")));
 
     for root in roots {
         let walker = ignore::WalkBuilder::new(root)
@@ -95,8 +99,11 @@ pub fn scan_roots(
             // Parse tags and upsert
             let tags = read_tags(path).with_context(|| format!("read_tags for {path_str}"))?;
             let tx = conn.transaction()?;
-            upsert_file(&tx, &tags, &path_str, mtime, size, epoch, now_secs)?;
+            let decisions = upsert_file(&tx, &tags, &path_str, mtime, size, epoch, now_secs)?;
             tx.commit()?;
+            for d in &decisions {
+                log.record(d);
+            }
 
             files_changed += 1;
             files_seen += 1;
@@ -141,7 +148,11 @@ pub fn scan_roots(
 /// Re-read the tags of every file backing one track and re-upsert it, re-homing
 /// the track to the correct album/artist if the tags changed, then clean up any
 /// now-orphaned rows. Local tags only (MusicBrainz re-fetch is a separate action).
-pub fn reread_track_tags(conn: &mut Connection, track_id: i64) -> anyhow::Result<()> {
+pub fn reread_track_tags(
+    conn: &mut Connection,
+    track_id: i64,
+    log: &DecisionLog,
+) -> anyhow::Result<()> {
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?;
     let epoch = now.as_nanos() as i64;
     let now_secs = now.as_secs() as i64;
@@ -166,8 +177,11 @@ pub fn reread_track_tags(conn: &mut Connection, track_id: i64) -> anyhow::Result
         let size = meta.len() as i64;
         let tags = read_tags(Path::new(path)).with_context(|| format!("read_tags for {path}"))?;
         let tx = conn.transaction()?;
-        upsert_file(&tx, &tags, path, mtime, size, epoch, now_secs)?;
+        let decisions = upsert_file(&tx, &tags, path, mtime, size, epoch, now_secs)?;
         tx.commit()?;
+        for d in &decisions {
+            log.record(d);
+        }
     }
 
     reconcile_album_artists(conn)?;
@@ -244,7 +258,7 @@ fn upsert_file(
     size: i64,
     epoch: i64,
     now_secs: i64,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<Decision>> {
     let album_artist_name = tags
         .album_artist
         .as_deref()
@@ -258,6 +272,23 @@ fn upsert_file(
     let rel_mbid = ids::release_key(tags.release_mbid.as_deref(), album_artist_name, album);
 
     let sort_name = ids::sort_name(album_artist_name, tags.album_artist_sort.as_deref());
+
+    let artist_existed = tx
+        .query_row(
+            "SELECT 1 FROM artist WHERE mbid = ?1",
+            rusqlite::params![artist_mbid],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some();
+    let album_existed = tx
+        .query_row(
+            "SELECT 1 FROM release WHERE mbid = ?1",
+            rusqlite::params![rel_mbid],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some();
 
     // Upsert artist
     tx.execute(
@@ -300,6 +331,23 @@ fn upsert_file(
     // Upsert track — get its id via RETURNING
     let disc = tags.disc_no.unwrap_or(1) as i64;
     let position = tags.track_no.unwrap_or(1) as i64;
+    let prior_track_id: Option<i64> = tx
+        .query_row(
+            "SELECT id FROM track WHERE release_mbid = ?1 AND disc = ?2 AND position = ?3",
+            rusqlite::params![rel_mbid, disc, position],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let prior_other_file: Option<String> = match prior_track_id {
+        Some(tid) => tx
+            .query_row(
+                "SELECT path FROM file WHERE track_id = ?1 AND path != ?2 LIMIT 1",
+                rusqlite::params![tid, path],
+                |r| r.get(0),
+            )
+            .optional()?,
+        None => None,
+    };
     let length_ms = if tags.length_ms > 0 {
         Some(tags.length_ms as i64)
     } else {
@@ -356,5 +404,34 @@ fn upsert_file(
         rusqlite::params![track_id],
     )?;
 
-    Ok(())
+    let mut decisions = Vec::new();
+    if !artist_existed {
+        decisions.push(Decision::AddArtist {
+            name: album_artist_name.to_string(),
+        });
+    }
+    if !album_existed {
+        decisions.push(Decision::AddAlbum {
+            title: album.to_string(),
+            artist: album_artist_name.to_string(),
+        });
+    }
+    match (prior_track_id, prior_other_file) {
+        (None, _) => decisions.push(Decision::AddTrack {
+            title: tags.title.clone().unwrap_or_default(),
+            artist: album_artist_name.to_string(),
+            album: album.to_string(),
+            path: path.to_string(),
+        }),
+        (Some(_), Some(existing_path)) => decisions.push(Decision::Dedup {
+            path: path.to_string(),
+            track_title: tags.title.clone().unwrap_or_default(),
+            album: album.to_string(),
+            disc,
+            position,
+            existing_path,
+        }),
+        (Some(_), None) => {}
+    }
+    Ok(decisions)
 }

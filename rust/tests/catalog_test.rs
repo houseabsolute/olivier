@@ -6,6 +6,7 @@ use rust_lib_olivier::catalog::query::{
 use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
 use rust_lib_olivier::catalog::scan::{reconcile_album_artists, reread_track_tags, scan_roots};
 use rust_lib_olivier::db::open;
+use rust_lib_olivier::decision_log::DecisionLog;
 
 #[test]
 fn migration_creates_catalog_tables() {
@@ -49,11 +50,16 @@ fn scan_populates_catalog_and_is_incremental() {
     let mut conn = open(":memory:").unwrap();
     let root = dir.path().to_string_lossy().to_string();
     let mut changed = 0u64;
-    scan_roots(&mut conn, std::slice::from_ref(&root), |p| {
-        if p.done {
-            changed = p.files_changed
-        }
-    })
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root),
+        &DecisionLog::to_path(None),
+        |p| {
+            if p.done {
+                changed = p.files_changed
+            }
+        },
+    )
     .unwrap();
     assert!(changed >= 2, "changed={changed}");
     let artists: i64 = conn
@@ -66,7 +72,7 @@ fn scan_populates_catalog_and_is_incremental() {
     assert_eq!(albums, 1);
     // re-scan: nothing changed
     let mut changed2 = u64::MAX;
-    scan_roots(&mut conn, &[root], |p| {
+    scan_roots(&mut conn, &[root], &DecisionLog::to_path(None), |p| {
         if p.done {
             changed2 = p.files_changed
         }
@@ -505,7 +511,13 @@ fn scan_stores_embedded_sort_name() {
     .unwrap();
     let mut conn = open(":memory:").unwrap();
     let root = dir.path().to_string_lossy().to_string();
-    scan_roots(&mut conn, std::slice::from_ref(&root), |_| {}).unwrap();
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root),
+        &DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
     let sort: String = conn
         .query_row("SELECT sort_name FROM artist LIMIT 1", [], |r| r.get(0))
         .unwrap();
@@ -561,7 +573,13 @@ fn rescan_removes_orphaned_rows() {
     .unwrap();
     let mut conn = open(":memory:").unwrap();
     let root = dir.path().to_string_lossy().to_string();
-    scan_roots(&mut conn, std::slice::from_ref(&root), |_| {}).unwrap();
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root),
+        &DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
     assert_eq!(
         conn.query_row("SELECT count(*) FROM file", [], |r| r.get::<_, i64>(0))
             .unwrap(),
@@ -571,7 +589,13 @@ fn rescan_removes_orphaned_rows() {
     // Remove the file, then re-scan the now-empty dir: the sweep must not hit a
     // FOREIGN KEY constraint and must drop every catalog row to zero.
     std::fs::remove_file(dir.path().join("sample.flac")).unwrap();
-    scan_roots(&mut conn, std::slice::from_ref(&root), |_| {}).unwrap();
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root),
+        &DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
     for table in [
         "file",
         "track_stats",
@@ -609,7 +633,13 @@ fn scoped_scan_preserves_other_roots() {
     let root_b = dir_b.path().to_string_lossy().to_string();
 
     // Scan A by itself.
-    scan_roots(&mut conn, std::slice::from_ref(&root_a), |_| {}).unwrap();
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root_a),
+        &DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
     assert_eq!(
         conn.query_row("SELECT count(*) FROM file", [], |r| r.get::<_, i64>(0))
             .unwrap(),
@@ -617,7 +647,13 @@ fn scoped_scan_preserves_other_roots() {
     );
 
     // Scan B by itself — A's file must survive (old global sweep would delete it).
-    scan_roots(&mut conn, std::slice::from_ref(&root_b), |_| {}).unwrap();
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root_b),
+        &DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
     assert_eq!(
         conn.query_row("SELECT count(*) FROM file", [], |r| r.get::<_, i64>(0))
             .unwrap(),
@@ -659,7 +695,13 @@ fn remove_root_prunes_files_beneath_it() {
     let mut conn = open(":memory:").unwrap();
     let root = dir.path().to_string_lossy().to_string();
     add_root(&conn, &root).unwrap();
-    scan_roots(&mut conn, std::slice::from_ref(&root), |_| {}).unwrap();
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root),
+        &DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
     assert_eq!(
         conn.query_row("SELECT count(*) FROM file", [], |r| r.get::<_, i64>(0))
             .unwrap(),
@@ -706,8 +748,20 @@ fn scoped_scan_preserves_shared_parent_rows() {
     let root_a = dir_a.path().to_string_lossy().to_string();
     let root_b = dir_b.path().to_string_lossy().to_string();
 
-    scan_roots(&mut conn, std::slice::from_ref(&root_a), |_| {}).unwrap();
-    scan_roots(&mut conn, std::slice::from_ref(&root_b), |_| {}).unwrap();
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root_a),
+        &DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root_b),
+        &DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
 
     // Both files survive, and the shared catalog rows stay intact (1, not 0).
     assert_eq!(count(&conn, "file"), 2);
@@ -731,12 +785,24 @@ fn scoped_sweep_handles_multibyte_root_paths() {
     .unwrap();
     let mut conn = open(":memory:").unwrap();
     let root = music.to_string_lossy().to_string();
-    scan_roots(&mut conn, std::slice::from_ref(&root), |_| {}).unwrap();
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root),
+        &DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
     assert_eq!(count(&conn, "file"), 1);
 
     // Remove the file and rescan: the multibyte-prefixed sweep must prune it.
     std::fs::remove_file(music.join("sample.flac")).unwrap();
-    scan_roots(&mut conn, std::slice::from_ref(&root), |_| {}).unwrap();
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root),
+        &DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
     assert_eq!(count(&conn, "file"), 0);
 }
 
@@ -763,7 +829,13 @@ fn remove_root_keeps_files_under_nested_root() {
     add_root(&conn, &root_a).unwrap();
     add_root(&conn, &root_b).unwrap();
     // Scanning A covers both files, since B is nested under A.
-    scan_roots(&mut conn, std::slice::from_ref(&root_a), |_| {}).unwrap();
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root_a),
+        &DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
     assert_eq!(count(&conn, "file"), 2);
 
     remove_root(&conn, &root_a).unwrap();
@@ -806,7 +878,13 @@ fn remove_root_keeps_files_still_covered_by_another_root() {
     let root_b = inner.to_string_lossy().to_string();
     add_root(&conn, &root_a).unwrap();
     add_root(&conn, &root_b).unwrap();
-    scan_roots(&mut conn, std::slice::from_ref(&root_a), |_| {}).unwrap();
+    scan_roots(
+        &mut conn,
+        std::slice::from_ref(&root_a),
+        &DecisionLog::to_path(None),
+        |_| {},
+    )
+    .unwrap();
     assert_eq!(count(&conn, "file"), 1);
 
     remove_root(&conn, &root_b).unwrap();
@@ -1243,7 +1321,7 @@ fn seed_one_flac(dir: &std::path::Path) -> (rusqlite::Connection, i64) {
     .unwrap();
     let mut conn = open(":memory:").unwrap();
     let root = dir.to_string_lossy().to_string();
-    scan_roots(&mut conn, &[root], |_| {}).unwrap();
+    scan_roots(&mut conn, &[root], &DecisionLog::to_path(None), |_| {}).unwrap();
     let track_id: i64 = conn
         .query_row("SELECT id FROM track", [], |r| r.get(0))
         .unwrap();
@@ -1264,7 +1342,7 @@ fn reread_track_tags_is_a_noop_when_tags_unchanged() {
         .unwrap();
 
     // Re-read without touching the file → nothing should move.
-    reread_track_tags(&mut conn, track_id).unwrap();
+    reread_track_tags(&mut conn, track_id, &DecisionLog::to_path(None)).unwrap();
 
     let release_after: String = conn
         .query_row(
@@ -1324,7 +1402,7 @@ fn reread_track_tags_rehomes_when_album_changes() {
         flac.save_to_path(&path, WriteOptions::default()).unwrap();
     }
 
-    reread_track_tags(&mut conn, track_id).unwrap();
+    reread_track_tags(&mut conn, track_id, &DecisionLog::to_path(None)).unwrap();
 
     // Re-homing onto a new release means a new track row (the upsert keys tracks
     // by (release_mbid, disc, position), and the new release_mbid doesn't conflict
