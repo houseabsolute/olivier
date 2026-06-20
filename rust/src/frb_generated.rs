@@ -1513,6 +1513,9 @@ impl SseDecode for crate::catalog::schema::Track {
         let mut var_addedAt = <i64>::sse_decode(deserializer);
         let mut var_titleTranslit = <Option<String>>::sse_decode(deserializer);
         let mut var_titleTranslate = <Option<String>>::sse_decode(deserializer);
+        let mut var_albumArtist = <Option<String>>::sse_decode(deserializer);
+        let mut var_albumArtistOriginal = <Option<String>>::sse_decode(deserializer);
+        let mut var_albumArtistReading = <Option<String>>::sse_decode(deserializer);
         return crate::catalog::schema::Track {
             id: var_id,
             disc: var_disc,
@@ -1524,6 +1527,9 @@ impl SseDecode for crate::catalog::schema::Track {
             added_at: var_addedAt,
             title_translit: var_titleTranslit,
             title_translate: var_titleTranslate,
+            album_artist: var_albumArtist,
+            album_artist_original: var_albumArtistOriginal,
+            album_artist_reading: var_albumArtistReading,
         };
     }
 }
@@ -1865,6 +1871,9 @@ impl flutter_rust_bridge::IntoDart for crate::catalog::schema::Track {
             self.added_at.into_into_dart().into_dart(),
             self.title_translit.into_into_dart().into_dart(),
             self.title_translate.into_into_dart().into_dart(),
+            self.album_artist.into_into_dart().into_dart(),
+            self.album_artist_original.into_into_dart().into_dart(),
+            self.album_artist_reading.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2170,6 +2179,9 @@ impl SseEncode for crate::catalog::schema::Track {
         <i64>::sse_encode(self.added_at, serializer);
         <Option<String>>::sse_encode(self.title_translit, serializer);
         <Option<String>>::sse_encode(self.title_translate, serializer);
+        <Option<String>>::sse_encode(self.album_artist, serializer);
+        <Option<String>>::sse_encode(self.album_artist_original, serializer);
+        <Option<String>>::sse_encode(self.album_artist_reading, serializer);
     }
 }
 

@@ -1242,8 +1242,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Track dco_decode_track(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return Track(
       id: dco_decode_i_64(arr[0]),
       disc: dco_decode_u_32(arr[1]),
@@ -1255,6 +1255,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       addedAt: dco_decode_i_64(arr[7]),
       titleTranslit: dco_decode_opt_String(arr[8]),
       titleTranslate: dco_decode_opt_String(arr[9]),
+      albumArtist: dco_decode_opt_String(arr[10]),
+      albumArtistOriginal: dco_decode_opt_String(arr[11]),
+      albumArtistReading: dco_decode_opt_String(arr[12]),
     );
   }
 
@@ -1642,6 +1645,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_addedAt = sse_decode_i_64(deserializer);
     var var_titleTranslit = sse_decode_opt_String(deserializer);
     var var_titleTranslate = sse_decode_opt_String(deserializer);
+    var var_albumArtist = sse_decode_opt_String(deserializer);
+    var var_albumArtistOriginal = sse_decode_opt_String(deserializer);
+    var var_albumArtistReading = sse_decode_opt_String(deserializer);
     return Track(
         id: var_id,
         disc: var_disc,
@@ -1652,7 +1658,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         lastPlayed: var_lastPlayed,
         addedAt: var_addedAt,
         titleTranslit: var_titleTranslit,
-        titleTranslate: var_titleTranslate);
+        titleTranslate: var_titleTranslate,
+        albumArtist: var_albumArtist,
+        albumArtistOriginal: var_albumArtistOriginal,
+        albumArtistReading: var_albumArtistReading);
   }
 
   @protected
@@ -2007,6 +2016,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.addedAt, serializer);
     sse_encode_opt_String(self.titleTranslit, serializer);
     sse_encode_opt_String(self.titleTranslate, serializer);
+    sse_encode_opt_String(self.albumArtist, serializer);
+    sse_encode_opt_String(self.albumArtistOriginal, serializer);
+    sse_encode_opt_String(self.albumArtistReading, serializer);
   }
 
   @protected

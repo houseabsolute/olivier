@@ -121,8 +121,12 @@ pub fn tracks_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Result
         "SELECT t.id, t.disc, t.position, t.title, t.artist, t.length_ms,
                 s.last_played, MIN(f.added_at),
                 MAX(CASE WHEN tta.kind = 'translit' THEN tta.title END),
-                MAX(CASE WHEN tta.kind = 'translate' THEN tta.title END)
+                MAX(CASE WHEN tta.kind = 'translate' THEN tta.title END),
+                aa.name, aa.name_original,
+                COALESCE(aa.transliteration_override, aa.transliteration)
          FROM track t
+         JOIN release r ON r.mbid = t.release_mbid
+         LEFT JOIN artist aa ON aa.mbid = r.album_artist_mbid
          LEFT JOIN track_stats s ON s.track_id = t.id
          LEFT JOIN file f ON f.track_id = t.id
          LEFT JOIN track_title_alt tta ON tta.recording_mbid = t.recording_mbid
@@ -142,6 +146,9 @@ pub fn tracks_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Result
             added_at: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
             title_translit: r.get(8)?,
             title_translate: r.get(9)?,
+            album_artist: r.get(10)?,
+            album_artist_original: r.get(11)?,
+            album_artist_reading: r.get(12)?,
         })
     })?;
     for r in rows {

@@ -1639,6 +1639,38 @@ fn albums_for_artist_returns_album_artist_reading_with_override() {
 }
 
 #[test]
+fn tracks_for_album_returns_album_artist_fields_with_override() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name, transliteration, name_original)
+         VALUES ('m', '椎名林檎', 'Sheena, Ringo', 'Sheena Ringo', '椎名林檎')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('rel', 'm', 'Album')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, disc, position, title, artist)
+         VALUES (1, 'rel', 1, 1, 'Song', 'feat. Someone')",
+        [],
+    )
+    .unwrap();
+
+    let tracks = tracks_for_album(&conn, "rel").unwrap();
+    assert_eq!(tracks.len(), 1);
+    assert_eq!(tracks[0].album_artist.as_deref(), Some("椎名林檎"));
+    assert_eq!(tracks[0].album_artist_original.as_deref(), Some("椎名林檎"));
+    assert_eq!(tracks[0].album_artist_reading.as_deref(), Some("Sheena Ringo"));
+
+    set_artist_reading_override(&conn, "m", Some("Shiina Ringo"), None).unwrap();
+    let tracks = tracks_for_album(&conn, "rel").unwrap();
+    assert_eq!(tracks[0].album_artist_reading.as_deref(), Some("Shiina Ringo"));
+}
+
+#[test]
 fn migration_adds_artist_override_columns() {
     let conn = open(":memory:").unwrap();
     // pragma_table_info lists every column; both override columns must exist.

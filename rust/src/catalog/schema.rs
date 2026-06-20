@@ -49,6 +49,9 @@ pub struct Track {
     pub added_at: i64,
     pub title_translit: Option<String>,
     pub title_translate: Option<String>,
+    pub album_artist: Option<String>,
+    pub album_artist_original: Option<String>,
+    pub album_artist_reading: Option<String>,
 }
 
 /// A queue entry paired with its catalog metadata, keyed by file path — used to
