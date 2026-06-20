@@ -1522,6 +1522,87 @@ fn reread_track_tags_rehomes_when_album_changes() {
 }
 
 #[test]
+fn artists_page_applies_reading_and_sort_override() {
+    let conn = open(":memory:").unwrap();
+    // 椎名林檎: MB romanization "Sheena", which the user prefers as "Shiina".
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name, transliteration, name_original)
+         VALUES ('m-ringo', '椎名林檎', 'Sheena, Ringo', 'Sheena Ringo', '椎名林檎')",
+        [],
+    )
+    .unwrap();
+    // A second artist that sorts BETWEEN the MB ("Sheena") and override ("Shiina").
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('m-sg', 'Sheena G', 'Shenagan, X')",
+        [],
+    )
+    .unwrap();
+    for (rel, mbid) in [("r-ringo", "m-ringo"), ("r-sg", "m-sg")] {
+        conn.execute(
+            "INSERT INTO release(mbid, album_artist_mbid, title) VALUES (?1, ?2, 'X')",
+            rusqlite::params![rel, mbid],
+        )
+        .unwrap();
+    }
+
+    // Before override: ordered by MB sort_name → "Sheena, Ringo" < "Shenagan, X".
+    let page = artists_page(&conn, None, 50).unwrap();
+    assert_eq!(page[0].mbid, "m-ringo");
+    assert_eq!(page[1].mbid, "m-sg");
+
+    // Override Ringo to read + sort as "Shiina"; now "Shenagan" < "Shiina".
+    set_artist_reading_override(&conn, "m-ringo", Some("Shiina Ringo"), Some("Shiina, Ringo"))
+        .unwrap();
+    let page = artists_page(&conn, None, 50).unwrap();
+    let ringo = page.iter().find(|a| a.mbid == "m-ringo").unwrap();
+    assert_eq!(ringo.transliteration.as_deref(), Some("Shiina Ringo"));
+    assert_eq!(ringo.sort_name, "Shiina, Ringo");
+    // Order changed: the override moved Ringo after "Shenagan, X".
+    assert_eq!(page[0].mbid, "m-sg");
+    assert_eq!(page[1].mbid, "m-ringo");
+
+    // Keyset cursor uses the effective sort: after "Shenagan, X" → only Ringo.
+    let page2 = artists_page(&conn, Some("Shenagan, X"), 50).unwrap();
+    assert_eq!(page2.len(), 1);
+    assert_eq!(page2[0].mbid, "m-ringo");
+}
+
+#[test]
+fn override_survives_reenrichment() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name, transliteration)
+         VALUES ('m', '椎名林檎', 'Sheena, Ringo', 'Sheena Ringo')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('r', 'm', 'X')",
+        [],
+    )
+    .unwrap();
+    set_artist_reading_override(&conn, "m", Some("Shiina Ringo"), Some("Shiina, Ringo")).unwrap();
+
+    // Simulate a MusicBrainz re-enrichment writing fresh MB values (the exact
+    // statement enrich/store.rs uses). It must NOT disturb the override.
+    conn.execute(
+        "UPDATE artist SET transliteration = ?1, sort_name = ?2, name_original = ?3 WHERE mbid = ?4",
+        rusqlite::params!["Sheena Ringo (new)", "Sheena, Ringo (new)", "椎名林檎", "m"],
+    )
+    .unwrap();
+
+    let page = artists_page(&conn, None, 50).unwrap();
+    assert_eq!(page[0].transliteration.as_deref(), Some("Shiina Ringo"));
+    assert_eq!(page[0].sort_name, "Shiina, Ringo");
+
+    // Clearing the override falls back to the (new) MB values.
+    set_artist_reading_override(&conn, "m", None, None).unwrap();
+    let page = artists_page(&conn, None, 50).unwrap();
+    assert_eq!(page[0].transliteration.as_deref(), Some("Sheena Ringo (new)"));
+    assert_eq!(page[0].sort_name, "Sheena, Ringo (new)");
+}
+
+#[test]
 fn migration_adds_artist_override_columns() {
     let conn = open(":memory:").unwrap();
     // pragma_table_info lists every column; both override columns must exist.
