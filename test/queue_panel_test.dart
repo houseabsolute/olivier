@@ -211,4 +211,113 @@ void main() {
     // × remove buttons must be present.
     expect(find.byTooltip('Remove from queue'), findsWidgets);
   });
+
+  testWidgets(
+      'expanded panel shows a column header and artist/album in their own '
+      'columns (not a joined subtitle)', (tester) async {
+    const tracks = [
+      QueueTrack(
+        path: '/a.flac',
+        title: 'Kabukicho',
+        artist: '椎名林檎',
+        album: '無罪モラトリアム',
+        addedAt: 0,
+      ),
+    ];
+    final player = FakeQueuePlayer();
+    final qc = QueueController.withPlayer(
+      player,
+      dbPath: ':memory:',
+      saveQueue: (_) async {},
+    );
+    await qc.append([for (final t in tracks) t.path]);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          getSettingFnProvider.overrideWithValue((key) async => null),
+          queueControllerProvider.overrideWithValue(qc),
+          queueProvider.overrideWith(
+            () => _StubQueueNotifier(
+              const QueueView(
+                tracks: tracks,
+                currentIndex: 0,
+                shuffled: false,
+              ),
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: QueuePanel())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _expand(tester);
+
+    expect(tester.takeException(), isNull);
+    // Column header labels are present above the rows.
+    expect(find.text('Title'), findsOneWidget);
+    expect(find.text('Artist'), findsOneWidget);
+    expect(find.text('Album'), findsOneWidget);
+    // Artist and album each render as their own cell...
+    expect(find.text('椎名林檎'), findsOneWidget);
+    expect(find.text('無罪モラトリアム'), findsOneWidget);
+    // ...and are NOT combined into the old "Artist — Album" subtitle.
+    expect(find.text('椎名林檎 — 無罪モラトリアム'), findsNothing);
+  });
+
+  testWidgets(
+      'narrow expanded queue drops the meta columns instead of overflowing',
+      (tester) async {
+    // Between the now-playing header's minimum width and the 560px meta
+    // threshold: wide enough that the always-visible header bar fits, narrow
+    // enough that the row's Length/Added/Played columns must drop out.
+    await tester.binding.setSurfaceSize(const Size(540, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const tracks = [
+      QueueTrack(
+        path: '/a.flac',
+        title: 'Kabukicho',
+        artist: '椎名林檎',
+        album: '無罪モラトリアム',
+        addedAt: 0,
+      ),
+    ];
+    final player = FakeQueuePlayer();
+    final qc = QueueController.withPlayer(
+      player,
+      dbPath: ':memory:',
+      saveQueue: (_) async {},
+    );
+    await qc.append([for (final t in tracks) t.path]);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          getSettingFnProvider.overrideWithValue((key) async => null),
+          queueControllerProvider.overrideWithValue(qc),
+          queueProvider.overrideWith(
+            () => _StubQueueNotifier(
+              const QueueView(
+                tracks: tracks,
+                currentIndex: 0,
+                shuffled: false,
+              ),
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: QueuePanel())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _expand(tester);
+
+    // No RenderFlex overflow at a narrow panel width.
+    expect(tester.takeException(), isNull);
+    // The Length/Added/Played meta columns drop out below the threshold...
+    expect(find.text('Length'), findsNothing);
+    // ...but the title and the new artist/album columns stay.
+    expect(find.text('椎名林檎'), findsOneWidget);
+    expect(find.text('無罪モラトリアム'), findsOneWidget);
+  });
 }

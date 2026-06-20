@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/audio/queue_entity.dart';
-import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/widgets/album_cover.dart';
@@ -65,19 +64,87 @@ Future<void> shuffleEntireLibrary(BuildContext context, WidgetRef ref) async {
   await ref.read(shuffleAllTargetProvider).replaceLibraryShuffled(paths);
 }
 
-/// "Artist — Album" (whichever is present) for the queue-row subtitle.
-String _artistAlbum(QueueTrack t) {
-  final artist = t.artist?.trim() ?? '';
-  final album = t.album.trim();
-  if (artist.isNotEmpty && album.isNotEmpty) return '$artist — $album';
-  return artist.isNotEmpty ? artist : album;
+// Column geometry for the expanded-queue rows. The drag-handle and remove
+// columns are fixed-width so the header labels line up with the data cells
+// below them; the title/artist/album columns flex to share the rest.
+const double _queueDragColWidth = 24;
+const double _queueColGap = 8;
+const double _queueRemoveColWidth = 40;
+const int _queueTitleFlex = 3;
+const int _queueArtistFlex = 2;
+const int _queueAlbumFlex = 2;
+
+/// Below this panel width the fixed ~228px Length/Added/Played block leaves too
+/// little room for the title/artist/album columns and the row would overflow,
+/// so the meta columns drop out (in both the header and the rows) instead.
+const double _queueMetaMinWidth = 560;
+
+/// Lays out one expanded-queue row — or the column header — with identical
+/// geometry so the header labels align with the cells beneath them. [lead]
+/// fills the drag-handle column, [trailing] the remove-button column. [meta]
+/// (and its leading gap) is omitted when [showMeta] is false.
+Widget _queueRowLayout({
+  required Widget lead,
+  required Widget title,
+  required Widget artist,
+  required Widget album,
+  required Widget meta,
+  required Widget trailing,
+  required bool showMeta,
+}) {
+  return Row(
+    children: [
+      SizedBox(width: _queueDragColWidth, child: lead),
+      const SizedBox(width: _queueColGap),
+      Expanded(flex: _queueTitleFlex, child: title),
+      const SizedBox(width: _queueColGap),
+      Expanded(flex: _queueArtistFlex, child: artist),
+      const SizedBox(width: _queueColGap),
+      Expanded(flex: _queueAlbumFlex, child: album),
+      if (showMeta) ...[
+        const SizedBox(width: _queueColGap),
+        meta,
+      ],
+      const SizedBox(width: 4),
+      SizedBox(width: _queueRemoveColWidth, child: trailing),
+    ],
+  );
+}
+
+/// Column-title header for the expanded queue, aligned to [_queueRowLayout].
+class _QueueColumnHeader extends StatelessWidget {
+  const _QueueColumnHeader({required this.showMeta});
+
+  final bool showMeta;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: scheme.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
+        );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: _queueRowLayout(
+        lead: const SizedBox.shrink(),
+        title: Text('Title', style: style),
+        artist: Text('Artist', style: style),
+        album: Text('Album', style: style),
+        meta: const TrackMetaHeader(),
+        showMeta: showMeta,
+        trailing: const SizedBox.shrink(),
+      ),
+    );
+  }
 }
 
 /// Collapsible queue panel between the browse split and the now-playing bar.
 /// Collapsed: shows the count + up-next header with fully-wired Shuffle,
 /// Empty, and Shuffle-all controls plus an expand caret. Expanded: the header
-/// plus a ReorderableListView of queued tracks (bilingual titles, drag handle,
-/// × remove, tap-to-play, current-track highlight).
+/// plus a column header and a ReorderableListView of queued tracks (bilingual
+/// title, separate artist/album columns, drag handle, × remove, tap-to-play,
+/// current-track highlight).
 class QueuePanel extends ConsumerStatefulWidget {
   const QueuePanel({super.key});
 
@@ -202,82 +269,100 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
     final controller = ref.read(queueControllerProvider);
     final scheme = Theme.of(context).colorScheme;
 
-    return ReorderableListView.builder(
-      itemCount: view.tracks.length,
-      // onReorderItem delivers the post-removal destination index directly
-      // (unlike the deprecated onReorder which required normalizeReorder).
-      onReorderItem: (oldIndex, newIndex) {
-        controller.reorder(oldIndex, newIndex);
-      },
-      itemBuilder: (context, i) {
-        final t = view.tracks[i];
-        final selected = i == view.currentIndex;
-        return RowContextMenu(
-          key: ValueKey('${t.path}#$i'),
-          entity: QueueEntityRef.track(t.trackId ?? 0),
-          onInfo: (_) => showInfoDialog(
-            context,
-            title: 'Track',
-            fields: queueTrackInfoFields(t),
-          ),
-          child: Material(
-            color: selected ? scheme.primaryContainer : Colors.transparent,
-            child: InkWell(
-              onTap: () => controller.playAt(i),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(
-                  children: [
-                    ReorderableDragStartListener(
-                      index: i,
-                      child: const Icon(Icons.drag_handle),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showMeta = constraints.maxWidth >= _queueMetaMinWidth;
+        return Column(
+          children: [
+            _QueueColumnHeader(showMeta: showMeta),
+            const Divider(height: 1),
+            Expanded(
+              child: ReorderableListView.builder(
+                // Each row supplies its own drag handle in the lead column, so
+                // suppress the SDK's default handle — on desktop it overlays a
+                // second handle on top of the × button and steals its taps.
+                buildDefaultDragHandles: false,
+                itemCount: view.tracks.length,
+                // onReorderItem delivers the post-removal destination index
+                // directly (unlike the deprecated onReorder which required
+                // normalizeReorder).
+                onReorderItem: (oldIndex, newIndex) {
+                  controller.reorder(oldIndex, newIndex);
+                },
+                itemBuilder: (context, i) {
+                  final t = view.tracks[i];
+                  final selected = i == view.currentIndex;
+                  final muted = Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant);
+                  final artist = (t.artist?.trim().isNotEmpty ?? false)
+                      ? t.artist!.trim()
+                      : '—';
+                  return RowContextMenu(
+                    key: ValueKey('${t.path}#$i'),
+                    entity: QueueEntityRef.track(t.trackId ?? 0),
+                    onInfo: (_) => showInfoDialog(
+                      context,
+                      title: 'Track',
+                      fields: queueTrackInfoFields(t),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          BilingualText(
-                            original: t.title,
-                            translit: t.titleTranslit,
-                            translate: t.titleTranslate,
-                            leads: leads,
-                          ),
-                          if (_artistAlbum(t).isNotEmpty)
-                            Text(
-                              _artistAlbum(t),
+                    child: Material(
+                      color: selected
+                          ? scheme.primaryContainer
+                          : Colors.transparent,
+                      child: InkWell(
+                        onTap: () => controller.playAt(i),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          child: _queueRowLayout(
+                            lead: ReorderableDragStartListener(
+                              index: i,
+                              child: const Icon(Icons.drag_handle),
+                            ),
+                            title: BilingualText(
+                              original: t.title,
+                              translit: t.titleTranslit,
+                              translate: t.titleTranslate,
+                              leads: leads,
+                            ),
+                            artist: Text(
+                              artist,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
+                              style: muted,
                             ),
-                        ],
+                            album: Text(
+                              t.album,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: muted,
+                            ),
+                            meta: TrackMeta(
+                              lengthMs: t.lengthMs,
+                              addedAt: t.addedAt,
+                              lastPlayed: t.lastPlayed,
+                            ),
+                            showMeta: showMeta,
+                            trailing: IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                  minWidth: 40, minHeight: 40),
+                              iconSize: 20,
+                              icon: const Icon(Icons.close),
+                              tooltip: 'Remove from queue',
+                              onPressed: () => controller.removeAt(i),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    TrackMeta(
-                      lengthMs: t.lengthMs,
-                      addedAt: t.addedAt,
-                      lastPlayed: t.lastPlayed,
-                    ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      tooltip: 'Remove from queue',
-                      onPressed: () => controller.removeAt(i),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
-          ),
+          ],
         );
       },
     );
