@@ -18,7 +18,7 @@ The override affects **both** the displayed reading **and** the sort position (u
 exposes the two independently: a **Reading** field and a **Sort as** field.
 
 The artist reading is displayed in exactly one place — `lib/catalog/artist_column.dart:86-91`
-(`BilingualText(original: nameOriginal ?? name, translit: transliteration)`) — and SELECTed in
+(`BilingualText(original: nameOriginal ?? name, translit: transliteration)`) — and read by
 exactly one query — `artists_page` (`rust/src/catalog/query.rs:6-31`). Albums show a plain
 `album_artist` string (`albums_for_artist`), not the artist's transliteration, so they are
 unaffected. This keeps the change tightly bounded.

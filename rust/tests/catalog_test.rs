@@ -4,9 +4,9 @@ use rust_lib_olivier::catalog::query::{
     set_artist_reading_override, track_path, track_paths_for_artist, track_paths_for_library,
     tracks_for_album, tracks_for_paths,
 };
-use rust_lib_olivier::catalog::schema::ArtistReading;
 use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
 use rust_lib_olivier::catalog::scan::{reconcile_album_artists, reread_track_tags, scan_roots};
+use rust_lib_olivier::catalog::schema::ArtistReading;
 use rust_lib_olivier::db::open;
 use rust_lib_olivier::decision_log::DecisionLog;
 
@@ -1551,8 +1551,13 @@ fn artists_page_applies_reading_and_sort_override() {
     assert_eq!(page[1].mbid, "m-sg");
 
     // Override Ringo to read + sort as "Shiina"; now "Shenagan" < "Shiina".
-    set_artist_reading_override(&conn, "m-ringo", Some("Shiina Ringo"), Some("Shiina, Ringo"))
-        .unwrap();
+    set_artist_reading_override(
+        &conn,
+        "m-ringo",
+        Some("Shiina Ringo"),
+        Some("Shiina, Ringo"),
+    )
+    .unwrap();
     let page = artists_page(&conn, None, 50).unwrap();
     let ringo = page.iter().find(|a| a.mbid == "m-ringo").unwrap();
     assert_eq!(ringo.transliteration.as_deref(), Some("Shiina Ringo"));
@@ -1598,7 +1603,10 @@ fn override_survives_reenrichment() {
     // Clearing the override falls back to the (new) MB values.
     set_artist_reading_override(&conn, "m", None, None).unwrap();
     let page = artists_page(&conn, None, 50).unwrap();
-    assert_eq!(page[0].transliteration.as_deref(), Some("Sheena Ringo (new)"));
+    assert_eq!(
+        page[0].transliteration.as_deref(),
+        Some("Sheena Ringo (new)")
+    );
     assert_eq!(page[0].sort_name, "Sheena, Ringo (new)");
 }
 

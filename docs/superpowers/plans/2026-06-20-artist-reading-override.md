@@ -931,8 +931,8 @@ Expected: all Rust tests pass.
 Run: `cd /home/autarch/projects/olivier && mise exec -- dart format lib/catalog/artist_column.dart && mise exec -- flutter analyze lib 2>&1 | tail -3`
 Expected: No issues.
 
-> LINT NOTE: `mise exec -- precious lint --all` may report a pre-existing `typos` failure
-> (`Yoru`) in the untracked `TODO` file — that is the user's note, not this change. Confirm any
+> LINT NOTE: `mise exec -- precious lint --all` may report a pre-existing `typos` failure on a
+> romaji word in the untracked `TODO` file — that is the user's note, not this change. Confirm any
 > typos failure is only in `TODO`, and never stage `TODO`.
 
 - [ ] **Step 6: Commit**
