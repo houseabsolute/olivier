@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
@@ -117,7 +118,7 @@ void main() {
           body: Center(
             child: ElevatedButton(
               onPressed: () => showInfoDialog(context,
-                  title: 'Track', fields: const [('Title', '歌舞伎町の女王')]),
+                  title: 'Track', fields: const [('Title', '歌舞伎町の女王', null)]),
               child: const Text('open'),
             ),
           ),
@@ -157,7 +158,7 @@ void main() {
               onPressed: () => showInfoDialog(
                 context,
                 title: 'Album',
-                fields: const [('Title', 'X')],
+                fields: const [('Title', 'X', null)],
                 header: const Text('HEADER', key: Key('hdr')),
               ),
               child: const Text('open'),
@@ -169,5 +170,72 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('hdr')), findsOneWidget);
+  });
+
+  test(
+      'albumInfoFields links a real Release MBID and adds the album-artist MBID',
+      () {
+    const rel = '11111111-2222-3333-4444-555555555555';
+    const art = 'aaaaaaaa-2222-3333-4444-555555555555';
+    final a = Album(
+      releaseMbid: rel,
+      title: 'Album',
+      albumArtist: 'A',
+      albumArtistMbid: art,
+      addedAt: 0,
+    );
+    final fields = albumInfoFields(a);
+    final release = fields.firstWhere((f) => f.$1 == 'Release MBID');
+    expect(release.$2, rel);
+    expect(release.$3, 'https://musicbrainz.org/release/$rel');
+    final artist = fields.firstWhere((f) => f.$1 == 'Album artist MBID');
+    expect(artist.$3, 'https://musicbrainz.org/artist/$art');
+  });
+
+  test('synth release MBID is shown but not linked', () {
+    final a = Album(
+      releaseMbid: 'synth:rel:a|b',
+      title: 'Album',
+      albumArtist: 'A',
+      addedAt: 0,
+    );
+    final release =
+        albumInfoFields(a).firstWhere((f) => f.$1 == 'Release MBID');
+    expect(release.$2, 'synth:rel:a|b');
+    expect(release.$3, isNull);
+  });
+
+  testWidgets('a linked MBID launches its musicbrainz URL when tapped',
+      (tester) async {
+    final launched = <String>[];
+    final orig = launchMbUrl;
+    launchMbUrl = (url) async => launched.add(url);
+    addTearDown(() => launchMbUrl = orig);
+
+    const uuid = '11111111-2222-3333-4444-555555555555';
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => showInfoDialog(context, title: 'Album', fields: [
+              ('Release MBID', uuid, mbUrl('release', uuid)),
+              ('Note', 'plain', null),
+            ]),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    final link = tester.widget<SelectableText>(find
+        .byWidgetPredicate((w) => w is SelectableText && w.textSpan != null));
+    final recognizer =
+        (link.textSpan! as TextSpan).recognizer! as TapGestureRecognizer;
+    recognizer.onTap!();
+    await tester.pump();
+
+    expect(launched, ['https://musicbrainz.org/release/$uuid']);
   });
 }

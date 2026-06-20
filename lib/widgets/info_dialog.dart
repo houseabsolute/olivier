@@ -1,5 +1,7 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 final _mbidUuid = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
@@ -12,14 +14,26 @@ String? mbUrl(String entityType, String? mbid) {
   return 'https://musicbrainz.org/$entityType/$mbid';
 }
 
+/// Opens a MusicBrainz URL. Overridable in tests; defaults to the external
+/// browser.
+Future<void> Function(String url) launchMbUrl =
+    (url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+
 /// A read-only, copy-pasteable info dialog: label/value rows where each value is
-/// selectable text. The caller passes only non-empty fields.
+/// selectable text. The caller passes only non-empty fields. The optional third
+/// element of each tuple is a URL to open when the value is tapped.
 Future<void> showInfoDialog(
   BuildContext context, {
   required String title,
-  required List<(String, String)> fields,
+  required List<(String, String, String?)> fields,
   Widget? header,
 }) {
+  final recognizers = <String, TapGestureRecognizer>{};
+  for (final (_, _, url) in fields) {
+    if (url != null && !recognizers.containsKey(url)) {
+      recognizers[url] = TapGestureRecognizer()..onTap = () => launchMbUrl(url);
+    }
+  }
   return showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
@@ -35,7 +49,7 @@ Future<void> showInfoDialog(
                 Center(child: header),
                 const SizedBox(height: 12),
               ],
-              for (final (label, value) in fields)
+              for (final (label, value, url) in fields)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Column(
@@ -43,7 +57,17 @@ Future<void> showInfoDialog(
                     children: [
                       Text(label,
                           style: Theme.of(context).textTheme.labelSmall),
-                      SelectableText(value),
+                      if (url == null)
+                        SelectableText(value)
+                      else
+                        SelectableText.rich(TextSpan(
+                          text: value,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            decoration: TextDecoration.underline,
+                          ),
+                          recognizer: recognizers[url],
+                        )),
                     ],
                   ),
                 ),
@@ -58,7 +82,11 @@ Future<void> showInfoDialog(
         ),
       ],
     ),
-  );
+  ).whenComplete(() {
+    for (final r in recognizers.values) {
+      r.dispose();
+    }
+  });
 }
 
 String _fmtLen(BigInt? ms) {
@@ -74,19 +102,24 @@ String _fmtEpoch(int? secs) {
   return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
 }
 
-void _add(List<(String, String)> out, String label, String? value) {
+void _add(List<(String, String, String?)> out, String label, String? value,
+    [String? url]) {
   final v = (value ?? '').trim();
-  if (v.isNotEmpty) out.add((label, v));
+  if (v.isNotEmpty) out.add((label, v, url));
 }
 
 /// Non-empty info fields for a track, in display order.
-List<(String, String)> trackInfoFields(Track t) {
-  final out = <(String, String)>[];
+List<(String, String, String?)> trackInfoFields(Track t) {
+  final out = <(String, String, String?)>[];
   _add(out, 'Title', t.title);
   _add(out, 'Reading', t.titleTranslit);
   _add(out, 'Translation', t.titleTranslate);
   _add(out, 'Album artist', t.albumArtistOriginal ?? t.albumArtist);
   _add(out, 'Album artist reading', t.albumArtistReading);
+  _add(out, 'Recording MBID', t.recordingMbid,
+      mbUrl('recording', t.recordingMbid));
+  _add(out, 'Album artist MBID', t.albumArtistMbid,
+      mbUrl('artist', t.albumArtistMbid));
   _add(out, 'Disc / Track', '${t.disc} / ${t.position}');
   _add(out, 'Length', _fmtLen(t.lengthMs));
   _add(out, 'Last played', _fmtEpoch(t.lastPlayed));
@@ -96,13 +129,17 @@ List<(String, String)> trackInfoFields(Track t) {
 }
 
 /// Non-empty info fields for a queued track, in display order.
-List<(String, String)> queueTrackInfoFields(QueueTrack t) {
-  final out = <(String, String)>[];
+List<(String, String, String?)> queueTrackInfoFields(QueueTrack t) {
+  final out = <(String, String, String?)>[];
   _add(out, 'Title', t.title);
   _add(out, 'Reading', t.titleTranslit);
   _add(out, 'Translation', t.titleTranslate);
   _add(out, 'Album artist', t.albumArtistOriginal ?? t.albumArtist);
   _add(out, 'Album artist reading', t.albumArtistReading);
+  _add(out, 'Recording MBID', t.recordingMbid,
+      mbUrl('recording', t.recordingMbid));
+  _add(out, 'Album artist MBID', t.albumArtistMbid,
+      mbUrl('artist', t.albumArtistMbid));
   _add(out, 'Album', t.album);
   _add(out, 'Length', _fmtLen(t.lengthMs));
   _add(out, 'Date added', _fmtEpoch(t.addedAt));
@@ -112,8 +149,8 @@ List<(String, String)> queueTrackInfoFields(QueueTrack t) {
 }
 
 /// Non-empty info fields for an album, in display order.
-List<(String, String)> albumInfoFields(Album a) {
-  final out = <(String, String)>[];
+List<(String, String, String?)> albumInfoFields(Album a) {
+  final out = <(String, String, String?)>[];
   _add(out, 'Title', a.title);
   _add(out, 'Reading', a.titleTranslit);
   _add(out, 'Translation', a.titleTranslate);
@@ -121,7 +158,9 @@ List<(String, String)> albumInfoFields(Album a) {
   _add(out, 'Album artist reading', a.albumArtistReading);
   _add(out, 'Original year', a.originalYear);
   _add(out, 'Reissue year', a.reissueYear);
-  _add(out, 'Release MBID', a.releaseMbid);
+  _add(out, 'Release MBID', a.releaseMbid, mbUrl('release', a.releaseMbid));
+  _add(out, 'Album artist MBID', a.albumArtistMbid,
+      mbUrl('artist', a.albumArtistMbid));
   _add(out, 'Date added', _fmtEpoch(a.addedAt));
   return out;
 }
