@@ -29,7 +29,7 @@ List<MediaItem> mediaItemsForQueueTracks(List<QueueTrack> qts) {
       MediaItem(
         id: qt.path,
         title: qt.title,
-        artist: qt.artist,
+        artist: qt.albumArtistOriginal ?? qt.albumArtist,
         album: qt.album.isEmpty ? null : qt.album,
         duration: qt.lengthMs == null
             ? null
@@ -38,6 +38,7 @@ List<MediaItem> mediaItemsForQueueTracks(List<QueueTrack> qts) {
           if (qt.trackId != null) 'trackId': qt.trackId,
           'titleTranslit': qt.titleTranslit,
           'titleTranslate': qt.titleTranslate,
+          'artistReading': qt.albumArtistReading,
         },
       ),
   ];

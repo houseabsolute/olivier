@@ -17,6 +17,8 @@ void main() {
         addedAt: 0,
         titleTranslit: 'Song A translit',
         titleTranslate: 'Song A translate',
+        albumArtist: 'Album Artist A',
+        albumArtistReading: 'Arutisuto A',
       ),
     ]);
 
@@ -24,7 +26,8 @@ void main() {
     final item = items.single;
     expect(item.id, '/music/a.flac');
     expect(item.title, 'Song A');
-    expect(item.artist, 'Artist A');
+    expect(item.artist, 'Album Artist A'); // album-artist, not the tag
+    expect(item.extras?['artistReading'], 'Arutisuto A');
     expect(item.album, 'Album A');
     expect(item.duration, const Duration(milliseconds: 123456));
     expect(item.extras?['trackId'], 42);
@@ -61,9 +64,10 @@ void main() {
     ]);
     final extras = items.single.extras!;
     expect(extras.containsKey('trackId'), isFalse);
-    // The bilingual-title extras are always present (may be null).
+    // The bilingual-title and bilingual-artist extras are always present (may be null).
     expect(extras.containsKey('titleTranslit'), isTrue);
     expect(extras.containsKey('titleTranslate'), isTrue);
+    expect(extras.containsKey('artistReading'), isTrue);
   });
 
   test('null artist passes through as null', () {

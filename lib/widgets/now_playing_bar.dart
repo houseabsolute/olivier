@@ -110,10 +110,12 @@ class NowPlayingBar extends ConsumerWidget {
                               ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         if (item.artist != null)
-                          Text(
-                            item.artist!,
-                            style: Theme.of(context).textTheme.bodySmall,
-                            overflow: TextOverflow.ellipsis,
+                          BilingualText(
+                            original: item.artist!,
+                            translit: item.extras?['artistReading'] as String?,
+                            translate: null,
+                            leads: leads,
+                            primaryStyle: Theme.of(context).textTheme.bodySmall,
                           ),
                       ],
                     );
