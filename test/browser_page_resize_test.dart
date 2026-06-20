@@ -86,7 +86,10 @@ void main() {
         queueProvider.overrideWith(_EmptyQueue.new),
       ],
       child: const MaterialApp(
-        home: BrowserPage(nowPlaying: SizedBox.shrink()),
+        home: BrowserPage(
+          nowPlaying: SizedBox.shrink(),
+          topControls: SizedBox.shrink(),
+        ),
       ),
     ));
     await tester.pump();

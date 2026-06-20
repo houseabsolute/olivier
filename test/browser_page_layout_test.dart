@@ -78,6 +78,7 @@ Widget _page(double scale) {
           // is never referenced.
           child: const BrowserPage(
             nowPlaying: SizedBox(height: 56, child: Text('stub-now-playing')),
+            topControls: SizedBox.shrink(),
           ),
         ),
       ),

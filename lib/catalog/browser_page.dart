@@ -11,17 +11,22 @@ import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/scan_controller.dart';
 import 'package:olivier/widgets/now_playing_bar.dart';
 import 'package:olivier/widgets/resizable_split.dart';
+import 'package:olivier/widgets/top_controls.dart';
 
 /// The first pane's fraction of a persisted `(f0, f1)` flex pair.
 double _ratioOf((double, double) flex) => flex.$1 / (flex.$1 + flex.$2);
 
 class BrowserPage extends ConsumerStatefulWidget {
-  const BrowserPage({super.key, this.nowPlaying});
+  const BrowserPage({super.key, this.nowPlaying, this.topControls});
 
   /// The bottom transport bar. Injectable so the page can be widget-tested
   /// without the live, uninitialized global [audioHandler]. Defaults to the
   /// real [NowPlayingBar] in production.
   final Widget? nowPlaying;
+
+  /// The top control bar (transport + volume). Injectable for the same reason
+  /// as [nowPlaying]; defaults to the real [TopControls] in production.
+  final Widget? topControls;
 
   @override
   ConsumerState<BrowserPage> createState() => _BrowserPageState();
@@ -89,7 +94,7 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Olivier'),
+        title: widget.topControls ?? TopControls(audioHandler: audioHandler),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
