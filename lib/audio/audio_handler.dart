@@ -16,6 +16,10 @@ class OlivierAudioHandler extends BaseAudioHandler
 
   /// Toggle between playing and paused — bound to the space bar.
   Future<void> togglePlayPause() => player.playing ? pause() : play();
+
+  /// Set output volume (0.0–1.0).
+  Future<void> setVolume(double v) => player.setVolume(v);
+
   @override
   Future<void> stop() => player.stop();
   @override
