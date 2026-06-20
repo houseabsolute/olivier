@@ -1760,3 +1760,34 @@ fn albums_for_artist_returns_album_artist_mbid() {
         Some("11111111-2222-3333-4444-555555555555")
     );
 }
+
+#[test]
+fn tracks_for_album_returns_recording_and_album_artist_mbids() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('aaaaaaaa-2222-3333-4444-555555555555', 'A', 'A')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('rel', 'aaaaaaaa-2222-3333-4444-555555555555', 'Album')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, recording_mbid, disc, position, title)
+         VALUES (1, 'rel', 'bbbbbbbb-2222-3333-4444-555555555555', 1, 1, 'Song')",
+        [],
+    )
+    .unwrap();
+
+    let tracks = tracks_for_album(&conn, "rel").unwrap();
+    assert_eq!(
+        tracks[0].recording_mbid.as_deref(),
+        Some("bbbbbbbb-2222-3333-4444-555555555555")
+    );
+    assert_eq!(
+        tracks[0].album_artist_mbid.as_deref(),
+        Some("aaaaaaaa-2222-3333-4444-555555555555")
+    );
+}

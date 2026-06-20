@@ -53,6 +53,8 @@ pub struct Track {
     pub album_artist: Option<String>,
     pub album_artist_original: Option<String>,
     pub album_artist_reading: Option<String>,
+    pub recording_mbid: Option<String>,
+    pub album_artist_mbid: Option<String>,
 }
 
 /// A queue entry paired with its catalog metadata, keyed by file path — used to

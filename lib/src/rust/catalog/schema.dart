@@ -231,6 +231,8 @@ class Track {
   final String? albumArtist;
   final String? albumArtistOriginal;
   final String? albumArtistReading;
+  final String? recordingMbid;
+  final String? albumArtistMbid;
 
   const Track({
     required this.id,
@@ -246,6 +248,8 @@ class Track {
     this.albumArtist,
     this.albumArtistOriginal,
     this.albumArtistReading,
+    this.recordingMbid,
+    this.albumArtistMbid,
   });
 
   @override
@@ -262,7 +266,9 @@ class Track {
       titleTranslate.hashCode ^
       albumArtist.hashCode ^
       albumArtistOriginal.hashCode ^
-      albumArtistReading.hashCode;
+      albumArtistReading.hashCode ^
+      recordingMbid.hashCode ^
+      albumArtistMbid.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -281,5 +287,7 @@ class Track {
           titleTranslate == other.titleTranslate &&
           albumArtist == other.albumArtist &&
           albumArtistOriginal == other.albumArtistOriginal &&
-          albumArtistReading == other.albumArtistReading;
+          albumArtistReading == other.albumArtistReading &&
+          recordingMbid == other.recordingMbid &&
+          albumArtistMbid == other.albumArtistMbid;
 }
