@@ -1739,3 +1739,24 @@ fn migration_adds_artist_override_columns() {
         .unwrap();
     assert_eq!(n, 2);
 }
+
+#[test]
+fn albums_for_artist_returns_album_artist_mbid() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('11111111-2222-3333-4444-555555555555', 'A', 'A')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('r', '11111111-2222-3333-4444-555555555555', 'Album')",
+        [],
+    )
+    .unwrap();
+
+    let albums = albums_for_artist(&conn, "11111111-2222-3333-4444-555555555555").unwrap();
+    assert_eq!(
+        albums[0].album_artist_mbid.as_deref(),
+        Some("11111111-2222-3333-4444-555555555555")
+    );
+}

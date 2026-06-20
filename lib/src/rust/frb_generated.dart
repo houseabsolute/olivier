@@ -1027,19 +1027,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Album dco_decode_album(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return Album(
       releaseMbid: dco_decode_String(arr[0]),
       title: dco_decode_String(arr[1]),
       albumArtist: dco_decode_String(arr[2]),
       albumArtistOriginal: dco_decode_opt_String(arr[3]),
       albumArtistReading: dco_decode_opt_String(arr[4]),
-      originalYear: dco_decode_opt_String(arr[5]),
-      reissueYear: dco_decode_opt_String(arr[6]),
-      titleTranslit: dco_decode_opt_String(arr[7]),
-      titleTranslate: dco_decode_opt_String(arr[8]),
-      addedAt: dco_decode_i_64(arr[9]),
+      albumArtistMbid: dco_decode_opt_String(arr[5]),
+      originalYear: dco_decode_opt_String(arr[6]),
+      reissueYear: dco_decode_opt_String(arr[7]),
+      titleTranslit: dco_decode_opt_String(arr[8]),
+      titleTranslate: dco_decode_opt_String(arr[9]),
+      addedAt: dco_decode_i_64(arr[10]),
     );
   }
 
@@ -1355,6 +1356,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_albumArtist = sse_decode_String(deserializer);
     var var_albumArtistOriginal = sse_decode_opt_String(deserializer);
     var var_albumArtistReading = sse_decode_opt_String(deserializer);
+    var var_albumArtistMbid = sse_decode_opt_String(deserializer);
     var var_originalYear = sse_decode_opt_String(deserializer);
     var var_reissueYear = sse_decode_opt_String(deserializer);
     var var_titleTranslit = sse_decode_opt_String(deserializer);
@@ -1366,6 +1368,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         albumArtist: var_albumArtist,
         albumArtistOriginal: var_albumArtistOriginal,
         albumArtistReading: var_albumArtistReading,
+        albumArtistMbid: var_albumArtistMbid,
         originalYear: var_originalYear,
         reissueYear: var_reissueYear,
         titleTranslit: var_titleTranslit,
@@ -1797,6 +1800,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.albumArtist, serializer);
     sse_encode_opt_String(self.albumArtistOriginal, serializer);
     sse_encode_opt_String(self.albumArtistReading, serializer);
+    sse_encode_opt_String(self.albumArtistMbid, serializer);
     sse_encode_opt_String(self.originalYear, serializer);
     sse_encode_opt_String(self.reissueYear, serializer);
     sse_encode_opt_String(self.titleTranslit, serializer);

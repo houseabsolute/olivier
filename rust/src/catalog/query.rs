@@ -87,7 +87,8 @@ pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::
                 (SELECT MIN(f.added_at) FROM track t JOIN file f ON f.track_id = t.id
                    WHERE t.release_mbid = r.mbid),
                 a.name_original,
-                COALESCE(a.transliteration_override, a.transliteration)
+                COALESCE(a.transliteration_override, a.transliteration),
+                r.album_artist_mbid
          FROM release r
          JOIN artist a ON a.mbid = r.album_artist_mbid
          LEFT JOIN release_group rg ON rg.mbid = r.release_group_mbid
@@ -106,6 +107,7 @@ pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::
             added_at: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
             album_artist_original: r.get(8)?,
             album_artist_reading: r.get(9)?,
+            album_artist_mbid: r.get(10)?,
         })
     })?;
     for r in rows {
