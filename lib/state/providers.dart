@@ -133,6 +133,25 @@ final rereadTrackTagsFnProvider = Provider<RereadTrackTagsFn>((ref) {
   return (trackId) => rereadTrackTags(dbPath: db, trackId: trackId);
 });
 
+// Loads one artist's raw reading/sort values for the "Set reading" dialog. Seam.
+typedef ArtistReadingFn = Future<ArtistReading> Function(String mbid);
+
+final artistReadingFnProvider = Provider<ArtistReadingFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (mbid) => artistReading(dbPath: db, mbid: mbid);
+});
+
+// Writes/clears one artist's reading + sort override. Seam.
+typedef SetArtistReadingOverrideFn = Future<void> Function(
+    String mbid, String? reading, String? sort);
+
+final setArtistReadingOverrideFnProvider =
+    Provider<SetArtistReadingOverrideFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (mbid, reading, sort) => setArtistReadingOverride(
+      dbPath: db, mbid: mbid, reading: reading, sort: sort);
+});
+
 // --- Entity → paths FFI seams (overridable in tests) ---
 
 final entityPathFnsProvider = Provider<EntityPathFns>((ref) {
