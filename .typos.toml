@@ -7,3 +7,5 @@ TPOS = "TPOS"
 nam = "nam"
 # Audio-domain past tense of "seek" (seek to position) — correct terminology.
 seeked = "seeked"
+# "Yoru" (夜 = night) is a Japanese romanization used in track/song titles, not a misspelling of "Your".
+Yoru = "Yoru"
