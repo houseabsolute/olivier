@@ -223,6 +223,8 @@ void main() {
         artist: '椎名林檎',
         album: '無罪モラトリアム',
         addedAt: 0,
+        albumArtist: '椎名林檎',
+        albumArtistReading: 'Shiina Ringo',
       ),
     ];
     final player = FakeQueuePlayer();
@@ -259,8 +261,9 @@ void main() {
     expect(find.text('Title'), findsOneWidget);
     expect(find.text('Artist'), findsOneWidget);
     expect(find.text('Album'), findsOneWidget);
-    // Artist and album each render as their own cell...
-    expect(find.text('椎名林檎'), findsOneWidget);
+    // Album-artist original and reading each render as their own cell...
+    expect(find.text('椎名林檎'), findsOneWidget); // album-artist original
+    expect(find.text('Shiina Ringo'), findsOneWidget); // its reading
     expect(find.text('無罪モラトリアム'), findsOneWidget);
     // ...and are NOT combined into the old "Artist — Album" subtitle.
     expect(find.text('椎名林檎 — 無罪モラトリアム'), findsNothing);
@@ -282,6 +285,8 @@ void main() {
         artist: '椎名林檎',
         album: '無罪モラトリアム',
         addedAt: 0,
+        albumArtist: '椎名林檎',
+        albumArtistReading: 'Shiina Ringo',
       ),
     ];
     final player = FakeQueuePlayer();

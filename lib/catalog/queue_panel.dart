@@ -325,9 +325,6 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                       .textTheme
                       .bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant);
-                  final artist = (t.artist?.trim().isNotEmpty ?? false)
-                      ? t.artist!.trim()
-                      : '—';
                   return RowContextMenu(
                     key: ValueKey('${t.path}#$i'),
                     entity: QueueEntityRef.track(t.trackId ?? 0),
@@ -356,11 +353,13 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                               translate: t.titleTranslate,
                               leads: leads,
                             ),
-                            artist: Text(
-                              artist,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: muted,
+                            artist: BilingualText(
+                              original:
+                                  t.albumArtistOriginal ?? t.albumArtist ?? '',
+                              translit: t.albumArtistReading,
+                              translate: null,
+                              leads: leads,
+                              primaryStyle: muted,
                             ),
                             album: Text(
                               t.album,
