@@ -1,4 +1,4 @@
-use crate::catalog::schema::{Album, Artist, QueueTrack, Track};
+use crate::catalog::schema::{Album, Artist, ArtistReading, QueueTrack, Track};
 use rusqlite::{Connection, OptionalExtension};
 
 /// Keyset page of album-artists ordered by sort_name (case-insensitive). Pass
@@ -28,6 +28,44 @@ pub fn artists_page(
         out.push(r?);
     }
     Ok(out)
+}
+
+/// Raw reading/sort fields for one artist (for the edit dialog).
+pub fn artist_reading(conn: &Connection, mbid: &str) -> anyhow::Result<ArtistReading> {
+    let r = conn.query_row(
+        "SELECT name, name_original, transliteration, transliteration_override,
+                sort_name, sort_name_override
+         FROM artist WHERE mbid = ?1",
+        [mbid],
+        |r| {
+            Ok(ArtistReading {
+                name: r.get(0)?,
+                name_original: r.get(1)?,
+                mb_transliteration: r.get(2)?,
+                transliteration_override: r.get(3)?,
+                mb_sort_name: r.get(4)?,
+                sort_name_override: r.get(5)?,
+            })
+        },
+    )?;
+    Ok(r)
+}
+
+/// Set or clear an artist's manual reading/sort overrides. `None` clears that
+/// dimension (falls back to the MusicBrainz value via COALESCE in `artists_page`).
+pub fn set_artist_reading_override(
+    conn: &Connection,
+    mbid: &str,
+    reading: Option<&str>,
+    sort: Option<&str>,
+) -> anyhow::Result<()> {
+    conn.execute(
+        "UPDATE artist
+            SET transliteration_override = ?2, sort_name_override = ?3
+          WHERE mbid = ?1",
+        rusqlite::params![mbid, reading, sort],
+    )?;
+    Ok(())
 }
 
 /// Albums for one album-artist, ordered by original year then title

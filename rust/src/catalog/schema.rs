@@ -9,6 +9,19 @@ pub struct Artist {
     pub name_original: Option<String>,
 }
 
+/// Raw (non-coalesced) reading/sort fields for one artist — populates the
+/// "Set reading" edit dialog so it can show the current override alongside the
+/// MusicBrainz value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtistReading {
+    pub name: String,
+    pub name_original: Option<String>,
+    pub mb_transliteration: Option<String>,
+    pub transliteration_override: Option<String>,
+    pub mb_sort_name: String,
+    pub sort_name_override: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Album {
     pub release_mbid: String,

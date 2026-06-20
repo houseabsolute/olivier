@@ -1,8 +1,10 @@
 use rust_lib_olivier::catalog::ids::{album_artist_key, sort_name};
 use rust_lib_olivier::catalog::query::{
-    albums_for_artist, artists_page, file_paths_for_album, record_play, track_path,
-    track_paths_for_artist, track_paths_for_library, tracks_for_album, tracks_for_paths,
+    albums_for_artist, artist_reading, artists_page, file_paths_for_album, record_play,
+    set_artist_reading_override, track_path, track_paths_for_artist, track_paths_for_library,
+    tracks_for_album, tracks_for_paths,
 };
+use rust_lib_olivier::catalog::schema::ArtistReading;
 use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
 use rust_lib_olivier::catalog::scan::{reconcile_album_artists, reread_track_tags, scan_roots};
 use rust_lib_olivier::db::open;
@@ -893,6 +895,40 @@ fn remove_root_keeps_files_still_covered_by_another_root() {
         1,
         "file still covered by parent root A must survive removing nested root B"
     );
+}
+
+#[test]
+fn artist_reading_round_trip_and_clear() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name, transliteration, name_original)
+         VALUES ('m', '椎名林檎', 'Sheena, Ringo', 'Sheena Ringo', '椎名林檎')",
+        [],
+    )
+    .unwrap();
+
+    // Raw read before any override: mb_* populated, *_override null.
+    let r: ArtistReading = artist_reading(&conn, "m").unwrap();
+    assert_eq!(r.name, "椎名林檎");
+    assert_eq!(r.name_original.as_deref(), Some("椎名林檎"));
+    assert_eq!(r.mb_transliteration.as_deref(), Some("Sheena Ringo"));
+    assert_eq!(r.mb_sort_name, "Sheena, Ringo");
+    assert_eq!(r.transliteration_override, None);
+    assert_eq!(r.sort_name_override, None);
+
+    // Write an override for both dimensions.
+    set_artist_reading_override(&conn, "m", Some("Shiina Ringo"), Some("Shiina, Ringo")).unwrap();
+    let r = artist_reading(&conn, "m").unwrap();
+    assert_eq!(r.transliteration_override.as_deref(), Some("Shiina Ringo"));
+    assert_eq!(r.sort_name_override.as_deref(), Some("Shiina, Ringo"));
+    assert_eq!(r.mb_transliteration.as_deref(), Some("Sheena Ringo"));
+    assert_eq!(r.mb_sort_name, "Sheena, Ringo");
+
+    // Clearing sets both back to null.
+    set_artist_reading_override(&conn, "m", None, None).unwrap();
+    let r = artist_reading(&conn, "m").unwrap();
+    assert_eq!(r.transliteration_override, None);
+    assert_eq!(r.sort_name_override, None);
 }
 
 #[test]
