@@ -39,4 +39,31 @@ void main() {
     expect(infoed, entity);
     expect(added, isNull);
   });
+
+  testWidgets('shows Set reading… and invokes onSetReading', (tester) async {
+    QueueEntityRef? reading;
+    const entity = QueueEntityRef.artist('m-1');
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: RowContextMenu(
+          entity: entity,
+          onSetReading: (e) => reading = e,
+          child: const SizedBox(width: 200, height: 40, child: Text('row')),
+        ),
+      ),
+    ));
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('row')),
+      buttons: kSecondaryButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Set reading…'), findsOneWidget);
+    await tester.tap(find.text('Set reading…'));
+    await tester.pumpAndSettle();
+    expect(reading, entity);
+  });
 }

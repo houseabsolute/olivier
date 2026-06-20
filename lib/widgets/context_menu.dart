@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:olivier/audio/queue_entity.dart';
 
 /// Wraps [child] so a right-click (secondary tap) opens a context menu. The
-/// optional [onAddToQueue]/[onInfo]/[onReadTags]/[onRefetch] entries appear
+/// optional [onAddToQueue]/[onInfo]/[onReadTags]/[onRefetch]/[onSetReading] entries appear
 /// only when their callback is non-null, so each column shows the actions
 /// appropriate to its entity.
 class RowContextMenu extends StatelessWidget {
@@ -13,6 +13,7 @@ class RowContextMenu extends StatelessWidget {
     this.onInfo,
     this.onReadTags,
     this.onRefetch,
+    this.onSetReading,
     required this.child,
   });
 
@@ -21,6 +22,7 @@ class RowContextMenu extends StatelessWidget {
   final ValueChanged<QueueEntityRef>? onInfo;
   final ValueChanged<QueueEntityRef>? onReadTags;
   final ValueChanged<QueueEntityRef>? onRefetch;
+  final ValueChanged<QueueEntityRef>? onSetReading;
   final Widget child;
 
   Future<void> _show(BuildContext context, Offset globalPosition) async {
@@ -44,6 +46,9 @@ class RowContextMenu extends StatelessWidget {
         if (onRefetch != null)
           const PopupMenuItem<String>(
               value: 'refetch', child: Text('Re-fetch from MusicBrainz')),
+        if (onSetReading != null)
+          const PopupMenuItem<String>(
+              value: 'reading', child: Text('Set reading…')),
       ],
     );
     switch (selected) {
@@ -55,6 +60,8 @@ class RowContextMenu extends StatelessWidget {
         onReadTags?.call(entity);
       case 'refetch':
         onRefetch?.call(entity);
+      case 'reading':
+        onSetReading?.call(entity);
     }
   }
 
