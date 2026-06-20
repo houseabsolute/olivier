@@ -312,7 +312,7 @@ class VolumeControl extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final vol = ref.watch(volumeProvider).valueOrNull ?? defaultVolume;
+    final vol = ref.watch(volumeProvider).value ?? defaultVolume;
     final icon = vol <= 0
         ? Icons.volume_off
         : vol < 0.5
