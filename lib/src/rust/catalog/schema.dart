@@ -152,6 +152,9 @@ class QueueTrack {
   final String title;
   final String? artist;
   final String album;
+  final String? albumArtist;
+  final String? albumArtistOriginal;
+  final String? albumArtistReading;
   final BigInt? lengthMs;
   final PlatformInt64 addedAt;
   final PlatformInt64? lastPlayed;
@@ -164,6 +167,9 @@ class QueueTrack {
     required this.title,
     this.artist,
     required this.album,
+    this.albumArtist,
+    this.albumArtistOriginal,
+    this.albumArtistReading,
     this.lengthMs,
     required this.addedAt,
     this.lastPlayed,
@@ -178,6 +184,9 @@ class QueueTrack {
       title.hashCode ^
       artist.hashCode ^
       album.hashCode ^
+      albumArtist.hashCode ^
+      albumArtistOriginal.hashCode ^
+      albumArtistReading.hashCode ^
       lengthMs.hashCode ^
       addedAt.hashCode ^
       lastPlayed.hashCode ^
@@ -194,6 +203,9 @@ class QueueTrack {
           title == other.title &&
           artist == other.artist &&
           album == other.album &&
+          albumArtist == other.albumArtist &&
+          albumArtistOriginal == other.albumArtistOriginal &&
+          albumArtistReading == other.albumArtistReading &&
           lengthMs == other.lengthMs &&
           addedAt == other.addedAt &&
           lastPlayed == other.lastPlayed &&

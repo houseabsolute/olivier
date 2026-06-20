@@ -1208,19 +1208,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   QueueTrack dco_decode_queue_track(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return QueueTrack(
       path: dco_decode_String(arr[0]),
       trackId: dco_decode_opt_box_autoadd_i_64(arr[1]),
       title: dco_decode_String(arr[2]),
       artist: dco_decode_opt_String(arr[3]),
       album: dco_decode_String(arr[4]),
-      lengthMs: dco_decode_opt_box_autoadd_u_64(arr[5]),
-      addedAt: dco_decode_i_64(arr[6]),
-      lastPlayed: dco_decode_opt_box_autoadd_i_64(arr[7]),
-      titleTranslit: dco_decode_opt_String(arr[8]),
-      titleTranslate: dco_decode_opt_String(arr[9]),
+      albumArtist: dco_decode_opt_String(arr[5]),
+      albumArtistOriginal: dco_decode_opt_String(arr[6]),
+      albumArtistReading: dco_decode_opt_String(arr[7]),
+      lengthMs: dco_decode_opt_box_autoadd_u_64(arr[8]),
+      addedAt: dco_decode_i_64(arr[9]),
+      lastPlayed: dco_decode_opt_box_autoadd_i_64(arr[10]),
+      titleTranslit: dco_decode_opt_String(arr[11]),
+      titleTranslate: dco_decode_opt_String(arr[12]),
     );
   }
 
@@ -1600,6 +1603,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_title = sse_decode_String(deserializer);
     var var_artist = sse_decode_opt_String(deserializer);
     var var_album = sse_decode_String(deserializer);
+    var var_albumArtist = sse_decode_opt_String(deserializer);
+    var var_albumArtistOriginal = sse_decode_opt_String(deserializer);
+    var var_albumArtistReading = sse_decode_opt_String(deserializer);
     var var_lengthMs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_addedAt = sse_decode_i_64(deserializer);
     var var_lastPlayed = sse_decode_opt_box_autoadd_i_64(deserializer);
@@ -1611,6 +1617,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         title: var_title,
         artist: var_artist,
         album: var_album,
+        albumArtist: var_albumArtist,
+        albumArtistOriginal: var_albumArtistOriginal,
+        albumArtistReading: var_albumArtistReading,
         lengthMs: var_lengthMs,
         addedAt: var_addedAt,
         lastPlayed: var_lastPlayed,
@@ -1987,6 +1996,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.title, serializer);
     sse_encode_opt_String(self.artist, serializer);
     sse_encode_String(self.album, serializer);
+    sse_encode_opt_String(self.albumArtist, serializer);
+    sse_encode_opt_String(self.albumArtistOriginal, serializer);
+    sse_encode_opt_String(self.albumArtistReading, serializer);
     sse_encode_opt_box_autoadd_u_64(self.lengthMs, serializer);
     sse_encode_i_64(self.addedAt, serializer);
     sse_encode_opt_box_autoadd_i_64(self.lastPlayed, serializer);

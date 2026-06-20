@@ -1464,6 +1464,9 @@ impl SseDecode for crate::catalog::schema::QueueTrack {
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_artist = <Option<String>>::sse_decode(deserializer);
         let mut var_album = <String>::sse_decode(deserializer);
+        let mut var_albumArtist = <Option<String>>::sse_decode(deserializer);
+        let mut var_albumArtistOriginal = <Option<String>>::sse_decode(deserializer);
+        let mut var_albumArtistReading = <Option<String>>::sse_decode(deserializer);
         let mut var_lengthMs = <Option<u64>>::sse_decode(deserializer);
         let mut var_addedAt = <i64>::sse_decode(deserializer);
         let mut var_lastPlayed = <Option<i64>>::sse_decode(deserializer);
@@ -1475,6 +1478,9 @@ impl SseDecode for crate::catalog::schema::QueueTrack {
             title: var_title,
             artist: var_artist,
             album: var_album,
+            album_artist: var_albumArtist,
+            album_artist_original: var_albumArtistOriginal,
+            album_artist_reading: var_albumArtistReading,
             length_ms: var_lengthMs,
             added_at: var_addedAt,
             last_played: var_lastPlayed,
@@ -1814,6 +1820,9 @@ impl flutter_rust_bridge::IntoDart for crate::catalog::schema::QueueTrack {
             self.title.into_into_dart().into_dart(),
             self.artist.into_into_dart().into_dart(),
             self.album.into_into_dart().into_dart(),
+            self.album_artist.into_into_dart().into_dart(),
+            self.album_artist_original.into_into_dart().into_dart(),
+            self.album_artist_reading.into_into_dart().into_dart(),
             self.length_ms.into_into_dart().into_dart(),
             self.added_at.into_into_dart().into_dart(),
             self.last_played.into_into_dart().into_dart(),
@@ -2148,6 +2157,9 @@ impl SseEncode for crate::catalog::schema::QueueTrack {
         <String>::sse_encode(self.title, serializer);
         <Option<String>>::sse_encode(self.artist, serializer);
         <String>::sse_encode(self.album, serializer);
+        <Option<String>>::sse_encode(self.album_artist, serializer);
+        <Option<String>>::sse_encode(self.album_artist_original, serializer);
+        <Option<String>>::sse_encode(self.album_artist_reading, serializer);
         <Option<u64>>::sse_encode(self.length_ms, serializer);
         <i64>::sse_encode(self.added_at, serializer);
         <Option<i64>>::sse_encode(self.last_played, serializer);
