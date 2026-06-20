@@ -1209,8 +1209,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   QueueTrack dco_decode_queue_track(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
     return QueueTrack(
       path: dco_decode_String(arr[0]),
       trackId: dco_decode_opt_box_autoadd_i_64(arr[1]),
@@ -1225,6 +1225,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       lastPlayed: dco_decode_opt_box_autoadd_i_64(arr[10]),
       titleTranslit: dco_decode_opt_String(arr[11]),
       titleTranslate: dco_decode_opt_String(arr[12]),
+      recordingMbid: dco_decode_opt_String(arr[13]),
+      albumArtistMbid: dco_decode_opt_String(arr[14]),
     );
   }
 
@@ -1616,6 +1618,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_lastPlayed = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_titleTranslit = sse_decode_opt_String(deserializer);
     var var_titleTranslate = sse_decode_opt_String(deserializer);
+    var var_recordingMbid = sse_decode_opt_String(deserializer);
+    var var_albumArtistMbid = sse_decode_opt_String(deserializer);
     return QueueTrack(
         path: var_path,
         trackId: var_trackId,
@@ -1629,7 +1633,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         addedAt: var_addedAt,
         lastPlayed: var_lastPlayed,
         titleTranslit: var_titleTranslit,
-        titleTranslate: var_titleTranslate);
+        titleTranslate: var_titleTranslate,
+        recordingMbid: var_recordingMbid,
+        albumArtistMbid: var_albumArtistMbid);
   }
 
   @protected
@@ -2014,6 +2020,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_64(self.lastPlayed, serializer);
     sse_encode_opt_String(self.titleTranslit, serializer);
     sse_encode_opt_String(self.titleTranslate, serializer);
+    sse_encode_opt_String(self.recordingMbid, serializer);
+    sse_encode_opt_String(self.albumArtistMbid, serializer);
   }
 
   @protected

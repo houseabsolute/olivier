@@ -75,4 +75,6 @@ pub struct QueueTrack {
     pub last_played: Option<i64>,
     pub title_translit: Option<String>,
     pub title_translate: Option<String>,
+    pub recording_mbid: Option<String>,
+    pub album_artist_mbid: Option<String>,
 }

@@ -1791,3 +1791,45 @@ fn tracks_for_album_returns_recording_and_album_artist_mbids() {
         Some("aaaaaaaa-2222-3333-4444-555555555555")
     );
 }
+
+#[test]
+fn tracks_for_paths_returns_recording_and_album_artist_mbids() {
+    let conn = open(":memory:").unwrap();
+    conn.execute(
+        "INSERT INTO artist(mbid, name, sort_name) VALUES ('aaaaaaaa-2222-3333-4444-555555555555', 'A', 'A')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid, album_artist_mbid, title) VALUES ('rel', 'aaaaaaaa-2222-3333-4444-555555555555', 'Album')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(id, release_mbid, recording_mbid, disc, position, title)
+         VALUES (1, 'rel', 'bbbbbbbb-2222-3333-4444-555555555555', 1, 1, 'Song')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path, mtime, size, track_id, added_at) VALUES ('/m/a.flac', 0, 0, 1, 0)",
+        [],
+    )
+    .unwrap();
+
+    let got = tracks_for_paths(
+        &conn,
+        &["/m/a.flac".to_string(), "/m/missing.mp3".to_string()],
+    )
+    .unwrap();
+    assert_eq!(
+        got[0].recording_mbid.as_deref(),
+        Some("bbbbbbbb-2222-3333-4444-555555555555")
+    );
+    assert_eq!(
+        got[0].album_artist_mbid.as_deref(),
+        Some("aaaaaaaa-2222-3333-4444-555555555555")
+    );
+    assert_eq!(got[1].recording_mbid, None);
+    assert_eq!(got[1].album_artist_mbid, None);
+}

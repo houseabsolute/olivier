@@ -164,6 +164,8 @@ class QueueTrack {
   final PlatformInt64? lastPlayed;
   final String? titleTranslit;
   final String? titleTranslate;
+  final String? recordingMbid;
+  final String? albumArtistMbid;
 
   const QueueTrack({
     required this.path,
@@ -179,6 +181,8 @@ class QueueTrack {
     this.lastPlayed,
     this.titleTranslit,
     this.titleTranslate,
+    this.recordingMbid,
+    this.albumArtistMbid,
   });
 
   @override
@@ -195,7 +199,9 @@ class QueueTrack {
       addedAt.hashCode ^
       lastPlayed.hashCode ^
       titleTranslit.hashCode ^
-      titleTranslate.hashCode;
+      titleTranslate.hashCode ^
+      recordingMbid.hashCode ^
+      albumArtistMbid.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -214,7 +220,9 @@ class QueueTrack {
           addedAt == other.addedAt &&
           lastPlayed == other.lastPlayed &&
           titleTranslit == other.titleTranslit &&
-          titleTranslate == other.titleTranslate;
+          titleTranslate == other.titleTranslate &&
+          recordingMbid == other.recordingMbid &&
+          albumArtistMbid == other.albumArtistMbid;
 }
 
 class Track {

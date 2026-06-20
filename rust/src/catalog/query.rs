@@ -272,7 +272,8 @@ pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<V
                    WHERE recording_mbid = t.recording_mbid AND kind = 'translate'),
                 f.added_at, s.last_played,
                 aa.name, aa.name_original,
-                COALESCE(aa.transliteration_override, aa.transliteration)
+                COALESCE(aa.transliteration_override, aa.transliteration),
+                t.recording_mbid, r.album_artist_mbid
          FROM file f JOIN track t ON t.id = f.track_id
          JOIN release r ON r.mbid = t.release_mbid
          LEFT JOIN artist aa ON aa.mbid = r.album_artist_mbid
@@ -297,6 +298,8 @@ pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<V
                     album_artist: r.get(9)?,
                     album_artist_original: r.get(10)?,
                     album_artist_reading: r.get(11)?,
+                    recording_mbid: r.get(12)?,
+                    album_artist_mbid: r.get(13)?,
                 })
             })
             .optional()?;
@@ -314,6 +317,8 @@ pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<V
             album_artist: None,
             album_artist_original: None,
             album_artist_reading: None,
+            recording_mbid: None,
+            album_artist_mbid: None,
         }));
     }
     Ok(out)
