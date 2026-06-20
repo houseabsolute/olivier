@@ -79,6 +79,17 @@ class _AlbumList extends ConsumerWidget {
                     content: Text('Re-fetching from MusicBrainz…')));
               c.enrichAlbum(album.releaseMbid);
             },
+            onReadTags: (_) async {
+              final messenger = ScaffoldMessenger.of(context);
+              await ref.read(rereadAlbumTagsFnProvider)(album.releaseMbid);
+              ref.invalidate(artistsProvider);
+              ref.invalidate(albumsProvider);
+              ref.invalidate(tracksProvider);
+              ref.read(selectedAlbumProvider.notifier).clear();
+              messenger
+                ..clearSnackBars()
+                ..showSnackBar(const SnackBar(content: Text('Tags re-read')));
+            },
             child: InkWell(
               key: ValueKey(album.releaseMbid),
               onTap: () {

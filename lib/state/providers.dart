@@ -133,6 +133,14 @@ final rereadTrackTagsFnProvider = Provider<RereadTrackTagsFn>((ref) {
   return (trackId) => rereadTrackTags(dbPath: db, trackId: trackId);
 });
 
+// Re-read every track's tags for one album (re-homes any whose album changed). Seam.
+typedef RereadAlbumTagsFn = Future<void> Function(String releaseMbid);
+
+final rereadAlbumTagsFnProvider = Provider<RereadAlbumTagsFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (releaseMbid) => rereadAlbumTags(dbPath: db, releaseMbid: releaseMbid);
+});
+
 // Loads one artist's raw reading/sort values for the "Set reading" dialog. Seam.
 typedef ArtistReadingFn = Future<ArtistReading> Function(String mbid);
 

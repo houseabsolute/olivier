@@ -59,6 +59,42 @@ void main() {
     expect(qc.orderedPaths, ['/m/a.flac', '/m/b.flac']);
   });
 
+  testWidgets('album menu "Re-read tags" calls the seam + shows a snackbar',
+      (tester) async {
+    final reread = <String>[];
+    final qc = QueueController.withPlayer(
+      FakeQueuePlayer(),
+      dbPath: '/x.db',
+      saveQueue: (_) async {},
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        getSettingFnProvider.overrideWithValue((key) async => null),
+        albumsProvider.overrideWith((ref) => [_album]),
+        queueControllerProvider.overrideWithValue(qc),
+        albumFilePathsFnProvider.overrideWithValue((mbid) async => []),
+        rereadAlbumTagsFnProvider
+            .overrideWithValue((mbid) async => reread.add(mbid)),
+      ],
+      child: const MaterialApp(home: Scaffold(body: AlbumColumn())),
+    ));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Album One')),
+      buttons: kSecondaryButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Re-read tags'), findsOneWidget);
+    await tester.tap(find.text('Re-read tags'));
+    await tester.pumpAndSettle();
+
+    expect(reread, ['rel-1']);
+    expect(find.text('Tags re-read'), findsOneWidget);
+  });
+
   // Spec §4: single-click selects the album (updates selectedAlbumProvider) and
   // must NOT enqueue/play anything — the queue stays empty.
   testWidgets('single-tapping an album selects it without enqueueing',
