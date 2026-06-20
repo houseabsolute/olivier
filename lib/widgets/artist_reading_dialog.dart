@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 
@@ -27,7 +28,10 @@ Future<void> showArtistReadingDialog(
       reading: reading,
       onSubmit: (r, s) async {
         await ref.read(setArtistReadingOverrideFnProvider)(mbid, r, s);
+        ref.read(queueControllerProvider).refreshMetadata();
         ref.invalidate(artistsProvider);
+        ref.invalidate(albumsProvider);
+        ref.invalidate(tracksProvider);
       },
     ),
   );

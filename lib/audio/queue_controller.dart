@@ -40,6 +40,12 @@ class QueueController implements ShuffleAllTarget {
   /// Bumped after every mutation so the queue view can rebuild.
   final ValueNotifier<int> revision = ValueNotifier(0);
 
+  /// Re-resolve the now-playing/queue metadata without changing the queue
+  /// order — used when an artist's reading override changes so the displayed
+  /// album-artist (and its reading) refreshes in the queue panel, the
+  /// now-playing bar, and MPRIS.
+  void refreshMetadata() => revision.value++;
+
   List<String> _orderedPaths = [];
   // The actual order the player's sources are in (shuffled or canonical), so the
   // now-playing items can be built to line up 1:1 with the player by index.
