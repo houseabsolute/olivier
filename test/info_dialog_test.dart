@@ -130,6 +130,23 @@ void main() {
     expect(find.text('歌舞伎町の女王'), findsOneWidget);
   });
 
+  group('mbUrl', () {
+    test('builds a musicbrainz URL for a real UUID', () {
+      const uuid = '11111111-2222-3333-4444-555555555555';
+      expect(mbUrl('release', uuid), 'https://musicbrainz.org/release/$uuid');
+      expect(mbUrl('artist', uuid), 'https://musicbrainz.org/artist/$uuid');
+      expect(
+          mbUrl('recording', uuid), 'https://musicbrainz.org/recording/$uuid');
+    });
+    test('returns null for a synth key or null/empty', () {
+      expect(mbUrl('artist', 'synth:aa:foo'), isNull);
+      expect(mbUrl('release', 'synth:rel:x|y'), isNull);
+      expect(mbUrl('release', null), isNull);
+      expect(mbUrl('release', ''), isNull);
+      expect(mbUrl('release', 'not-a-uuid'), isNull);
+    });
+  });
+
   testWidgets('showInfoDialog renders an optional header above the fields',
       (tester) async {
     await tester.pumpWidget(MaterialApp(

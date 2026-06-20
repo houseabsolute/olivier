@@ -1,6 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 
+final _mbidUuid = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+
+/// The musicbrainz.org URL for an entity, or null when [mbid] is not a real
+/// MBID (a synth key like `synth:aa:…`, or null/empty). [entityType] is one of
+/// `release`, `artist`, `recording`.
+String? mbUrl(String entityType, String? mbid) {
+  if (mbid == null || !_mbidUuid.hasMatch(mbid)) return null;
+  return 'https://musicbrainz.org/$entityType/$mbid';
+}
+
 /// A read-only, copy-pasteable info dialog: label/value rows where each value is
 /// selectable text. The caller passes only non-empty fields.
 Future<void> showInfoDialog(
