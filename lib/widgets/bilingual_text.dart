@@ -12,9 +12,10 @@ enum LanguageLeads { a, b }
 /// to its text, so it never overflows — while preserving the perf benefit of a
 /// fixed `itemExtent` (ListView can still compute scroll offsets without laying
 /// every row out). The list rows carry no vertical padding, so the two text
-/// lines are the only content; each base (48 for a list row, 80 for the
-/// now-playing bar's title block) keeps a constant headroom over its lines at
-/// every scale, since base and text grow by the same factor.
+/// lines are the only content; each base (48 for the artist/album columns, 42
+/// for the tighter track rows, 80 for the now-playing bar's title block) keeps
+/// a constant headroom over its lines at every scale, since base and text grow
+/// by the same factor.
 double bilingualRowExtent(BuildContext context, double base) =>
     MediaQuery.textScalerOf(context).scale(base);
 

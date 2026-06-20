@@ -13,6 +13,10 @@ import 'package:olivier/widgets/track_meta.dart';
 const double _trackNumWidth = 32;
 const double _trackNumGap = 8;
 
+// Track rows are tighter than the artist/album columns (base 48): the two-line
+// bilingual content needs ~36px, so 42 packs the rows closer together.
+const double _trackRowBase = 42;
+
 Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
   final paths = await resolveEntityPaths(
     entity,
@@ -57,7 +61,7 @@ class _TrackList extends ConsumerWidget {
         Expanded(
           child: ListView.builder(
             itemCount: tracks.length,
-            itemExtent: bilingualRowExtent(context, 48),
+            itemExtent: bilingualRowExtent(context, _trackRowBase),
             scrollCacheExtent: const ScrollCacheExtent.pixels(600),
             itemBuilder: (context, index) {
               final track = tracks[index];
