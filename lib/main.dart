@@ -150,10 +150,19 @@ Future<void> _migrateLegacyDb(String newDbPath) async {
 }
 
 class OlivierApp extends StatelessWidget {
-  const OlivierApp({super.key, this.onQuit, this.home});
+  const OlivierApp({
+    super.key,
+    this.onQuit,
+    this.onTogglePlayPause,
+    this.home,
+  });
 
   /// Injectable so the Ctrl-Q binding is testable; defaults to quitting.
   final VoidCallback? onQuit;
+
+  /// Injectable so the space-bar play/pause binding is testable; defaults to
+  /// toggling the global audio handler.
+  final VoidCallback? onTogglePlayPause;
 
   /// Injectable home widget so the app can be widget-tested without the full
   /// BrowserPage + Riverpod provider stack. Defaults to [BrowserPage].
@@ -168,6 +177,21 @@ class OlivierApp extends StatelessWidget {
       },
       child: Focus(
         autofocus: true,
+        // Space toggles play/pause like a media key, but only when no text
+        // field is focused — otherwise typing a space would also toggle
+        // playback. The space key event still bubbles up here while editing
+        // (the character is inserted via the text-input system rather than
+        // consumed as a key event), so we explicitly yield when a text field
+        // holds focus.
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.space &&
+              !_textInputHasFocus()) {
+            (onTogglePlayPause ?? () => audioHandler.togglePlayPause())();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
         child: MaterialApp(
           title: 'Olivier',
           home: home ?? const BrowserPage(),
@@ -175,4 +199,13 @@ class OlivierApp extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Whether a text-editing widget currently holds focus, so global single-key
+/// shortcuts (like space → play/pause) can yield to typing.
+bool _textInputHasFocus() {
+  final ctx = FocusManager.instance.primaryFocus?.context;
+  if (ctx == null) return false;
+  return ctx.widget is EditableText ||
+      ctx.findAncestorStateOfType<EditableTextState>() != null;
 }
