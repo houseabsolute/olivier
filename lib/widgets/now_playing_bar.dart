@@ -42,46 +42,6 @@ class NowPlayingBar extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: Row(
             children: [
-              // Transport buttons.
-              IconButton(
-                icon: const Icon(Icons.skip_previous),
-                tooltip: 'Previous',
-                onPressed: () => audioHandler.skipToPrevious(),
-              ),
-              StreamBuilder<PlayerState>(
-                stream: _player.playerStateStream,
-                builder: (context, snap) {
-                  final state = snap.data;
-                  final playing = state?.playing ?? false;
-                  final processingState =
-                      state?.processingState ?? ProcessingState.idle;
-                  final isLoading =
-                      processingState == ProcessingState.loading ||
-                          processingState == ProcessingState.buffering;
-                  if (isLoading) {
-                    return const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    );
-                  }
-                  return IconButton(
-                    icon: Icon(playing ? Icons.pause : Icons.play_arrow),
-                    tooltip: playing ? 'Pause' : 'Play',
-                    onPressed: () =>
-                        playing ? audioHandler.pause() : audioHandler.play(),
-                  );
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.skip_next),
-                tooltip: 'Next',
-                onPressed: () => audioHandler.skipToNext(),
-              ),
-              const SizedBox(width: 8),
               // Title / artist.
               Expanded(
                 flex: 2,
