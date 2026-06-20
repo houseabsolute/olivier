@@ -50,6 +50,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Artist dco_decode_artist(dynamic raw);
 
   @protected
+  ArtistReading dco_decode_artist_reading(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
@@ -149,6 +152,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Artist sse_decode_artist(SseDeserializer deserializer);
+
+  @protected
+  ArtistReading sse_decode_artist_reading(SseDeserializer deserializer);
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
@@ -256,6 +262,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_artist(Artist self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_artist_reading(ArtistReading self, SseSerializer serializer);
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);

@@ -23,6 +23,19 @@ Future<List<Artist>> listArtists(
     RustLib.instance.api
         .crateApiCatalogListArtists(dbPath: dbPath, after: after, limit: limit);
 
+Future<ArtistReading> artistReading(
+        {required String dbPath, required String mbid}) =>
+    RustLib.instance.api
+        .crateApiCatalogArtistReading(dbPath: dbPath, mbid: mbid);
+
+Future<void> setArtistReadingOverride(
+        {required String dbPath,
+        required String mbid,
+        String? reading,
+        String? sort}) =>
+    RustLib.instance.api.crateApiCatalogSetArtistReadingOverride(
+        dbPath: dbPath, mbid: mbid, reading: reading, sort: sort);
+
 Future<List<Album>> listAlbums(
         {required String dbPath, required String albumArtistMbid}) =>
     RustLib.instance.api.crateApiCatalogListAlbums(

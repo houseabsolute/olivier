@@ -1,7 +1,7 @@
 use crate::catalog::query;
 use crate::catalog::roots;
 use crate::catalog::scan::{self, ScanProgress};
-use crate::catalog::schema::{Album, Artist, QueueTrack, Track};
+use crate::catalog::schema::{Album, Artist, ArtistReading, QueueTrack, Track};
 use crate::db;
 use crate::decision_log::DecisionLog;
 use crate::frb_generated::StreamSink;
@@ -30,6 +30,24 @@ pub fn list_artists(
     limit: u32,
 ) -> anyhow::Result<Vec<Artist>> {
     query::artists_page(&db::open(&db_path)?, after.as_deref(), limit)
+}
+
+pub fn artist_reading(db_path: String, mbid: String) -> anyhow::Result<ArtistReading> {
+    query::artist_reading(&db::open(&db_path)?, &mbid)
+}
+
+pub fn set_artist_reading_override(
+    db_path: String,
+    mbid: String,
+    reading: Option<String>,
+    sort: Option<String>,
+) -> anyhow::Result<()> {
+    query::set_artist_reading_override(
+        &db::open(&db_path)?,
+        &mbid,
+        reading.as_deref(),
+        sort.as_deref(),
+    )
 }
 
 pub fn list_albums(db_path: String, album_artist_mbid: String) -> anyhow::Result<Vec<Album>> {

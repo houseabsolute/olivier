@@ -93,6 +93,48 @@ class Artist {
           nameOriginal == other.nameOriginal;
 }
 
+/// Raw (non-coalesced) reading/sort fields for one artist — populates the
+/// "Set reading" edit dialog so it can show the current override alongside the
+/// MusicBrainz value.
+class ArtistReading {
+  final String name;
+  final String? nameOriginal;
+  final String? mbTransliteration;
+  final String? transliterationOverride;
+  final String mbSortName;
+  final String? sortNameOverride;
+
+  const ArtistReading({
+    required this.name,
+    this.nameOriginal,
+    this.mbTransliteration,
+    this.transliterationOverride,
+    required this.mbSortName,
+    this.sortNameOverride,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      nameOriginal.hashCode ^
+      mbTransliteration.hashCode ^
+      transliterationOverride.hashCode ^
+      mbSortName.hashCode ^
+      sortNameOverride.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ArtistReading &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          nameOriginal == other.nameOriginal &&
+          mbTransliteration == other.mbTransliteration &&
+          transliterationOverride == other.transliterationOverride &&
+          mbSortName == other.mbSortName &&
+          sortNameOverride == other.sortNameOverride;
+}
+
 /// A queue entry paired with its catalog metadata, keyed by file path — used to
 /// rebuild the now-playing items for a restored session. `track_id` is None when
 /// the path is no longer in the catalog (then `title` falls back to the filename).
