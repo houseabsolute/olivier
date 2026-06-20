@@ -231,8 +231,7 @@ void main() {
 
     final link = tester.widget<SelectableText>(find
         .byWidgetPredicate((w) => w is SelectableText && w.textSpan != null));
-    final recognizer =
-        (link.textSpan! as TextSpan).recognizer! as TapGestureRecognizer;
+    final recognizer = link.textSpan!.recognizer! as TapGestureRecognizer;
     recognizer.onTap!();
     await tester.pump();
 

@@ -5,7 +5,9 @@ use rust_lib_olivier::catalog::query::{
     tracks_for_album, tracks_for_paths,
 };
 use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
-use rust_lib_olivier::catalog::scan::{reconcile_album_artists, reread_album_tags, reread_track_tags, scan_roots};
+use rust_lib_olivier::catalog::scan::{
+    reconcile_album_artists, reread_album_tags, reread_track_tags, scan_roots,
+};
 use rust_lib_olivier::catalog::schema::ArtistReading;
 use rust_lib_olivier::db::open;
 use rust_lib_olivier::decision_log::DecisionLog;
@@ -1839,7 +1841,11 @@ fn reread_album_tags_is_a_noop_when_tags_unchanged() {
     let dir = tempfile::tempdir().unwrap();
     let (mut conn, track_id) = seed_one_flac(dir.path());
     let release: String = conn
-        .query_row("SELECT release_mbid FROM track WHERE id = ?1", [track_id], |r| r.get(0))
+        .query_row(
+            "SELECT release_mbid FROM track WHERE id = ?1",
+            [track_id],
+            |r| r.get(0),
+        )
         .unwrap();
 
     reread_album_tags(&mut conn, &release, &DecisionLog::to_path(None)).unwrap();
@@ -1862,7 +1868,11 @@ fn reread_album_tags_applies_a_tag_change_across_the_album() {
     let (mut conn, track_id) = seed_one_flac(dir.path());
     let path = dir.path().join("sample.flac");
     let release_before: String = conn
-        .query_row("SELECT release_mbid FROM track WHERE id = ?1", [track_id], |r| r.get(0))
+        .query_row(
+            "SELECT release_mbid FROM track WHERE id = ?1",
+            [track_id],
+            |r| r.get(0),
+        )
         .unwrap();
 
     {
@@ -1889,7 +1899,11 @@ fn reread_album_tags_applies_a_tag_change_across_the_album() {
         .unwrap();
     assert_eq!(release_after, "ffffffff-0000-0000-0000-000000000099");
     let old: i64 = conn
-        .query_row("SELECT count(*) FROM release WHERE mbid = ?1", [&release_before], |r| r.get(0))
+        .query_row(
+            "SELECT count(*) FROM release WHERE mbid = ?1",
+            [&release_before],
+            |r| r.get(0),
+        )
         .unwrap();
     assert_eq!(old, 0);
 }
