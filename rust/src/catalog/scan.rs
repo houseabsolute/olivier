@@ -220,6 +220,27 @@ pub fn reread_track_tags(
     Ok(())
 }
 
+/// Re-read the on-disk tags of every track in a release, re-homing tracks whose
+/// album/artist tags changed (per `reread_track_tags`). Track IDs are collected
+/// before the loop because a re-home can move a track off this release mid-pass.
+pub fn reread_album_tags(
+    conn: &mut Connection,
+    release_mbid: &str,
+    log: &DecisionLog,
+) -> anyhow::Result<()> {
+    let track_ids: Vec<i64> = {
+        let mut stmt = conn.prepare("SELECT id FROM track WHERE release_mbid = ?1")?;
+        let ids = stmt
+            .query_map([release_mbid], |r| r.get::<_, i64>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        ids
+    };
+    for id in track_ids {
+        reread_track_tags(conn, id, log)?;
+    }
+    Ok(())
+}
+
 /// Remove catalog rows orphaned by file deletions, child-first. track_stats
 /// references track, so it must be deleted BEFORE the track — FKs ARE enforced
 /// here (libsqlite3-sys bundles SQLite with SQLITE_DEFAULT_FOREIGN_KEYS=1). Keying

@@ -18,6 +18,11 @@ Future<void> rereadTrackTags(
     RustLib.instance.api
         .crateApiCatalogRereadTrackTags(dbPath: dbPath, trackId: trackId);
 
+Future<void> rereadAlbumTags(
+        {required String dbPath, required String releaseMbid}) =>
+    RustLib.instance.api.crateApiCatalogRereadAlbumTags(
+        dbPath: dbPath, releaseMbid: releaseMbid);
+
 Future<List<Artist>> listArtists(
         {required String dbPath, String? after, required int limit}) =>
     RustLib.instance.api

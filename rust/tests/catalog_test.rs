@@ -5,7 +5,7 @@ use rust_lib_olivier::catalog::query::{
     tracks_for_album, tracks_for_paths,
 };
 use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
-use rust_lib_olivier::catalog::scan::{reconcile_album_artists, reread_track_tags, scan_roots};
+use rust_lib_olivier::catalog::scan::{reconcile_album_artists, reread_album_tags, reread_track_tags, scan_roots};
 use rust_lib_olivier::catalog::schema::ArtistReading;
 use rust_lib_olivier::db::open;
 use rust_lib_olivier::decision_log::DecisionLog;
@@ -1832,4 +1832,64 @@ fn tracks_for_paths_returns_recording_and_album_artist_mbids() {
     );
     assert_eq!(got[1].recording_mbid, None);
     assert_eq!(got[1].album_artist_mbid, None);
+}
+
+#[test]
+fn reread_album_tags_is_a_noop_when_tags_unchanged() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut conn, track_id) = seed_one_flac(dir.path());
+    let release: String = conn
+        .query_row("SELECT release_mbid FROM track WHERE id = ?1", [track_id], |r| r.get(0))
+        .unwrap();
+
+    reread_album_tags(&mut conn, &release, &DecisionLog::to_path(None)).unwrap();
+
+    for (table, n) in [("track", 1), ("file", 1), ("release", 1)] {
+        let got: i64 = conn
+            .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(got, n, "{table}");
+    }
+}
+
+#[test]
+fn reread_album_tags_applies_a_tag_change_across_the_album() {
+    use lofty::config::{ParseOptions, WriteOptions};
+    use lofty::file::AudioFile;
+    use lofty::flac::FlacFile;
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut conn, track_id) = seed_one_flac(dir.path());
+    let path = dir.path().join("sample.flac");
+    let release_before: String = conn
+        .query_row("SELECT release_mbid FROM track WHERE id = ?1", [track_id], |r| r.get(0))
+        .unwrap();
+
+    {
+        let mut f = std::fs::File::open(&path).unwrap();
+        let mut flac = FlacFile::read_from(&mut f, ParseOptions::new()).unwrap();
+        let vc = flac.vorbis_comments_mut().unwrap();
+        vc.insert("ALBUM".to_string(), "Some Other Album".to_string());
+        vc.insert(
+            "MUSICBRAINZ_ALBUMID".to_string(),
+            "ffffffff-0000-0000-0000-000000000099".to_string(),
+        );
+        flac.save_to_path(&path, WriteOptions::default()).unwrap();
+    }
+
+    reread_album_tags(&mut conn, &release_before, &DecisionLog::to_path(None)).unwrap();
+
+    let path_str = path.to_string_lossy().to_string();
+    let release_after: String = conn
+        .query_row(
+            "SELECT t.release_mbid FROM file f JOIN track t ON t.id = f.track_id WHERE f.path = ?1",
+            [&path_str],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(release_after, "ffffffff-0000-0000-0000-000000000099");
+    let old: i64 = conn
+        .query_row("SELECT count(*) FROM release WHERE mbid = ?1", [&release_before], |r| r.get(0))
+        .unwrap();
+    assert_eq!(old, 0);
 }

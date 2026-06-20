@@ -24,6 +24,12 @@ pub fn reread_track_tags(db_path: String, track_id: i64) -> anyhow::Result<()> {
     scan::reread_track_tags(&mut conn, track_id, &log)
 }
 
+pub fn reread_album_tags(db_path: String, release_mbid: String) -> anyhow::Result<()> {
+    let mut conn = db::open(&db_path)?;
+    let log = DecisionLog::for_db(&db_path);
+    scan::reread_album_tags(&mut conn, &release_mbid, &log)
+}
+
 pub fn list_artists(
     db_path: String,
     after: Option<String>,
