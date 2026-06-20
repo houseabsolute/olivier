@@ -6,6 +6,7 @@ import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/widgets/artist_reading_dialog.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 import 'package:olivier/widgets/context_menu.dart';
 
@@ -72,6 +73,8 @@ class _ArtistList extends ConsumerWidget {
                     content: Text('Re-fetching from MusicBrainz…')));
               c.enrichArtist(artist.mbid);
             },
+            onSetReading: (_) =>
+                showArtistReadingDialog(context, ref, artist.mbid),
             child: InkWell(
               key: ValueKey(artist.mbid),
               onTap: () =>

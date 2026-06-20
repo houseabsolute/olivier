@@ -1,5 +1,5 @@
 import 'package:flutter/gestures.dart'
-    show kDoubleTapMinTime, kDoubleTapTimeout;
+    show kDoubleTapMinTime, kDoubleTapTimeout, kSecondaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -98,5 +98,24 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(qc.orderedPaths, _fakePaths);
+  });
+
+  testWidgets('artist row context menu offers Set reading…', (tester) async {
+    final qc = QueueController.withPlayer(
+      FakeQueuePlayer(),
+      dbPath: '/x.db',
+      saveQueue: (_) async {},
+    );
+    await tester.pumpWidget(_artistApp(qc));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Test Artist')),
+      buttons: kSecondaryButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Set reading…'), findsOneWidget);
   });
 }
