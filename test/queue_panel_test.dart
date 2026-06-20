@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olivier/audio/queue_controller.dart';
@@ -319,5 +320,88 @@ void main() {
     // ...but the title and the new artist/album columns stay.
     expect(find.text('椎名林檎'), findsOneWidget);
     expect(find.text('無罪モラトリアム'), findsOneWidget);
+  });
+
+  testWidgets(
+      'collapsed header does not overflow at a narrow width and keeps its '
+      'controls', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    // _app seeds currentIndex 0 over the 2-track stub, so the header has a
+    // now-playing track (cover candidate) and an up-next entry — the exact
+    // shape that previously overflowed when narrow.
+    final c = await _seededController();
+    await tester.pumpWidget(_app(c.qc));
+    await tester.pumpAndSettle();
+
+    // Collapsed (not expanded): the now-playing header bar must not overflow.
+    expect(tester.takeException(), isNull);
+    // All controls stay reachable even though the thumbnail is dropped.
+    expect(find.byTooltip('Shuffle'), findsOneWidget);
+    expect(find.byTooltip('Shuffle entire library'), findsOneWidget);
+    expect(find.byTooltip('Empty queue'), findsOneWidget);
+    expect(find.byTooltip('Expand queue'), findsOneWidget);
+  });
+
+  testWidgets(
+      'collapsed header shows the full track count (no ellipsis) when there '
+      'is room, even with an up-next', (tester) async {
+    // 700px is above the compact threshold, so the count must render in full.
+    // Regression guard: when the count flexed equally against the up-next cell,
+    // the up-next stole half the slack and ellipsized the count at this width.
+    await tester.binding.setSurfaceSize(const Size(700, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final c = await _seededController();
+    await tester.pumpWidget(_app(c.qc));
+    await tester.pumpAndSettle();
+
+    final count = tester.renderObject<RenderParagraph>(
+      find.text('Queue · 2 tracks'),
+    );
+    expect(count.didExceedMaxLines, isFalse);
+  });
+
+  testWidgets('collapsed header with no up-next does not overflow when narrow',
+      (tester) async {
+    // A single-track queue at currentIndex 0 has a now-playing track but no
+    // up-next, exercising the `else Spacer()` branch at a narrow width.
+    await tester.binding.setSurfaceSize(const Size(360, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const tracks = [
+      QueueTrack(path: '/solo.flac', title: 'Solo', album: 'X', addedAt: 0),
+    ];
+    final player = FakeQueuePlayer();
+    final qc = QueueController.withPlayer(
+      player,
+      dbPath: ':memory:',
+      saveQueue: (_) async {},
+    );
+    await qc.append([for (final t in tracks) t.path]);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          getSettingFnProvider.overrideWithValue((key) async => null),
+          queueControllerProvider.overrideWithValue(qc),
+          queueProvider.overrideWith(
+            () => _StubQueueNotifier(
+              const QueueView(
+                tracks: tracks,
+                currentIndex: 0,
+                shuffled: false,
+              ),
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: QueuePanel())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byTooltip('Expand queue'), findsOneWidget);
   });
 }

@@ -79,6 +79,13 @@ const int _queueAlbumFlex = 2;
 /// so the meta columns drop out (in both the header and the rows) instead.
 const double _queueMetaMinWidth = 560;
 
+/// Below this panel width the collapsed header switches to a compact layout: the
+/// now-playing thumbnail is dropped and the count text flexes so it ellipsizes
+/// rather than forcing the row wider than the panel. The four controls stay
+/// fixed-width, so at extreme widths (below ~250px, well under any realistic
+/// window — no minimum window size is enforced) the row can still overflow.
+const double _queueHeaderCompactWidth = 520;
+
 /// Lays out one expanded-queue row — or the column header — with identical
 /// geometry so the header labels align with the cells beneath them. [lead]
 /// fills the drag-handle column, [trailing] the remove-button column. [meta]
@@ -176,72 +183,94 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
 
     final header = Material(
       color: theme.colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            if (nowPlaying != null) ...[
-              PathCover(
-                filePath: nowPlaying.path,
-                size: 36,
-              ),
-              const SizedBox(width: 8),
-            ],
-            const Icon(Icons.queue_music, size: 20),
-            const SizedBox(width: 8),
-            Text('Queue · $count tracks', style: theme.textTheme.bodyMedium),
-            if (upNext != null) ...[
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '· up next: $upNext',
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall,
+      // The controls and the count text are non-compressible; below a threshold
+      // drop the now-playing thumbnail and let the count/up-next text ellipsize
+      // so the row degrades instead of overflowing when the panel is narrow.
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < _queueHeaderCompactWidth;
+          final countText = Text(
+            'Queue · $count tracks',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium,
+          );
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                if (nowPlaying != null && !compact) ...[
+                  PathCover(
+                    filePath: nowPlaying.path,
+                    size: 36,
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                const Icon(Icons.queue_music, size: 20),
+                const SizedBox(width: 8),
+                // Plain (full width) when there's room, so the count never
+                // truncates while empty space sits in the up-next / Spacer cell.
+                // Only the compact layout flexes it so it can ellipsize instead
+                // of overflowing when the panel is genuinely narrow.
+                if (compact) Flexible(child: countText) else countText,
+                if (upNext != null)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text(
+                        '· up next: $upNext',
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                  )
+                else
+                  const Spacer(),
+                // Shuffle toggle — flips shuffle on/off, active state driven by
+                // QueueView.shuffled (rebuilt when revision bumps).
+                Consumer(
+                  builder: (context, ref, _) {
+                    final view = ref.watch(queueProvider).value;
+                    final shuffled = view?.shuffled ?? false;
+                    return IconButton(
+                      tooltip: 'Shuffle',
+                      isSelected: shuffled,
+                      icon: const Icon(Icons.shuffle),
+                      selectedIcon: const Icon(Icons.shuffle_on),
+                      onPressed: () => ref
+                          .read(queueControllerProvider)
+                          .setShuffle(!shuffled),
+                    );
+                  },
                 ),
-              ),
-            ] else
-              const Spacer(),
-            // Shuffle toggle — flips shuffle on/off, active state driven by
-            // QueueView.shuffled (rebuilt when revision bumps).
-            Consumer(
-              builder: (context, ref, _) {
-                final view = ref.watch(queueProvider).value;
-                final shuffled = view?.shuffled ?? false;
-                return IconButton(
-                  tooltip: 'Shuffle',
-                  isSelected: shuffled,
-                  icon: const Icon(Icons.shuffle),
-                  selectedIcon: const Icon(Icons.shuffle_on),
+                // Shuffle entire library — replaces the queue and starts shuffled.
+                IconButton(
+                  icon: const Icon(Icons.shuffle_on_outlined),
+                  tooltip: 'Shuffle entire library',
+                  onPressed: () => shuffleEntireLibrary(context, ref),
+                ),
+                // Empty — clears the entire queue. Disabled when already empty.
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Empty queue',
+                  onPressed: count == 0
+                      ? null
+                      : () => ref.read(queueControllerProvider).clear(),
+                ),
+                // Expand / collapse caret.
+                IconButton(
+                  icon: Icon(
+                    expanded ? Icons.expand_more : Icons.expand_less,
+                  ),
+                  tooltip: expanded ? 'Collapse queue' : 'Expand queue',
                   onPressed: () =>
-                      ref.read(queueControllerProvider).setShuffle(!shuffled),
-                );
-              },
+                      ref.read(queueExpandedProvider.notifier).toggle(),
+                ),
+              ],
             ),
-            // Shuffle entire library — replaces the queue and starts shuffled.
-            IconButton(
-              icon: const Icon(Icons.shuffle_on_outlined),
-              tooltip: 'Shuffle entire library',
-              onPressed: () => shuffleEntireLibrary(context, ref),
-            ),
-            // Empty — clears the entire queue. Disabled when already empty.
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Empty queue',
-              onPressed: count == 0
-                  ? null
-                  : () => ref.read(queueControllerProvider).clear(),
-            ),
-            // Expand / collapse caret.
-            IconButton(
-              icon: Icon(
-                expanded ? Icons.expand_more : Icons.expand_less,
-              ),
-              tooltip: expanded ? 'Collapse queue' : 'Expand queue',
-              onPressed: () =>
-                  ref.read(queueExpandedProvider.notifier).toggle(),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
 
