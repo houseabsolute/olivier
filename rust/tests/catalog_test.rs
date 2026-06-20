@@ -1484,3 +1484,18 @@ fn reread_track_tags_rehomes_when_album_changes() {
         .unwrap();
     assert_eq!(tracks, 1, "still exactly one track");
 }
+
+#[test]
+fn migration_adds_artist_override_columns() {
+    let conn = open(":memory:").unwrap();
+    // pragma_table_info lists every column; both override columns must exist.
+    let n: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM pragma_table_info('artist')
+             WHERE name IN ('transliteration_override', 'sort_name_override')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(n, 2);
+}
