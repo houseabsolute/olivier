@@ -27,6 +27,8 @@ pub struct Album {
     pub release_mbid: String,
     pub title: String,
     pub album_artist: String,
+    pub album_artist_original: Option<String>,
+    pub album_artist_reading: Option<String>,
     pub original_year: Option<String>, // 4-char year (queries project substr(date,1,4))
     pub reissue_year: Option<String>, // 4-char year; MP4 originals are absent so this is the only year
     pub title_translit: Option<String>,

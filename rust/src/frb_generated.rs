@@ -1221,6 +1221,8 @@ impl SseDecode for crate::catalog::schema::Album {
         let mut var_releaseMbid = <String>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_albumArtist = <String>::sse_decode(deserializer);
+        let mut var_albumArtistOriginal = <Option<String>>::sse_decode(deserializer);
+        let mut var_albumArtistReading = <Option<String>>::sse_decode(deserializer);
         let mut var_originalYear = <Option<String>>::sse_decode(deserializer);
         let mut var_reissueYear = <Option<String>>::sse_decode(deserializer);
         let mut var_titleTranslit = <Option<String>>::sse_decode(deserializer);
@@ -1230,6 +1232,8 @@ impl SseDecode for crate::catalog::schema::Album {
             release_mbid: var_releaseMbid,
             title: var_title,
             album_artist: var_albumArtist,
+            album_artist_original: var_albumArtistOriginal,
+            album_artist_reading: var_albumArtistReading,
             original_year: var_originalYear,
             reissue_year: var_reissueYear,
             title_translit: var_titleTranslit,
@@ -1686,6 +1690,8 @@ impl flutter_rust_bridge::IntoDart for crate::catalog::schema::Album {
             self.release_mbid.into_into_dart().into_dart(),
             self.title.into_into_dart().into_dart(),
             self.album_artist.into_into_dart().into_dart(),
+            self.album_artist_original.into_into_dart().into_dart(),
+            self.album_artist_reading.into_into_dart().into_dart(),
             self.original_year.into_into_dart().into_dart(),
             self.reissue_year.into_into_dart().into_dart(),
             self.title_translit.into_into_dart().into_dart(),
@@ -1948,6 +1954,8 @@ impl SseEncode for crate::catalog::schema::Album {
         <String>::sse_encode(self.release_mbid, serializer);
         <String>::sse_encode(self.title, serializer);
         <String>::sse_encode(self.album_artist, serializer);
+        <Option<String>>::sse_encode(self.album_artist_original, serializer);
+        <Option<String>>::sse_encode(self.album_artist_reading, serializer);
         <Option<String>>::sse_encode(self.original_year, serializer);
         <Option<String>>::sse_encode(self.reissue_year, serializer);
         <Option<String>>::sse_encode(self.title_translit, serializer);

@@ -10,6 +10,8 @@ class Album {
   final String releaseMbid;
   final String title;
   final String albumArtist;
+  final String? albumArtistOriginal;
+  final String? albumArtistReading;
   final String? originalYear;
   final String? reissueYear;
   final String? titleTranslit;
@@ -22,6 +24,8 @@ class Album {
     required this.releaseMbid,
     required this.title,
     required this.albumArtist,
+    this.albumArtistOriginal,
+    this.albumArtistReading,
     this.originalYear,
     this.reissueYear,
     this.titleTranslit,
@@ -34,6 +38,8 @@ class Album {
       releaseMbid.hashCode ^
       title.hashCode ^
       albumArtist.hashCode ^
+      albumArtistOriginal.hashCode ^
+      albumArtistReading.hashCode ^
       originalYear.hashCode ^
       reissueYear.hashCode ^
       titleTranslit.hashCode ^
@@ -48,6 +54,8 @@ class Album {
           releaseMbid == other.releaseMbid &&
           title == other.title &&
           albumArtist == other.albumArtist &&
+          albumArtistOriginal == other.albumArtistOriginal &&
+          albumArtistReading == other.albumArtistReading &&
           originalYear == other.originalYear &&
           reissueYear == other.reissueYear &&
           titleTranslit == other.titleTranslit &&
