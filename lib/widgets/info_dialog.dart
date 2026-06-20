@@ -74,7 +74,8 @@ List<(String, String)> trackInfoFields(Track t) {
   _add(out, 'Title', t.title);
   _add(out, 'Reading', t.titleTranslit);
   _add(out, 'Translation', t.titleTranslate);
-  _add(out, 'Artist', t.artist);
+  _add(out, 'Album artist', t.albumArtistOriginal ?? t.albumArtist);
+  _add(out, 'Album artist reading', t.albumArtistReading);
   _add(out, 'Disc / Track', '${t.disc} / ${t.position}');
   _add(out, 'Length', _fmtLen(t.lengthMs));
   _add(out, 'Last played', _fmtEpoch(t.lastPlayed));
@@ -89,7 +90,8 @@ List<(String, String)> queueTrackInfoFields(QueueTrack t) {
   _add(out, 'Title', t.title);
   _add(out, 'Reading', t.titleTranslit);
   _add(out, 'Translation', t.titleTranslate);
-  _add(out, 'Artist', t.artist);
+  _add(out, 'Album artist', t.albumArtistOriginal ?? t.albumArtist);
+  _add(out, 'Album artist reading', t.albumArtistReading);
   _add(out, 'Album', t.album);
   _add(out, 'Length', _fmtLen(t.lengthMs));
   _add(out, 'Date added', _fmtEpoch(t.addedAt));
@@ -104,7 +106,8 @@ List<(String, String)> albumInfoFields(Album a) {
   _add(out, 'Title', a.title);
   _add(out, 'Reading', a.titleTranslit);
   _add(out, 'Translation', a.titleTranslate);
-  _add(out, 'Album artist', a.albumArtist);
+  _add(out, 'Album artist', a.albumArtistOriginal ?? a.albumArtist);
+  _add(out, 'Album artist reading', a.albumArtistReading);
   _add(out, 'Original year', a.originalYear);
   _add(out, 'Reissue year', a.reissueYear);
   _add(out, 'Release MBID', a.releaseMbid);

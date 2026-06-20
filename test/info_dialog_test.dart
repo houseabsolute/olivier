@@ -11,6 +11,8 @@ void main() {
       position: 3,
       title: '歌舞伎町の女王',
       artist: 'Sheena Ringo',
+      albumArtist: '椎名林檎',
+      albumArtistReading: 'Shiina Ringo',
       addedAt: 0,
       lengthMs: BigInt.from(258000),
       titleTranslit: 'Kabukicho no Joo',
@@ -25,6 +27,12 @@ void main() {
     expect(labels, isNot(contains('Last played'))); // null omitted
     expect(labels, isNot(contains('Added at'))); // 0 omitted
     expect(fields.firstWhere((f) => f.$1 == 'Length').$2, '4:18');
+    expect(labels, contains('Album artist'));
+    expect(labels, isNot(contains('Artist'))); // tag artist dropped
+    expect(labels, contains('Album artist reading'));
+    expect(fields.firstWhere((f) => f.$1 == 'Album artist').$2, '椎名林檎');
+    expect(fields.firstWhere((f) => f.$1 == 'Album artist reading').$2,
+        'Shiina Ringo');
   });
 
   test('trackInfoFields includes Last played and Added at when non-zero', () {
@@ -77,6 +85,8 @@ void main() {
       trackId: 7,
       title: 'T',
       artist: 'A',
+      albumArtist: '椎名林檎',
+      albumArtistReading: 'Shiina Ringo',
       album: 'Al',
       lengthMs: BigInt.from(258000),
       titleTranslit: 'Reading',
@@ -86,7 +96,12 @@ void main() {
     );
     final fields = queueTrackInfoFields(t);
     final labels = fields.map((f) => f.$1).toList();
-    expect(labels, contains('Artist'));
+    expect(labels, contains('Album artist'));
+    expect(labels, isNot(contains('Artist'))); // tag artist dropped
+    expect(labels, contains('Album artist reading'));
+    expect(fields.firstWhere((f) => f.$1 == 'Album artist').$2, '椎名林檎');
+    expect(fields.firstWhere((f) => f.$1 == 'Album artist reading').$2,
+        'Shiina Ringo');
     expect(labels, contains('Album'));
     expect(labels, contains('Path'));
     expect(labels, contains('Date added'));
