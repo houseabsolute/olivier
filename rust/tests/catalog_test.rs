@@ -1628,14 +1628,23 @@ fn albums_for_artist_returns_album_artist_reading_with_override() {
     let albums = albums_for_artist(&conn, "m").unwrap();
     assert_eq!(albums[0].album_artist, "椎名林檎");
     assert_eq!(albums[0].album_artist_original.as_deref(), Some("椎名林檎"));
-    assert_eq!(albums[0].album_artist_reading.as_deref(), Some("Sheena Ringo"));
+    assert_eq!(
+        albums[0].album_artist_reading.as_deref(),
+        Some("Sheena Ringo")
+    );
 
     set_artist_reading_override(&conn, "m", Some("Shiina Ringo"), None).unwrap();
     let albums = albums_for_artist(&conn, "m").unwrap();
-    assert_eq!(albums[0].album_artist_reading.as_deref(), Some("Shiina Ringo"));
+    assert_eq!(
+        albums[0].album_artist_reading.as_deref(),
+        Some("Shiina Ringo")
+    );
     set_artist_reading_override(&conn, "m", None, None).unwrap();
     let albums = albums_for_artist(&conn, "m").unwrap();
-    assert_eq!(albums[0].album_artist_reading.as_deref(), Some("Sheena Ringo"));
+    assert_eq!(
+        albums[0].album_artist_reading.as_deref(),
+        Some("Sheena Ringo")
+    );
 }
 
 #[test]
@@ -1663,11 +1672,17 @@ fn tracks_for_album_returns_album_artist_fields_with_override() {
     assert_eq!(tracks.len(), 1);
     assert_eq!(tracks[0].album_artist.as_deref(), Some("椎名林檎"));
     assert_eq!(tracks[0].album_artist_original.as_deref(), Some("椎名林檎"));
-    assert_eq!(tracks[0].album_artist_reading.as_deref(), Some("Sheena Ringo"));
+    assert_eq!(
+        tracks[0].album_artist_reading.as_deref(),
+        Some("Sheena Ringo")
+    );
 
     set_artist_reading_override(&conn, "m", Some("Shiina Ringo"), None).unwrap();
     let tracks = tracks_for_album(&conn, "rel").unwrap();
-    assert_eq!(tracks[0].album_artist_reading.as_deref(), Some("Shiina Ringo"));
+    assert_eq!(
+        tracks[0].album_artist_reading.as_deref(),
+        Some("Shiina Ringo")
+    );
 }
 
 #[test]
