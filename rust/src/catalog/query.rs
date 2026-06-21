@@ -178,10 +178,14 @@ pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::
     let mut stmt = conn.prepare(
         "SELECT r.mbid, r.title, a.name,
                 substr(rg.first_release_date, 1, 4), substr(r.date, 1, 4),
-                (SELECT title FROM release_title_alt
-                   WHERE release_mbid = r.mbid AND kind = 'translit'),
-                (SELECT title FROM release_title_alt
-                   WHERE release_mbid = r.mbid AND kind = 'translate'),
+                NULLIF(COALESCE(
+                    (SELECT translit FROM release_title_override WHERE release_mbid = r.mbid),
+                    (SELECT title FROM release_title_alt WHERE release_mbid = r.mbid AND kind = 'translit')
+                ), ''),
+                NULLIF(COALESCE(
+                    (SELECT translate FROM release_title_override WHERE release_mbid = r.mbid),
+                    (SELECT title FROM release_title_alt WHERE release_mbid = r.mbid AND kind = 'translate')
+                ), ''),
                 (SELECT MIN(f.added_at) FROM track t JOIN file f ON f.track_id = t.id
                    WHERE t.release_mbid = r.mbid),
                 a.name_original,
@@ -220,8 +224,14 @@ pub fn tracks_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Result
     let mut stmt = conn.prepare(
         "SELECT t.id, t.disc, t.position, t.title, t.artist, t.length_ms,
                 s.last_played, MIN(f.added_at),
-                MAX(CASE WHEN tta.kind = 'translit' THEN tta.title END),
-                MAX(CASE WHEN tta.kind = 'translate' THEN tta.title END),
+                NULLIF(COALESCE(
+                    (SELECT translit FROM track_title_override WHERE recording_mbid = t.recording_mbid),
+                    MAX(CASE WHEN tta.kind = 'translit' THEN tta.title END)
+                ), ''),
+                NULLIF(COALESCE(
+                    (SELECT translate FROM track_title_override WHERE recording_mbid = t.recording_mbid),
+                    MAX(CASE WHEN tta.kind = 'translate' THEN tta.title END)
+                ), ''),
                 aa.name, aa.name_original,
                 COALESCE(aa.transliteration_override, aa.transliteration),
                 t.recording_mbid, r.album_artist_mbid
@@ -364,10 +374,14 @@ pub fn track_paths_for_library(conn: &Connection) -> anyhow::Result<Vec<String>>
 pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<Vec<QueueTrack>> {
     let mut stmt = conn.prepare(
         "SELECT t.id, t.title, t.artist, t.length_ms, r.title,
-                (SELECT title FROM track_title_alt
-                   WHERE recording_mbid = t.recording_mbid AND kind = 'translit'),
-                (SELECT title FROM track_title_alt
-                   WHERE recording_mbid = t.recording_mbid AND kind = 'translate'),
+                NULLIF(COALESCE(
+                    (SELECT translit FROM track_title_override WHERE recording_mbid = t.recording_mbid),
+                    (SELECT title FROM track_title_alt WHERE recording_mbid = t.recording_mbid AND kind = 'translit')
+                ), ''),
+                NULLIF(COALESCE(
+                    (SELECT translate FROM track_title_override WHERE recording_mbid = t.recording_mbid),
+                    (SELECT title FROM track_title_alt WHERE recording_mbid = t.recording_mbid AND kind = 'translate')
+                ), ''),
                 f.added_at, s.last_played,
                 aa.name, aa.name_original,
                 COALESCE(aa.transliteration_override, aa.transliteration),
