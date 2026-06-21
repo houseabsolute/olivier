@@ -3,12 +3,14 @@ use rusqlite::Connection;
 use crate::decision_log::DecisionLog;
 use crate::enrich::client::{MbClient, Pacer};
 use crate::enrich::http::MbHttp;
-use crate::enrich::model::{MbRelease, MbTextRepresentation};
+use crate::enrich::model::{MbRelease, MbTextRepresentation, MbTrack};
 use crate::enrich::progress::EnrichProgress;
 use crate::enrich::select::{
-    classify_from_text_representation, correct_alt_kind, english_words, select_transliteration,
+    classify_from_text_representation, english_words, is_non_latin, resolve_edition_kind,
+    select_transliteration, store_alt_for, AltKind,
 };
 use crate::enrich::store;
+use std::collections::HashMap;
 
 fn is_real_mbid(mbid: &str) -> bool {
     !mbid.is_empty() && !mbid.starts_with("synth:")
@@ -404,39 +406,79 @@ fn apply_edition_alts(
         .collect();
     ordered.sort_by(|a, b| a.id.cmp(&b.id));
 
-    for ed in ordered {
-        let Some(kind) = classify_from_text_representation(ed.text_representation.as_ref()) else {
-            continue;
-        };
-        // Correct MB's classification for romanizations it mislabels as
-        // translations (e.g. "Yoru no Tanken"): pool this edition's latin titles
-        // (release + tracks) for one robust per-edition decision.
-        let mut titles: Vec<&str> = vec![ed.title.as_str()];
-        for medium in &ed.media {
+    // The original release supplies each track's ORIGINAL-script title, which
+    // decides whether a romanized alt is a genuine reading (non-Latin original)
+    // or just the English original repeated. If the original release isn't in
+    // the browse, the map is empty -> nothing is treated as non-Latin -> no
+    // readings are invented (safe fallback to MB's classification).
+    let original = editions.iter().find(|ed| ed.id == release_mbid);
+    let original_album_title: &str = original.map_or("", |o| o.title.as_str());
+    let mut original_titles: HashMap<&str, &str> = HashMap::new();
+    if let Some(o) = original {
+        for medium in &o.media {
             for tr in &medium.tracks {
-                titles.push(tr.title.as_str());
+                if let Some(rec) = &tr.recording {
+                    original_titles.insert(rec.id.as_str(), tr.title.as_str());
+                }
             }
         }
-        let kind = correct_alt_kind(kind, &titles, english_words());
-        store::upsert_release_alt(conn, release_mbid, kind, &ed.title)?;
+    }
+    let track_non_latin = |tr: &MbTrack| -> bool {
+        tr.recording
+            .as_ref()
+            .and_then(|r| original_titles.get(r.id.as_str()))
+            .is_some_and(|orig| is_non_latin(orig))
+    };
+    let album_non_latin = is_non_latin(original_album_title);
+
+    for ed in ordered {
+        let Some(mb_kind) = classify_from_text_representation(ed.text_representation.as_ref())
+        else {
+            continue;
+        };
+        // Decide reading-vs-translation over ONLY the non-Latin-original titles.
+        let mut non_latin_alts: Vec<&str> = Vec::new();
+        if album_non_latin {
+            non_latin_alts.push(ed.title.as_str());
+        }
+        for medium in &ed.media {
+            for tr in &medium.tracks {
+                if track_non_latin(tr) {
+                    non_latin_alts.push(tr.title.as_str());
+                }
+            }
+        }
+        let kind = resolve_edition_kind(mb_kind, &non_latin_alts, english_words());
+
+        // Store, gating readings to non-Latin originals.
+        let album_stored = store_alt_for(kind, album_non_latin);
+        if album_stored {
+            store::upsert_release_alt(conn, release_mbid, kind, &ed.title)?;
+        }
         let mut n_tracks = 0usize;
         for medium in &ed.media {
             for tr in &medium.tracks {
                 if let Some(rec) = &tr.recording {
-                    store::upsert_track_alt(conn, &rec.id, kind, &tr.title)?;
-                    n_tracks += 1;
+                    if store_alt_for(kind, track_non_latin(tr)) {
+                        store::upsert_track_alt(conn, &rec.id, kind, &tr.title)?;
+                        n_tracks += 1;
+                    }
                 }
             }
         }
         let kind_label = match kind {
-            crate::enrich::select::AltKind::Translit => "reading",
-            crate::enrich::select::AltKind::Translate => "translation",
+            AltKind::Translit => "reading",
+            AltKind::Translate => "translation",
+        };
+        let album_note = if album_stored {
+            format!(" + album \"{}\"", ed.title)
+        } else {
+            String::new()
         };
         log.line(
             "APPLY",
             &format!(
-                "release \"{title}\": {kind_label} title \"{}\" (+{n_tracks} track titles)",
-                ed.title
+                "release \"{title}\": stored {n_tracks} {kind_label} track titles{album_note}"
             ),
         );
     }
