@@ -59,6 +59,7 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   integration_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -98,3 +99,11 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/olivier_1024.png"
+  adaptive_icon_background: "#2e2a63"
+  adaptive_icon_foreground: "assets/icon/olivier_foreground_1024.png"
+  min_sdk_android: 21
