@@ -66,4 +66,31 @@ void main() {
     await tester.pumpAndSettle();
     expect(reading, entity);
   });
+
+  testWidgets('shows Remove from library and invokes onRemove', (tester) async {
+    QueueEntityRef? removed;
+    const entity = QueueEntityRef.album('rel-1');
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: RowContextMenu(
+          entity: entity,
+          onRemove: (e) => removed = e,
+          child: const SizedBox(width: 200, height: 40, child: Text('row')),
+        ),
+      ),
+    ));
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('row')),
+      buttons: kSecondaryButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove from library'), findsOneWidget);
+    await tester.tap(find.text('Remove from library'));
+    await tester.pumpAndSettle();
+    expect(removed, entity);
+  });
 }
