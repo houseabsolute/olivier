@@ -1,3 +1,4 @@
+use crate::catalog::deletes;
 use crate::catalog::query;
 use crate::catalog::roots;
 use crate::catalog::scan::{self, ScanProgress};
@@ -97,6 +98,14 @@ pub fn add_root(db_path: String, path: String) -> anyhow::Result<()> {
 
 pub fn remove_root(db_path: String, path: String) -> anyhow::Result<()> {
     roots::remove_root(&db::open(&db_path)?, &path)
+}
+
+pub fn remove_track(db_path: String, track_id: i64) -> anyhow::Result<()> {
+    deletes::remove_track(&db::open(&db_path)?, track_id)
+}
+
+pub fn remove_album(db_path: String, release_mbid: String) -> anyhow::Result<()> {
+    deletes::remove_album(&db::open(&db_path)?, &release_mbid)
 }
 
 pub fn list_roots(db_path: String) -> anyhow::Result<Vec<String>> {

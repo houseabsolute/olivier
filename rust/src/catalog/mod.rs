@@ -1,3 +1,4 @@
+pub mod deletes;
 pub mod ids;
 pub mod query;
 pub mod roots;
