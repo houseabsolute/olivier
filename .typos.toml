@@ -9,3 +9,5 @@ nam = "nam"
 seeked = "seeked"
 # "Yoru" (夜 = night) is a Japanese romanization used in track/song titles, not a misspelling of "Your".
 Yoru = "Yoru"
+# "PNGs" splits into the sub-token "PN", which typos misreads as "ON". PNG = image format.
+PN = "PN"

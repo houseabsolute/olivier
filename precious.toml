@@ -19,6 +19,7 @@ exclude = [
     "**/*.AppImage",
     "**/*.gz",
     "**/*.zip",
+    "**/*.png",                  # committed binary app-icon rasters
 ]
 
 [commands.clippy]
