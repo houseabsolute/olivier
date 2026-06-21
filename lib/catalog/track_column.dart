@@ -94,6 +94,18 @@ class _TrackList extends ConsumerWidget {
                       ..showSnackBar(
                           const SnackBar(content: Text('Tags re-read')));
                   },
+                  onRemove: (_) async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    await ref.read(removeTrackFnProvider)(track.id);
+                    ref.invalidate(artistsProvider);
+                    ref.invalidate(albumsProvider);
+                    ref.invalidate(tracksProvider);
+                    ref.read(selectedTrackProvider.notifier).clear();
+                    messenger
+                      ..clearSnackBars()
+                      ..showSnackBar(
+                          SnackBar(content: Text('Removed "${track.title}"')));
+                  },
                   child: InkWell(
                     key: ValueKey(track.id),
                     onTap: () => ref

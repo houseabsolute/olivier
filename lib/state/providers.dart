@@ -134,6 +134,14 @@ final removeAlbumFnProvider = Provider<RemoveAlbumFn>((ref) {
   return (releaseMbid) => removeAlbum(dbPath: db, releaseMbid: releaseMbid);
 });
 
+// Forget one track from the catalog (file rows deleted + orphan prune). Seam.
+typedef RemoveTrackFn = Future<void> Function(int trackId);
+
+final removeTrackFnProvider = Provider<RemoveTrackFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (trackId) => removeTrack(dbPath: db, trackId: trackId);
+});
+
 // Loads one artist's raw reading/sort values for the "Set reading" dialog. Seam.
 typedef ArtistReadingFn = Future<ArtistReading> Function(String mbid);
 

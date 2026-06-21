@@ -84,4 +84,38 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(qc.orderedPaths, ['/m/song.flac']);
   });
+
+  testWidgets('track menu "Remove from library" calls the seam + snackbar',
+      (tester) async {
+    final removed = <int>[];
+    final qc = QueueController.withPlayer(FakeQueuePlayer(),
+        dbPath: '/x.db', saveQueue: (_) async {});
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        getSettingFnProvider.overrideWithValue((key) async => null),
+        tracksProvider.overrideWith((ref) => [_track]),
+        selectedAlbumProvider.overrideWith(() => _StubAlbum('rel-1')),
+        queueControllerProvider.overrideWithValue(qc),
+        removeTrackFnProvider.overrideWithValue((id) async => removed.add(id)),
+      ],
+      child: const MaterialApp(
+        home: Scaffold(body: TrackColumn()),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Song')),
+      buttons: kSecondaryButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove from library'), findsOneWidget);
+    await tester.tap(find.text('Remove from library'));
+    await tester.pumpAndSettle();
+
+    expect(removed, [7]);
+    expect(find.text('Removed "Song"'), findsOneWidget);
+  });
 }
