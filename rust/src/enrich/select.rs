@@ -157,6 +157,38 @@ pub fn correct_alt_kind(mb_kind: AltKind, titles: &[&str], dict: &HashSet<String
     }
 }
 
+/// True when [title] is written predominantly in a non-Latin script — i.e. its
+/// romanized alt would be a genuine reading. Empty or letterless titles are not
+/// non-Latin. (A romanization like "Yoru no Tanken" is Latin, so this is false.)
+pub fn is_non_latin(title: &str) -> bool {
+    title.chars().any(|c| c.is_alphabetic()) && ascii_latin_ratio(title) < 0.8
+}
+
+/// Resolve an edition's reading-vs-translation kind from the romanized alts of
+/// ONLY its non-Latin-original titles. An empty subset (an all-Latin album)
+/// keeps MB's classification.
+pub fn resolve_edition_kind(
+    mb_kind: AltKind,
+    non_latin_alts: &[&str],
+    dict: &HashSet<String>,
+) -> AltKind {
+    if non_latin_alts.is_empty() {
+        mb_kind
+    } else {
+        correct_alt_kind(mb_kind, non_latin_alts, dict)
+    }
+}
+
+/// Whether to store a title's alt, given the edition's resolved kind and whether
+/// that title's ORIGINAL is non-Latin. Readings are stored only for non-Latin
+/// originals; translations are stored for all.
+pub fn store_alt_for(kind: AltKind, original_is_non_latin: bool) -> bool {
+    match kind {
+        AltKind::Translit => original_is_non_latin,
+        AltKind::Translate => true,
+    }
+}
+
 /// Classify an edition by its `text-representation` (script/language): a Latin
 /// script ⇒ transliteration; `language == "eng"` (or any other non-original
 /// script) ⇒ translation. Returns `None` when `text-representation` carries no
