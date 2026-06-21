@@ -20,6 +20,7 @@ exclude = [
     "**/*.gz",
     "**/*.zip",
     "**/*.png",                  # committed binary app-icon rasters
+    "rust/data/en_words.txt",    # bundled CC0 English word list (atebits/Words)
 ]
 
 [commands.clippy]

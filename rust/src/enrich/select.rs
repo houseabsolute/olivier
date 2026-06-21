@@ -1,4 +1,6 @@
 use crate::enrich::model::{MbAlias, MbArtist, MbTextRepresentation};
+use std::collections::HashSet;
+use std::sync::OnceLock;
 
 /// The chosen display transliteration for an artist (§5.1).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,6 +69,20 @@ fn chosen(a: &MbAlias) -> ChosenAlias {
 pub enum AltKind {
     Translit,
     Translate,
+}
+
+/// Lowercased English words for the reading-vs-translation content check,
+/// bundled from atebits/Words `en.txt` (CC0) and embedded into the binary.
+/// Loaded once on first use.
+pub fn english_words() -> &'static HashSet<String> {
+    static WORDS: OnceLock<HashSet<String>> = OnceLock::new();
+    WORDS.get_or_init(|| {
+        include_str!("../../data/en_words.txt")
+            .lines()
+            .map(|w| w.trim().to_ascii_lowercase())
+            .filter(|w| !w.is_empty())
+            .collect()
+    })
 }
 
 /// Classify an edition by its `text-representation` (script/language): a Latin
