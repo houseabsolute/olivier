@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_entity.dart';
+import 'package:olivier/catalog/catalog_mutation.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
@@ -79,29 +80,25 @@ class _AlbumList extends ConsumerWidget {
                     content: Text('Re-fetching from MusicBrainz…')));
               c.enrichAlbum(album.releaseMbid);
             },
-            onReadTags: (_) async {
-              final messenger = ScaffoldMessenger.of(context);
-              await ref.read(rereadAlbumTagsFnProvider)(album.releaseMbid);
-              ref.invalidate(artistsProvider);
-              ref.invalidate(albumsProvider);
-              ref.invalidate(tracksProvider);
-              ref.read(selectedAlbumProvider.notifier).clear();
-              messenger
-                ..clearSnackBars()
-                ..showSnackBar(const SnackBar(content: Text('Tags re-read')));
-            },
-            onRemove: (_) async {
-              final messenger = ScaffoldMessenger.of(context);
-              await ref.read(removeAlbumFnProvider)(album.releaseMbid);
-              ref.invalidate(artistsProvider);
-              ref.invalidate(albumsProvider);
-              ref.invalidate(tracksProvider);
-              ref.read(selectedAlbumProvider.notifier).clear();
-              messenger
-                ..clearSnackBars()
-                ..showSnackBar(
-                    SnackBar(content: Text('Removed "${album.title}"')));
-            },
+            onReadTags: (_) => runCatalogMutation(
+              context,
+              ref,
+              action: () =>
+                  ref.read(rereadAlbumTagsFnProvider)(album.releaseMbid),
+              clearSelection: () =>
+                  ref.read(selectedAlbumProvider.notifier).clear(),
+              successMessage: 'Tags re-read',
+              failureMessage: 'Failed to re-read tags',
+            ),
+            onRemove: (_) => runCatalogMutation(
+              context,
+              ref,
+              action: () => ref.read(removeAlbumFnProvider)(album.releaseMbid),
+              clearSelection: () =>
+                  ref.read(selectedAlbumProvider.notifier).clear(),
+              successMessage: 'Removed "${album.title}"',
+              failureMessage: 'Failed to remove "${album.title}"',
+            ),
             child: InkWell(
               key: ValueKey(album.releaseMbid),
               onTap: () {
