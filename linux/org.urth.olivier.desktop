@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Olivier
+GenericName=Music Player
+Comment=Bilingual-aware music player
+Exec=olivier %U
+Icon=olivier
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+StartupWMClass=org.urth.olivier

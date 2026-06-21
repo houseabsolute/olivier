@@ -12,3 +12,8 @@ tidy *args:
 # `just run --release`.
 run *args:
     mise exec -- flutter run -d linux {{ args }}
+
+# Install the .desktop entry + themed icons into ~/.local so Olivier appears in
+# the app menu. Needs a release bundle (mise exec -- flutter build linux --release).
+install-desktop:
+    ./scripts/install-desktop.sh
