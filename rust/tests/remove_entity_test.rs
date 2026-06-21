@@ -149,3 +149,58 @@ fn remove_albums_last_one_also_prunes_the_artist() {
         0
     );
 }
+
+#[test]
+fn remove_album_cleans_up_alt_title_rows_for_an_enriched_album() {
+    let conn = seed();
+    // Enrich R1 like a real CJK album: a transliterated release title, and a
+    // track_title_alt for T1's recording. release_title_alt has an enforced FK to
+    // release(mbid), so before the prune_orphans fix remove_album failed here with
+    // a FOREIGN KEY constraint error and removed nothing.
+    conn.execute(
+        "INSERT INTO release_title_alt(release_mbid, kind, title) \
+         VALUES ('R1','translit','Arubamu Wan')",
+        [],
+    )
+    .unwrap();
+    conn.execute("UPDATE track SET recording_mbid = 'REC1' WHERE id = 1", [])
+        .unwrap();
+    conn.execute(
+        "INSERT INTO track_title_alt(recording_mbid, kind, title) \
+         VALUES ('REC1','translit','Tee Wan')",
+        [],
+    )
+    .unwrap();
+
+    remove_album(&conn, "R1").unwrap();
+
+    assert_eq!(
+        count(&conn, "SELECT COUNT(*) FROM release WHERE mbid = 'R1'"),
+        0
+    );
+    assert_eq!(
+        count(
+            &conn,
+            "SELECT COUNT(*) FROM release_title_alt WHERE release_mbid = 'R1'"
+        ),
+        0,
+        "orphaned release_title_alt must be pruned"
+    );
+    assert_eq!(
+        count(
+            &conn,
+            "SELECT COUNT(*) FROM track_title_alt WHERE recording_mbid = 'REC1'"
+        ),
+        0,
+        "orphaned track_title_alt must be pruned"
+    );
+    // The sibling album and the shared artist are untouched.
+    assert_eq!(
+        count(&conn, "SELECT COUNT(*) FROM release WHERE mbid = 'R2'"),
+        1
+    );
+    assert_eq!(
+        count(&conn, "SELECT COUNT(*) FROM artist WHERE mbid = 'A1'"),
+        1
+    );
+}

@@ -268,6 +268,15 @@ pub(crate) fn prune_orphans(conn: &Connection, log: &DecisionLog) -> anyhow::Res
         "DELETE FROM track WHERE id NOT IN (SELECT track_id FROM file)",
         [],
     )?;
+    // track_title_alt has no FK to track (it is keyed by recording_mbid), so a
+    // leftover row is not a constraint error — but prune it too, or a re-scan of
+    // the same recording could resurface a stale alternate title.
+    conn.execute(
+        "DELETE FROM track_title_alt \
+         WHERE recording_mbid NOT IN \
+             (SELECT recording_mbid FROM track WHERE recording_mbid IS NOT NULL)",
+        [],
+    )?;
 
     {
         let mut stmt = conn.prepare(
@@ -280,6 +289,14 @@ pub(crate) fn prune_orphans(conn: &Connection, log: &DecisionLog) -> anyhow::Res
             log.record(&Decision::PruneAlbum { title, artist });
         }
     }
+    // release_title_alt has a NOT NULL FK to release(mbid) and FKs are enforced,
+    // so its rows for a now-orphaned release MUST be deleted BEFORE the release —
+    // otherwise DELETE FROM release fails with a FOREIGN KEY constraint error
+    // (which broke remove_album / remove_root for every enriched album).
+    conn.execute(
+        "DELETE FROM release_title_alt WHERE release_mbid NOT IN (SELECT release_mbid FROM track)",
+        [],
+    )?;
     conn.execute(
         "DELETE FROM release WHERE mbid NOT IN (SELECT release_mbid FROM track)",
         [],
