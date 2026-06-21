@@ -225,6 +225,40 @@ class QueueTrack {
           albumArtistMbid == other.albumArtistMbid;
 }
 
+/// Current enriched + manual-override reading/translation for one title, for the
+/// "Set reading…" dialog. Each override field: None = automatic, Some("") =
+/// suppress, Some(text) = override.
+class TitleOverride {
+  final String? translit;
+  final String? translate;
+  final String? translitOverride;
+  final String? translateOverride;
+
+  const TitleOverride({
+    this.translit,
+    this.translate,
+    this.translitOverride,
+    this.translateOverride,
+  });
+
+  @override
+  int get hashCode =>
+      translit.hashCode ^
+      translate.hashCode ^
+      translitOverride.hashCode ^
+      translateOverride.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TitleOverride &&
+          runtimeType == other.runtimeType &&
+          translit == other.translit &&
+          translate == other.translate &&
+          translitOverride == other.translitOverride &&
+          translateOverride == other.translateOverride;
+}
+
 class Track {
   final PlatformInt64 id;
   final int disc;

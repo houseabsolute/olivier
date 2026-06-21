@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1171892001;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1600968571;
 
 // Section: executor
 
@@ -795,6 +795,45 @@ fn wire__crate__api__catalog__record_play_impl(
         },
     )
 }
+fn wire__crate__api__catalog__release_title_override_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "release_title_override",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_db_path = <String>::sse_decode(&mut deserializer);
+            let api_release_mbid = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::catalog::release_title_override(
+                            api_db_path,
+                            api_release_mbid,
+                        )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__catalog__remove_album_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1099,6 +1138,49 @@ fn wire__crate__api__catalog__set_artist_reading_override_impl(
         },
     )
 }
+fn wire__crate__api__catalog__set_release_title_override_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_release_title_override",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_db_path = <String>::sse_decode(&mut deserializer);
+            let api_release_mbid = <String>::sse_decode(&mut deserializer);
+            let api_translit = <Option<String>>::sse_decode(&mut deserializer);
+            let api_translate = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::catalog::set_release_title_override(
+                            api_db_path,
+                            api_release_mbid,
+                            api_translit,
+                            api_translate,
+                        )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__settings__set_setting_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1130,6 +1212,49 @@ fn wire__crate__api__settings__set_setting_impl(
                     (move || {
                         let output_ok =
                             crate::api::settings::set_setting(api_db_path, api_key, api_value)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__catalog__set_track_title_override_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_track_title_override",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_db_path = <String>::sse_decode(&mut deserializer);
+            let api_recording_mbid = <String>::sse_decode(&mut deserializer);
+            let api_translit = <Option<String>>::sse_decode(&mut deserializer);
+            let api_translate = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::catalog::set_track_title_override(
+                            api_db_path,
+                            api_recording_mbid,
+                            api_translit,
+                            api_translate,
+                        )?;
                         Ok(output_ok)
                     })(),
                 )
@@ -1240,6 +1365,45 @@ fn wire__crate__api__catalog__track_paths_for_library_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
                         let output_ok = crate::api::catalog::track_paths_for_library(api_db_path)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__catalog__track_title_override_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "track_title_override",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_db_path = <String>::sse_decode(&mut deserializer);
+            let api_recording_mbid = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::catalog::track_title_override(
+                            api_db_path,
+                            api_recording_mbid,
+                        )?;
                         Ok(output_ok)
                     })(),
                 )
@@ -1623,6 +1787,22 @@ impl SseDecode for crate::catalog::scan::ScanProgress {
     }
 }
 
+impl SseDecode for crate::catalog::schema::TitleOverride {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_translit = <Option<String>>::sse_decode(deserializer);
+        let mut var_translate = <Option<String>>::sse_decode(deserializer);
+        let mut var_translitOverride = <Option<String>>::sse_decode(deserializer);
+        let mut var_translateOverride = <Option<String>>::sse_decode(deserializer);
+        return crate::catalog::schema::TitleOverride {
+            translit: var_translit,
+            translate: var_translate,
+            translit_override: var_translitOverride,
+            translate_override: var_translateOverride,
+        };
+    }
+}
+
 impl SseDecode for crate::catalog::schema::Track {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1772,34 +1952,55 @@ fn pde_ffi_dispatcher_primary_impl(
         17 => wire__crate__api__queue__load_queue_impl(port, ptr, rust_vec_len, data_len),
         19 => wire__crate__api__tags__read_track_tags_impl(port, ptr, rust_vec_len, data_len),
         20 => wire__crate__api__catalog__record_play_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__catalog__remove_album_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__catalog__remove_root_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__catalog__remove_track_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__catalog__reread_album_tags_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__catalog__reread_track_tags_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__queue__save_queue_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__catalog__scan_library_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__catalog__set_artist_reading_override_impl(
+        21 => wire__crate__api__catalog__release_title_override_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__settings__set_setting_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__catalog__track_path_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__catalog__track_paths_for_artist_impl(
+        22 => wire__crate__api__catalog__remove_album_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__catalog__remove_root_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__catalog__remove_track_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__catalog__reread_album_tags_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__catalog__reread_track_tags_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__queue__save_queue_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__catalog__scan_library_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__catalog__set_artist_reading_override_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__catalog__track_paths_for_library_impl(
+        30 => wire__crate__api__catalog__set_release_title_override_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__api__catalog__tracks_for_paths_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__settings__set_setting_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__catalog__set_track_title_override_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        33 => wire__crate__api__catalog__track_path_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__catalog__track_paths_for_artist_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        35 => wire__crate__api__catalog__track_paths_for_library_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        36 => {
+            wire__crate__api__catalog__track_title_override_impl(port, ptr, rust_vec_len, data_len)
+        }
+        37 => wire__crate__api__catalog__tracks_for_paths_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1990,6 +2191,29 @@ impl flutter_rust_bridge::IntoIntoDart<crate::catalog::scan::ScanProgress>
     for crate::catalog::scan::ScanProgress
 {
     fn into_into_dart(self) -> crate::catalog::scan::ScanProgress {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::catalog::schema::TitleOverride {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.translit.into_into_dart().into_dart(),
+            self.translate.into_into_dart().into_dart(),
+            self.translit_override.into_into_dart().into_dart(),
+            self.translate_override.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::catalog::schema::TitleOverride
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::catalog::schema::TitleOverride>
+    for crate::catalog::schema::TitleOverride
+{
+    fn into_into_dart(self) -> crate::catalog::schema::TitleOverride {
         self
     }
 }
@@ -2307,6 +2531,16 @@ impl SseEncode for crate::catalog::scan::ScanProgress {
         <u64>::sse_encode(self.files_changed, serializer);
         <String>::sse_encode(self.current, serializer);
         <bool>::sse_encode(self.done, serializer);
+    }
+}
+
+impl SseEncode for crate::catalog::schema::TitleOverride {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<String>>::sse_encode(self.translit, serializer);
+        <Option<String>>::sse_encode(self.translate, serializer);
+        <Option<String>>::sse_encode(self.translit_override, serializer);
+        <Option<String>>::sse_encode(self.translate_override, serializer);
     }
 }
 

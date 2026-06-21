@@ -2,7 +2,7 @@ use crate::catalog::deletes;
 use crate::catalog::query;
 use crate::catalog::roots;
 use crate::catalog::scan::{self, ScanProgress};
-use crate::catalog::schema::{Album, Artist, ArtistReading, QueueTrack, Track};
+use crate::catalog::schema::{Album, Artist, ArtistReading, QueueTrack, TitleOverride, Track};
 use crate::db;
 use crate::decision_log::DecisionLog;
 use crate::frb_generated::StreamSink;
@@ -55,6 +55,38 @@ pub fn set_artist_reading_override(
         reading.as_deref(),
         sort.as_deref(),
     )
+}
+
+pub fn track_title_override(
+    db_path: String,
+    recording_mbid: String,
+) -> anyhow::Result<TitleOverride> {
+    query::track_title_override(&db::open(&db_path)?, &recording_mbid)
+}
+
+pub fn release_title_override(
+    db_path: String,
+    release_mbid: String,
+) -> anyhow::Result<TitleOverride> {
+    query::release_title_override(&db::open(&db_path)?, &release_mbid)
+}
+
+pub fn set_track_title_override(
+    db_path: String,
+    recording_mbid: String,
+    translit: Option<String>,
+    translate: Option<String>,
+) -> anyhow::Result<()> {
+    query::set_track_title_override(&db::open(&db_path)?, &recording_mbid, translit, translate)
+}
+
+pub fn set_release_title_override(
+    db_path: String,
+    release_mbid: String,
+    translit: Option<String>,
+    translate: Option<String>,
+) -> anyhow::Result<()> {
+    query::set_release_title_override(&db::open(&db_path)?, &release_mbid, translit, translate)
 }
 
 pub fn list_albums(db_path: String, album_artist_mbid: String) -> anyhow::Result<Vec<Album>> {

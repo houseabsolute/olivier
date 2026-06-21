@@ -41,6 +41,38 @@ Future<void> setArtistReadingOverride(
     RustLib.instance.api.crateApiCatalogSetArtistReadingOverride(
         dbPath: dbPath, mbid: mbid, reading: reading, sort: sort);
 
+Future<TitleOverride> trackTitleOverride(
+        {required String dbPath, required String recordingMbid}) =>
+    RustLib.instance.api.crateApiCatalogTrackTitleOverride(
+        dbPath: dbPath, recordingMbid: recordingMbid);
+
+Future<TitleOverride> releaseTitleOverride(
+        {required String dbPath, required String releaseMbid}) =>
+    RustLib.instance.api.crateApiCatalogReleaseTitleOverride(
+        dbPath: dbPath, releaseMbid: releaseMbid);
+
+Future<void> setTrackTitleOverride(
+        {required String dbPath,
+        required String recordingMbid,
+        String? translit,
+        String? translate}) =>
+    RustLib.instance.api.crateApiCatalogSetTrackTitleOverride(
+        dbPath: dbPath,
+        recordingMbid: recordingMbid,
+        translit: translit,
+        translate: translate);
+
+Future<void> setReleaseTitleOverride(
+        {required String dbPath,
+        required String releaseMbid,
+        String? translit,
+        String? translate}) =>
+    RustLib.instance.api.crateApiCatalogSetReleaseTitleOverride(
+        dbPath: dbPath,
+        releaseMbid: releaseMbid,
+        translit: translit,
+        translate: translate);
+
 Future<List<Album>> listAlbums(
         {required String dbPath, required String albumArtistMbid}) =>
     RustLib.instance.api.crateApiCatalogListAlbums(

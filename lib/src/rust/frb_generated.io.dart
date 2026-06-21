@@ -116,6 +116,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ScanProgress dco_decode_scan_progress(dynamic raw);
 
   @protected
+  TitleOverride dco_decode_title_override(dynamic raw);
+
+  @protected
   Track dco_decode_track(dynamic raw);
 
   @protected
@@ -220,6 +223,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ScanProgress sse_decode_scan_progress(SseDeserializer deserializer);
+
+  @protected
+  TitleOverride sse_decode_title_override(SseDeserializer deserializer);
 
   @protected
   Track sse_decode_track(SseDeserializer deserializer);
@@ -335,6 +341,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_scan_progress(ScanProgress self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_title_override(TitleOverride self, SseSerializer serializer);
 
   @protected
   void sse_encode_track(Track self, SseSerializer serializer);

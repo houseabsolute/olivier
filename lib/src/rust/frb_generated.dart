@@ -81,7 +81,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1171892001;
+  int get rustContentHash => -1600968571;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -153,6 +153,9 @@ abstract class RustLibApi extends BaseApi {
       required PlatformInt64 trackId,
       required PlatformInt64 playedAt});
 
+  Future<TitleOverride> crateApiCatalogReleaseTitleOverride(
+      {required String dbPath, required String releaseMbid});
+
   Future<void> crateApiCatalogRemoveAlbum(
       {required String dbPath, required String releaseMbid});
 
@@ -180,8 +183,20 @@ abstract class RustLibApi extends BaseApi {
       String? reading,
       String? sort});
 
+  Future<void> crateApiCatalogSetReleaseTitleOverride(
+      {required String dbPath,
+      required String releaseMbid,
+      String? translit,
+      String? translate});
+
   Future<void> crateApiSettingsSetSetting(
       {required String dbPath, required String key, required String value});
+
+  Future<void> crateApiCatalogSetTrackTitleOverride(
+      {required String dbPath,
+      required String recordingMbid,
+      String? translit,
+      String? translate});
 
   Future<String?> crateApiCatalogTrackPath(
       {required String dbPath, required PlatformInt64 trackId});
@@ -191,6 +206,9 @@ abstract class RustLibApi extends BaseApi {
 
   Future<List<String>> crateApiCatalogTrackPathsForLibrary(
       {required String dbPath});
+
+  Future<TitleOverride> crateApiCatalogTrackTitleOverride(
+      {required String dbPath, required String recordingMbid});
 
   Future<List<QueueTrack>> crateApiCatalogTracksForPaths(
       {required String dbPath, required List<String> paths});
@@ -734,7 +752,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateApiCatalogRemoveAlbum(
+  Future<TitleOverride> crateApiCatalogReleaseTitleOverride(
       {required String dbPath, required String releaseMbid}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
@@ -743,6 +761,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(releaseMbid, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 21, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_title_override,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCatalogReleaseTitleOverrideConstMeta,
+      argValues: [dbPath, releaseMbid],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCatalogReleaseTitleOverrideConstMeta =>
+      const TaskConstMeta(
+        debugName: "release_title_override",
+        argNames: ["dbPath", "releaseMbid"],
+      );
+
+  @override
+  Future<void> crateApiCatalogRemoveAlbum(
+      {required String dbPath, required String releaseMbid}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(dbPath, serializer);
+        sse_encode_String(releaseMbid, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 22, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -768,7 +813,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_String(path, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 22, port: port_);
+            funcId: 23, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -794,7 +839,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_i_64(trackId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 23, port: port_);
+            funcId: 24, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -820,7 +865,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_String(releaseMbid, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 24, port: port_);
+            funcId: 25, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -847,7 +892,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_i_64(trackId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 25, port: port_);
+            funcId: 26, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -874,7 +919,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_box_autoadd_queue_snapshot(snapshot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 26, port: port_);
+            funcId: 27, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -902,7 +947,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_String(roots, serializer);
         sse_encode_StreamSink_scan_progress_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 27, port: port_);
+            funcId: 28, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -934,7 +979,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(reading, serializer);
         sse_encode_opt_String(sort, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 28, port: port_);
+            funcId: 29, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -953,6 +998,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiCatalogSetReleaseTitleOverride(
+      {required String dbPath,
+      required String releaseMbid,
+      String? translit,
+      String? translate}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(dbPath, serializer);
+        sse_encode_String(releaseMbid, serializer);
+        sse_encode_opt_String(translit, serializer);
+        sse_encode_opt_String(translate, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 30, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCatalogSetReleaseTitleOverrideConstMeta,
+      argValues: [dbPath, releaseMbid, translit, translate],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCatalogSetReleaseTitleOverrideConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_release_title_override",
+        argNames: ["dbPath", "releaseMbid", "translit", "translate"],
+      );
+
+  @override
   Future<void> crateApiSettingsSetSetting(
       {required String dbPath, required String key, required String value}) {
     return handler.executeNormal(NormalTask(
@@ -962,7 +1039,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(key, serializer);
         sse_encode_String(value, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 29, port: port_);
+            funcId: 31, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -980,6 +1057,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiCatalogSetTrackTitleOverride(
+      {required String dbPath,
+      required String recordingMbid,
+      String? translit,
+      String? translate}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(dbPath, serializer);
+        sse_encode_String(recordingMbid, serializer);
+        sse_encode_opt_String(translit, serializer);
+        sse_encode_opt_String(translate, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 32, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCatalogSetTrackTitleOverrideConstMeta,
+      argValues: [dbPath, recordingMbid, translit, translate],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCatalogSetTrackTitleOverrideConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_track_title_override",
+        argNames: ["dbPath", "recordingMbid", "translit", "translate"],
+      );
+
+  @override
   Future<String?> crateApiCatalogTrackPath(
       {required String dbPath, required PlatformInt64 trackId}) {
     return handler.executeNormal(NormalTask(
@@ -988,7 +1097,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_i_64(trackId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 30, port: port_);
+            funcId: 33, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_String,
@@ -1014,7 +1123,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_String(albumArtistMbid, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 31, port: port_);
+            funcId: 34, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -1040,7 +1149,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(dbPath, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 32, port: port_);
+            funcId: 35, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -1059,6 +1168,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<TitleOverride> crateApiCatalogTrackTitleOverride(
+      {required String dbPath, required String recordingMbid}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(dbPath, serializer);
+        sse_encode_String(recordingMbid, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 36, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_title_override,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCatalogTrackTitleOverrideConstMeta,
+      argValues: [dbPath, recordingMbid],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCatalogTrackTitleOverrideConstMeta =>
+      const TaskConstMeta(
+        debugName: "track_title_override",
+        argNames: ["dbPath", "recordingMbid"],
+      );
+
+  @override
   Future<List<QueueTrack>> crateApiCatalogTracksForPaths(
       {required String dbPath, required List<String> paths}) {
     return handler.executeNormal(NormalTask(
@@ -1067,7 +1203,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_list_String(paths, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 33, port: port_);
+            funcId: 37, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_queue_track,
@@ -1329,6 +1465,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       filesChanged: dco_decode_u_64(arr[1]),
       current: dco_decode_String(arr[2]),
       done: dco_decode_bool(arr[3]),
+    );
+  }
+
+  @protected
+  TitleOverride dco_decode_title_override(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return TitleOverride(
+      translit: dco_decode_opt_String(arr[0]),
+      translate: dco_decode_opt_String(arr[1]),
+      translitOverride: dco_decode_opt_String(arr[2]),
+      translateOverride: dco_decode_opt_String(arr[3]),
     );
   }
 
@@ -1741,6 +1891,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TitleOverride sse_decode_title_override(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_translit = sse_decode_opt_String(deserializer);
+    var var_translate = sse_decode_opt_String(deserializer);
+    var var_translitOverride = sse_decode_opt_String(deserializer);
+    var var_translateOverride = sse_decode_opt_String(deserializer);
+    return TitleOverride(
+        translit: var_translit,
+        translate: var_translate,
+        translitOverride: var_translitOverride,
+        translateOverride: var_translateOverride);
+  }
+
+  @protected
   Track sse_decode_track(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_i_64(deserializer);
@@ -2119,6 +2283,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.filesChanged, serializer);
     sse_encode_String(self.current, serializer);
     sse_encode_bool(self.done, serializer);
+  }
+
+  @protected
+  void sse_encode_title_override(TitleOverride self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_String(self.translit, serializer);
+    sse_encode_opt_String(self.translate, serializer);
+    sse_encode_opt_String(self.translitOverride, serializer);
+    sse_encode_opt_String(self.translateOverride, serializer);
   }
 
   @protected
