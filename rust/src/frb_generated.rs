@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1678081738;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1171892001;
 
 // Section: executor
 
@@ -795,6 +795,43 @@ fn wire__crate__api__catalog__record_play_impl(
         },
     )
 }
+fn wire__crate__api__catalog__remove_album_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "remove_album",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_db_path = <String>::sse_decode(&mut deserializer);
+            let api_release_mbid = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok =
+                            crate::api::catalog::remove_album(api_db_path, api_release_mbid)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__catalog__remove_root_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -824,6 +861,43 @@ fn wire__crate__api__catalog__remove_root_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
                         let output_ok = crate::api::catalog::remove_root(api_db_path, api_path)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__catalog__remove_track_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "remove_track",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_db_path = <String>::sse_decode(&mut deserializer);
+            let api_track_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok =
+                            crate::api::catalog::remove_track(api_db_path, api_track_id)?;
                         Ok(output_ok)
                     })(),
                 )
@@ -1698,32 +1772,34 @@ fn pde_ffi_dispatcher_primary_impl(
         17 => wire__crate__api__queue__load_queue_impl(port, ptr, rust_vec_len, data_len),
         19 => wire__crate__api__tags__read_track_tags_impl(port, ptr, rust_vec_len, data_len),
         20 => wire__crate__api__catalog__record_play_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__catalog__remove_root_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__catalog__reread_album_tags_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__catalog__reread_track_tags_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__queue__save_queue_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__catalog__scan_library_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__catalog__set_artist_reading_override_impl(
+        21 => wire__crate__api__catalog__remove_album_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__catalog__remove_root_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__catalog__remove_track_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__catalog__reread_album_tags_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__catalog__reread_track_tags_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__queue__save_queue_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__catalog__scan_library_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__catalog__set_artist_reading_override_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        27 => wire__crate__api__settings__set_setting_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__catalog__track_path_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__catalog__track_paths_for_artist_impl(
+        29 => wire__crate__api__settings__set_setting_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__catalog__track_path_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__catalog__track_paths_for_artist_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        30 => wire__crate__api__catalog__track_paths_for_library_impl(
+        32 => wire__crate__api__catalog__track_paths_for_library_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => wire__crate__api__catalog__tracks_for_paths_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__catalog__tracks_for_paths_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

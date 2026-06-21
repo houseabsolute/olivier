@@ -87,5 +87,15 @@ Future<void> addRoot({required String dbPath, required String path}) =>
 Future<void> removeRoot({required String dbPath, required String path}) =>
     RustLib.instance.api.crateApiCatalogRemoveRoot(dbPath: dbPath, path: path);
 
+Future<void> removeTrack(
+        {required String dbPath, required PlatformInt64 trackId}) =>
+    RustLib.instance.api
+        .crateApiCatalogRemoveTrack(dbPath: dbPath, trackId: trackId);
+
+Future<void> removeAlbum(
+        {required String dbPath, required String releaseMbid}) =>
+    RustLib.instance.api
+        .crateApiCatalogRemoveAlbum(dbPath: dbPath, releaseMbid: releaseMbid);
+
 Future<List<String>> listRoots({required String dbPath}) =>
     RustLib.instance.api.crateApiCatalogListRoots(dbPath: dbPath);
