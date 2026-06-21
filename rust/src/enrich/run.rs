@@ -5,7 +5,9 @@ use crate::enrich::client::{MbClient, Pacer};
 use crate::enrich::http::MbHttp;
 use crate::enrich::model::{MbRelease, MbTextRepresentation};
 use crate::enrich::progress::EnrichProgress;
-use crate::enrich::select::{classify_from_text_representation, select_transliteration};
+use crate::enrich::select::{
+    classify_from_text_representation, correct_alt_kind, english_words, select_transliteration,
+};
 use crate::enrich::store;
 
 fn is_real_mbid(mbid: &str) -> bool {
@@ -406,6 +408,16 @@ fn apply_edition_alts(
         let Some(kind) = classify_from_text_representation(ed.text_representation.as_ref()) else {
             continue;
         };
+        // Correct MB's classification for romanizations it mislabels as
+        // translations (e.g. "Yoru no Tanken"): pool this edition's latin titles
+        // (release + tracks) for one robust per-edition decision.
+        let mut titles: Vec<&str> = vec![ed.title.as_str()];
+        for medium in &ed.media {
+            for tr in &medium.tracks {
+                titles.push(tr.title.as_str());
+            }
+        }
+        let kind = correct_alt_kind(kind, &titles, english_words());
         store::upsert_release_alt(conn, release_mbid, kind, &ed.title)?;
         let mut n_tracks = 0usize;
         for medium in &ed.media {
