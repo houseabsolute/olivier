@@ -102,6 +102,41 @@ void main() {
     expect(find.text('Tags re-read'), findsOneWidget);
   });
 
+  testWidgets('album menu "Remove from library" calls the seam + snackbar',
+      (tester) async {
+    final removed = <String>[];
+    final qc = QueueController.withPlayer(
+      FakeQueuePlayer(),
+      dbPath: '/x.db',
+      saveQueue: (_) async {},
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        getSettingFnProvider.overrideWithValue((key) async => null),
+        albumsProvider.overrideWith((ref) => [_album]),
+        queueControllerProvider.overrideWithValue(qc),
+        removeAlbumFnProvider
+            .overrideWithValue((mbid) async => removed.add(mbid)),
+      ],
+      child: const MaterialApp(home: Scaffold(body: AlbumColumn())),
+    ));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Album One')),
+      buttons: kSecondaryButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove from library'), findsOneWidget);
+    await tester.tap(find.text('Remove from library'));
+    await tester.pumpAndSettle();
+
+    expect(removed, ['rel-1']);
+    expect(find.text('Removed "Album One"'), findsOneWidget);
+  });
+
   // Spec §4: single-click selects the album (updates selectedAlbumProvider) and
   // must NOT enqueue/play anything — the queue stays empty.
   testWidgets('single-tapping an album selects it without enqueueing',

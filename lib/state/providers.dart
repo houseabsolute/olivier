@@ -125,6 +125,15 @@ final rereadAlbumTagsFnProvider = Provider<RereadAlbumTagsFn>((ref) {
   return (releaseMbid) => rereadAlbumTags(dbPath: db, releaseMbid: releaseMbid);
 });
 
+// Forget one album (release) from the catalog (file rows deleted + orphan
+// prune). Seam so the column is testable without the live FFI.
+typedef RemoveAlbumFn = Future<void> Function(String releaseMbid);
+
+final removeAlbumFnProvider = Provider<RemoveAlbumFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (releaseMbid) => removeAlbum(dbPath: db, releaseMbid: releaseMbid);
+});
+
 // Loads one artist's raw reading/sort values for the "Set reading" dialog. Seam.
 typedef ArtistReadingFn = Future<ArtistReading> Function(String mbid);
 

@@ -90,6 +90,18 @@ class _AlbumList extends ConsumerWidget {
                 ..clearSnackBars()
                 ..showSnackBar(const SnackBar(content: Text('Tags re-read')));
             },
+            onRemove: (_) async {
+              final messenger = ScaffoldMessenger.of(context);
+              await ref.read(removeAlbumFnProvider)(album.releaseMbid);
+              ref.invalidate(artistsProvider);
+              ref.invalidate(albumsProvider);
+              ref.invalidate(tracksProvider);
+              ref.read(selectedAlbumProvider.notifier).clear();
+              messenger
+                ..clearSnackBars()
+                ..showSnackBar(
+                    SnackBar(content: Text('Removed "${album.title}"')));
+            },
             child: InkWell(
               key: ValueKey(album.releaseMbid),
               onTap: () {
