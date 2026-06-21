@@ -22,6 +22,17 @@ pub struct ArtistReading {
     pub sort_name_override: Option<String>,
 }
 
+/// Current enriched + manual-override reading/translation for one title, for the
+/// "Set reading…" dialog. Each override field: None = automatic, Some("") =
+/// suppress, Some(text) = override.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TitleOverride {
+    pub translit: Option<String>,
+    pub translate: Option<String>,
+    pub translit_override: Option<String>,
+    pub translate_override: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Album {
     pub release_mbid: String,

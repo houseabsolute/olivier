@@ -105,6 +105,19 @@ const MIGRATION_SLICE: &[M<'_>] = &[
         "ALTER TABLE artist ADD COLUMN transliteration_override TEXT;
          ALTER TABLE artist ADD COLUMN sort_name_override TEXT;",
     ),
+    // ── Per-track / per-album manual reading+translation override ────────
+    M::up(
+        "CREATE TABLE track_title_override (
+            recording_mbid TEXT PRIMARY KEY,
+            translit       TEXT,
+            translate      TEXT
+         );
+         CREATE TABLE release_title_override (
+            release_mbid   TEXT PRIMARY KEY,
+            translit       TEXT,
+            translate      TEXT
+         );",
+    ),
 ];
 const MIGRATIONS: Migrations<'_> = Migrations::from_slice(MIGRATION_SLICE);
 

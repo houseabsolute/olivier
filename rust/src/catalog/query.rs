@@ -1,4 +1,4 @@
-use crate::catalog::schema::{Album, Artist, ArtistReading, QueueTrack, Track};
+use crate::catalog::schema::{Album, Artist, ArtistReading, QueueTrack, TitleOverride, Track};
 use rusqlite::{Connection, OptionalExtension};
 
 /// Keyset page of album-artists ordered by sort_name (case-insensitive). Pass
@@ -70,6 +70,104 @@ pub fn set_artist_reading_override(
           WHERE mbid = ?1",
         rusqlite::params![mbid, reading, sort],
     )?;
+    Ok(())
+}
+
+/// Enriched reading/translation plus any manual override for one track, for the
+/// "Set reading…" dialog. Each `*_override`: None = automatic, Some("") =
+/// suppress, Some(text) = override.
+pub fn track_title_override(
+    conn: &Connection,
+    recording_mbid: &str,
+) -> anyhow::Result<TitleOverride> {
+    let row = conn.query_row(
+        "SELECT
+            (SELECT title FROM track_title_alt WHERE recording_mbid = ?1 AND kind = 'translit'),
+            (SELECT title FROM track_title_alt WHERE recording_mbid = ?1 AND kind = 'translate'),
+            (SELECT translit  FROM track_title_override WHERE recording_mbid = ?1),
+            (SELECT translate FROM track_title_override WHERE recording_mbid = ?1)",
+        [recording_mbid],
+        |r| {
+            Ok(TitleOverride {
+                translit: r.get(0)?,
+                translate: r.get(1)?,
+                translit_override: r.get(2)?,
+                translate_override: r.get(3)?,
+            })
+        },
+    )?;
+    Ok(row)
+}
+
+/// Enriched reading/translation plus any manual override for one release (album).
+/// See `track_title_override` for the override-field semantics.
+pub fn release_title_override(
+    conn: &Connection,
+    release_mbid: &str,
+) -> anyhow::Result<TitleOverride> {
+    let row = conn.query_row(
+        "SELECT
+            (SELECT title FROM release_title_alt WHERE release_mbid = ?1 AND kind = 'translit'),
+            (SELECT title FROM release_title_alt WHERE release_mbid = ?1 AND kind = 'translate'),
+            (SELECT translit  FROM release_title_override WHERE release_mbid = ?1),
+            (SELECT translate FROM release_title_override WHERE release_mbid = ?1)",
+        [release_mbid],
+        |r| {
+            Ok(TitleOverride {
+                translit: r.get(0)?,
+                translate: r.get(1)?,
+                translit_override: r.get(2)?,
+                translate_override: r.get(3)?,
+            })
+        },
+    )?;
+    Ok(row)
+}
+
+/// Set or clear a track's manual reading/translation override. When both fields
+/// are `None` the row is deleted (fully automatic); otherwise it is upserted,
+/// where `Some("")` suppresses that field and `Some(text)` overrides it.
+pub fn set_track_title_override(
+    conn: &Connection,
+    recording_mbid: &str,
+    translit: Option<String>,
+    translate: Option<String>,
+) -> anyhow::Result<()> {
+    if translit.is_none() && translate.is_none() {
+        conn.execute(
+            "DELETE FROM track_title_override WHERE recording_mbid = ?1",
+            [recording_mbid],
+        )?;
+    } else {
+        conn.execute(
+            "INSERT INTO track_title_override(recording_mbid, translit, translate) VALUES (?1, ?2, ?3)
+             ON CONFLICT(recording_mbid) DO UPDATE SET translit = excluded.translit, translate = excluded.translate",
+            rusqlite::params![recording_mbid, translit, translate],
+        )?;
+    }
+    Ok(())
+}
+
+/// Set or clear a release's manual reading/translation override. See
+/// `set_track_title_override` for the delete-when-automatic semantics.
+pub fn set_release_title_override(
+    conn: &Connection,
+    release_mbid: &str,
+    translit: Option<String>,
+    translate: Option<String>,
+) -> anyhow::Result<()> {
+    if translit.is_none() && translate.is_none() {
+        conn.execute(
+            "DELETE FROM release_title_override WHERE release_mbid = ?1",
+            [release_mbid],
+        )?;
+    } else {
+        conn.execute(
+            "INSERT INTO release_title_override(release_mbid, translit, translate) VALUES (?1, ?2, ?3)
+             ON CONFLICT(release_mbid) DO UPDATE SET translit = excluded.translit, translate = excluded.translate",
+            rusqlite::params![release_mbid, translit, translate],
+        )?;
+    }
     Ok(())
 }
 
