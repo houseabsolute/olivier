@@ -100,20 +100,6 @@ void main() {
     expect(c.player.removedIndexes, [0]);
   });
 
-  testWidgets('tapping a row jumps to and plays it', (tester) async {
-    final c = await _seededController();
-    await tester.pumpWidget(_app(c.qc));
-    await tester.pumpAndSettle();
-    await _expand(tester);
-
-    await tester.tap(find.text('Innocence'));
-    await tester.pumpAndSettle();
-
-    // playAt(1) seeked to player index 1 (not shuffled) and started playback.
-    expect(c.player.seeks.single.index, 1);
-    expect(c.player.played, isTrue);
-  });
-
   testWidgets('Empty clears the queue', (tester) async {
     final c = await _seededController();
     await tester.pumpWidget(_app(c.qc));

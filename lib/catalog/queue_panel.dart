@@ -150,7 +150,7 @@ class _QueueColumnHeader extends StatelessWidget {
 /// Collapsed: shows the count + up-next header with fully-wired Shuffle,
 /// Empty, and Shuffle-all controls plus an expand caret. Expanded: the header
 /// plus a column header and a ReorderableListView of queued tracks (bilingual
-/// title, separate artist/album columns, drag handle, × remove, tap-to-play,
+/// title, separate artist/album columns, drag handle, × remove,
 /// current-track highlight).
 class QueuePanel extends ConsumerStatefulWidget {
   const QueuePanel({super.key});
@@ -337,51 +337,48 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                       color: selected
                           ? scheme.primaryContainer
                           : Colors.transparent,
-                      child: InkWell(
-                        onTap: () => controller.playAt(i),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          child: _queueRowLayout(
-                            lead: ReorderableDragStartListener(
-                              index: i,
-                              child: const Icon(Icons.drag_handle),
-                            ),
-                            title: BilingualText(
-                              original: t.title,
-                              translit: t.titleTranslit,
-                              translate: t.titleTranslate,
-                              leads: leads,
-                            ),
-                            artist: BilingualText(
-                              original:
-                                  t.albumArtistOriginal ?? t.albumArtist ?? '',
-                              translit: t.albumArtistReading,
-                              translate: null,
-                              leads: leads,
-                              primaryStyle: muted,
-                            ),
-                            album: Text(
-                              t.album,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: muted,
-                            ),
-                            meta: TrackMeta(
-                              lengthMs: t.lengthMs,
-                              addedAt: t.addedAt,
-                              lastPlayed: t.lastPlayed,
-                            ),
-                            showMeta: showMeta,
-                            trailing: IconButton(
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                  minWidth: 40, minHeight: 40),
-                              iconSize: 20,
-                              icon: const Icon(Icons.close),
-                              tooltip: 'Remove from queue',
-                              onPressed: () => controller.removeAt(i),
-                            ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        child: _queueRowLayout(
+                          lead: ReorderableDragStartListener(
+                            index: i,
+                            child: const Icon(Icons.drag_handle),
+                          ),
+                          title: BilingualText(
+                            original: t.title,
+                            translit: t.titleTranslit,
+                            translate: t.titleTranslate,
+                            leads: leads,
+                          ),
+                          artist: BilingualText(
+                            original:
+                                t.albumArtistOriginal ?? t.albumArtist ?? '',
+                            translit: t.albumArtistReading,
+                            translate: null,
+                            leads: leads,
+                            primaryStyle: muted,
+                          ),
+                          album: Text(
+                            t.album,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: muted,
+                          ),
+                          meta: TrackMeta(
+                            lengthMs: t.lengthMs,
+                            addedAt: t.addedAt,
+                            lastPlayed: t.lastPlayed,
+                          ),
+                          showMeta: showMeta,
+                          trailing: IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                                minWidth: 40, minHeight: 40),
+                            iconSize: 20,
+                            icon: const Icon(Icons.close),
+                            tooltip: 'Remove from queue',
+                            onPressed: () => controller.removeAt(i),
                           ),
                         ),
                       ),
