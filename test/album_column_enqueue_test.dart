@@ -1,9 +1,10 @@
-import 'package:flutter/gestures.dart';
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_controller.dart';
+import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/catalog/album_column.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
@@ -22,8 +23,11 @@ ProviderScope _albumApp(QueueController qc) => ProviderScope(
         getSettingFnProvider.overrideWithValue((key) async => null),
         albumsProvider.overrideWith((ref) => [_album]),
         queueControllerProvider.overrideWithValue(qc),
-        albumFilePathsFnProvider
-            .overrideWithValue((mbid) async => ['/m/a.flac', '/m/b.flac']),
+        entityPathFnsProvider.overrideWithValue(EntityPathFns(
+          artistPaths: (_) async => [],
+          albumPaths: (_) async => ['/m/a.flac', '/m/b.flac'],
+          trackPath: (_) async => null,
+        )),
       ],
       child: const MaterialApp(home: Scaffold(body: AlbumColumn())),
     );
@@ -40,7 +44,7 @@ void main() {
     expect(find.byIcon(Icons.play_arrow), findsNothing);
   });
 
-  testWidgets('double-tapping an album appends its tracks', (tester) async {
+  testWidgets('album "Add to queue" menu appends its tracks', (tester) async {
     final qc = QueueController.withPlayer(
       FakeQueuePlayer(),
       dbPath: '/x.db',
@@ -49,10 +53,14 @@ void main() {
     await tester.pumpWidget(_albumApp(qc));
     await tester.pumpAndSettle();
 
-    final row = find.text('Album One');
-    await tester.tap(row);
-    await tester.pump(kDoubleTapMinTime);
-    await tester.tap(row);
+    final g = await tester.startGesture(
+      tester.getCenter(find.text('Album One')),
+      buttons: kSecondaryButton,
+    );
+    await g.up();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add to queue'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -72,7 +80,6 @@ void main() {
         getSettingFnProvider.overrideWithValue((key) async => null),
         albumsProvider.overrideWith((ref) => [_album]),
         queueControllerProvider.overrideWithValue(qc),
-        albumFilePathsFnProvider.overrideWithValue((mbid) async => []),
         rereadAlbumTagsFnProvider
             .overrideWithValue((mbid) async => reread.add(mbid)),
       ],
@@ -109,8 +116,6 @@ void main() {
       getSettingFnProvider.overrideWithValue((key) async => null),
       albumsProvider.overrideWith((ref) => [_album]),
       queueControllerProvider.overrideWithValue(qc),
-      albumFilePathsFnProvider
-          .overrideWithValue((mbid) async => ['/m/a.flac', '/m/b.flac']),
     ]);
     addTearDown(container.dispose);
 
@@ -121,9 +126,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Album One'));
-    // Wait past the double-tap window so onTap fires.
-    await tester.pump(kDoubleTapTimeout);
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(tester.takeException(), isNull);
     // Selection updated.

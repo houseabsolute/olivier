@@ -25,7 +25,6 @@ ProviderScope _app(QueueController qc) => ProviderScope(
         tracksProvider.overrideWith((ref) => _tracks),
         selectedAlbumProvider.overrideWith(() => _StubAlbum()),
         queueControllerProvider.overrideWithValue(qc),
-        trackPathFnProvider.overrideWithValue((id) async => '/m/song.flac'),
       ],
       child: const MaterialApp(
         home: Scaffold(

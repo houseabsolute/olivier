@@ -109,22 +109,6 @@ final setSettingFnProvider = Provider<SetSettingFn>((ref) {
       rust_settings.setSetting(dbPath: db, key: key, value: value);
 });
 
-// Resolves one track's single play path (MIN path); seam for testability.
-typedef TrackPathFn = Future<String?> Function(int trackId);
-
-final trackPathFnProvider = Provider<TrackPathFn>((ref) {
-  final db = ref.watch(dbPathProvider);
-  return (trackId) => trackPath(dbPath: db, trackId: trackId);
-});
-
-// Resolves an album's file paths (one per track, disc/position order); seam.
-typedef AlbumFilePathsFn = Future<List<String>> Function(String releaseMbid);
-
-final albumFilePathsFnProvider = Provider<AlbumFilePathsFn>((ref) {
-  final db = ref.watch(dbPathProvider);
-  return (releaseMbid) => albumFilePaths(dbPath: db, releaseMbid: releaseMbid);
-});
-
 // Re-read one track's tags (re-homes it if the album/artist changed). Seam.
 typedef RereadTrackTagsFn = Future<void> Function(int trackId);
 

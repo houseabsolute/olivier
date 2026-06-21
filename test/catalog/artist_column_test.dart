@@ -1,5 +1,4 @@
-import 'package:flutter/gestures.dart'
-    show kDoubleTapMinTime, kDoubleTapTimeout, kSecondaryButton;
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,9 +67,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Test Artist'));
-    // Wait past double-tap window so onTap fires.
-    await tester.pump(kDoubleTapTimeout);
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(tester.takeException(), isNull);
     // Selection updated.
@@ -79,8 +76,8 @@ void main() {
     expect(qc.orderedPaths, isEmpty);
   });
 
-  // Spec §4: double-tap appends the artist's tracks to the queue.
-  testWidgets('double-tapping an artist appends its tracks to the queue',
+  // Spec §4: the right-click "Add to queue" menu appends the artist's tracks.
+  testWidgets('artist "Add to queue" menu appends its tracks to the queue',
       (tester) async {
     final qc = QueueController.withPlayer(
       FakeQueuePlayer(),
@@ -90,10 +87,14 @@ void main() {
     await tester.pumpWidget(_artistApp(qc));
     await tester.pumpAndSettle();
 
-    final row = find.text('Test Artist');
-    await tester.tap(row);
-    await tester.pump(kDoubleTapMinTime);
-    await tester.tap(row);
+    final g = await tester.startGesture(
+      tester.getCenter(find.text('Test Artist')),
+      buttons: kSecondaryButton,
+    );
+    await g.up();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add to queue'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);

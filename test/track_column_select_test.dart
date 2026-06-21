@@ -1,10 +1,10 @@
-import 'package:flutter/gestures.dart'
-    show kDoubleTapMinTime, kDoubleTapTimeout;
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_controller.dart';
+import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/catalog/track_column.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
@@ -20,20 +20,6 @@ class _StubAlbum extends SelectedAlbum {
   String? build() => _initial;
 }
 
-ProviderScope _app(QueueController qc) => ProviderScope(
-      overrides: [
-        getSettingFnProvider.overrideWithValue((key) async => null),
-        tracksProvider.overrideWith((ref) => [_track]),
-        selectedAlbumProvider.overrideWith(() => _StubAlbum('rel-1')),
-        queueControllerProvider.overrideWithValue(qc),
-        trackPathFnProvider.overrideWithValue((id) async => '/m/song.flac'),
-      ],
-      child: const MaterialApp(
-        home: Scaffold(
-            body: SizedBox(width: 320, height: 600, child: TrackColumn())),
-      ),
-    );
-
 void main() {
   testWidgets('single tap selects the track and does not play', (tester) async {
     final qc = QueueController.withPlayer(FakeQueuePlayer(),
@@ -43,7 +29,6 @@ void main() {
       tracksProvider.overrideWith((ref) => [_track]),
       selectedAlbumProvider.overrideWith(() => _StubAlbum('rel-1')),
       queueControllerProvider.overrideWithValue(qc),
-      trackPathFnProvider.overrideWithValue((id) async => '/m/song.flac'),
     ]);
     addTearDown(container.dispose);
 
@@ -56,27 +41,44 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Song'));
-    // InkWell with both onTap + onDoubleTap defers onTap until the
-    // double-tap window closes; advance past it before asserting.
-    await tester.pump(kDoubleTapTimeout);
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(tester.takeException(), isNull); // no playbackController read
     expect(container.read(selectedTrackProvider), 7);
     expect(qc.orderedPaths, isEmpty); // selection must not enqueue
   });
 
-  testWidgets('double tap resolves the path and appends to the queue',
+  testWidgets('"Add to queue" menu resolves the path and appends to the queue',
       (tester) async {
     final qc = QueueController.withPlayer(FakeQueuePlayer(),
         dbPath: '/x.db', saveQueue: (_) async {});
-    await tester.pumpWidget(_app(qc));
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        getSettingFnProvider.overrideWithValue((key) async => null),
+        tracksProvider.overrideWith((ref) => [_track]),
+        selectedAlbumProvider.overrideWith(() => _StubAlbum('rel-1')),
+        queueControllerProvider.overrideWithValue(qc),
+        entityPathFnsProvider.overrideWithValue(EntityPathFns(
+          artistPaths: (_) async => [],
+          albumPaths: (_) async => [],
+          trackPath: (_) async => '/m/song.flac',
+        )),
+      ],
+      child: const MaterialApp(
+        home: Scaffold(
+            body: SizedBox(width: 320, height: 600, child: TrackColumn())),
+      ),
+    ));
     await tester.pumpAndSettle();
 
-    final row = find.text('Song');
-    await tester.tap(row);
-    await tester.pump(kDoubleTapMinTime);
-    await tester.tap(row);
+    final g = await tester.startGesture(
+      tester.getCenter(find.text('Song')),
+      buttons: kSecondaryButton,
+    );
+    await g.up();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add to queue'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);

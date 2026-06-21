@@ -99,11 +99,6 @@ class _TrackList extends ConsumerWidget {
                     onTap: () => ref
                         .read(selectedTrackProvider.notifier)
                         .select(trackId),
-                    onDoubleTap: () async {
-                      final path = await ref.read(trackPathFnProvider)(trackId);
-                      if (path == null) return;
-                      await ref.read(queueControllerProvider).append([path]);
-                    },
                     child: Container(
                       color: isSelected
                           ? Theme.of(context).colorScheme.primaryContainer

@@ -79,7 +79,6 @@ class _ArtistList extends ConsumerWidget {
               key: ValueKey(artist.mbid),
               onTap: () =>
                   ref.read(selectedArtistProvider.notifier).select(artist.mbid),
-              onDoubleTap: () => _enqueue(ref, entity),
               child: Container(
                 color: isSelected
                     ? Theme.of(context).colorScheme.primaryContainer

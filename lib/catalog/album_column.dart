@@ -99,12 +99,6 @@ class _AlbumList extends ConsumerWidget {
                 // Store the full album object so the track column can access title.
                 ref.read(selectedAlbumObjectProvider.notifier).select(album);
               },
-              onDoubleTap: () async {
-                final paths =
-                    await ref.read(albumFilePathsFnProvider)(album.releaseMbid);
-                if (paths.isEmpty) return;
-                await ref.read(queueControllerProvider).append(paths);
-              },
               child: Container(
                 color: isSelected
                     ? Theme.of(context).colorScheme.primaryContainer
