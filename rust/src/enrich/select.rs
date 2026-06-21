@@ -85,6 +85,78 @@ pub fn english_words() -> &'static HashSet<String> {
     })
 }
 
+/// Fraction of alphabetic characters that are ASCII letters (0.0 if none).
+/// Gates the English check to latin-script titles: a Cyrillic/Greek translation
+/// scores ~0 and keeps MB's classification.
+fn ascii_latin_ratio(text: &str) -> f64 {
+    let mut alpha = 0usize;
+    let mut ascii = 0usize;
+    for c in text.chars() {
+        if c.is_alphabetic() {
+            alpha += 1;
+            if c.is_ascii_alphabetic() {
+                ascii += 1;
+            }
+        }
+    }
+    if alpha == 0 {
+        0.0
+    } else {
+        ascii as f64 / alpha as f64
+    }
+}
+
+/// Split latin text into lowercase word tokens: maximal runs of ASCII letters,
+/// keeping an apostrophe inside a word ("don't" stays one token) and trimming
+/// any leading/trailing apostrophes.
+fn tokenize(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    for c in text.chars() {
+        if c.is_ascii_alphabetic() {
+            cur.push(c.to_ascii_lowercase());
+        } else if c == '\'' && !cur.is_empty() {
+            cur.push(c);
+        } else if !cur.is_empty() {
+            out.push(std::mem::take(&mut cur));
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out.into_iter()
+        .map(|w| w.trim_matches('\'').to_string())
+        .filter(|w| !w.is_empty())
+        .collect()
+}
+
+/// Correct MB's classification in the one failing direction: when MB says
+/// `Translate` for a latin-script edition whose pooled titles are mostly NOT
+/// English (a romanization MB mislabeled as a translation), return `Translit`.
+/// Every other case is returned unchanged.
+pub fn correct_alt_kind(mb_kind: AltKind, titles: &[&str], dict: &HashSet<String>) -> AltKind {
+    if mb_kind != AltKind::Translate {
+        return mb_kind;
+    }
+    let combined = titles.join(" ");
+    // Latin-script guard: leave non-latin translations to MB.
+    if ascii_latin_ratio(&combined) < 0.8 {
+        return AltKind::Translate;
+    }
+    let tokens = tokenize(&combined);
+    // Min-token guard: too little signal to override MB.
+    if tokens.len() < 2 {
+        return AltKind::Translate;
+    }
+    let found = tokens.iter().filter(|t| dict.contains(t.as_str())).count();
+    let fraction = found as f64 / tokens.len() as f64;
+    if fraction < 0.5 {
+        AltKind::Translit
+    } else {
+        AltKind::Translate
+    }
+}
+
 /// Classify an edition by its `text-representation` (script/language): a Latin
 /// script ⇒ transliteration; `language == "eng"` (or any other non-original
 /// script) ⇒ translation. Returns `None` when `text-representation` carries no
