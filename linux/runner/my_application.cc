@@ -54,6 +54,23 @@ static void my_application_activate(GApplication* application) {
 
   gtk_window_set_default_size(window, 1280, 720);
 
+  // Set the window icon from the bundled PNG so the title bar / taskbar /
+  // alt-tab show Olivier's icon. The asset is bundled next to the executable
+  // at data/flutter_assets/, so resolve it relative to /proc/self/exe; this
+  // works both for `just run` (in-place bundle) and an installed bundle.
+  g_autofree gchar* exe_path = g_file_read_link("/proc/self/exe", nullptr);
+  if (exe_path != nullptr) {
+    g_autofree gchar* exe_dir = g_path_get_dirname(exe_path);
+    g_autofree gchar* icon_path =
+        g_build_filename(exe_dir, "data", "flutter_assets", "assets", "icon",
+                         "olivier_256.png", nullptr);
+    g_autoptr(GdkPixbuf) icon = gdk_pixbuf_new_from_file(icon_path, nullptr);
+    if (icon != nullptr) {
+      gtk_window_set_icon(window, icon);
+      gtk_window_set_default_icon(icon);
+    }
+  }
+
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);
