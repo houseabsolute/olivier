@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/catalog/album_column.dart';
 import 'package:olivier/catalog/artist_column.dart';
@@ -92,60 +93,68 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
 
     final queueExpanded = ref.watch(queueExpandedProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: widget.topControls ?? TopControls(audioHandler: audioHandler),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsPage()),
-            ),
-          ),
-        ],
-        bottom: scan.scanning ? _scanProgressBar(scan) : null,
-      ),
-      body: Column(
-        children: [
-          if (!queueExpanded)
-            Expanded(
-              // Artist | right pane (horizontal), with the right pane stacking
-              // Album over Track (vertical). Custom ResizableSplit (opaque drag
-              // handle) — see its doc for why multi_split_view's translucent
-              // divider didn't resize here.
-              child: ResizableSplit(
-                axis: Axis.horizontal,
-                ratio: _artistRatio,
-                minFirst: 220,
-                minSecond: 320,
-                onRatioSettled: (r) {
-                  _artistRatio = r;
-                  _saveRatio(layoutArtistsKey, r);
-                },
-                first: const ArtistColumn(),
-                second: ResizableSplit(
-                  axis: Axis.vertical,
-                  ratio: _albumRatio,
-                  minFirst: 80,
-                  minSecond: 80,
-                  onRatioSettled: (r) {
-                    _albumRatio = r;
-                    _saveRatio(layoutRightPaneKey, r);
-                  },
-                  first: const AlbumColumn(),
-                  second: const TrackColumn(),
-                ),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
+            ref.read(searchFocusNodeProvider).requestFocus(),
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () =>
+            ref.read(searchFocusNodeProvider).requestFocus(),
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: widget.topControls ?? TopControls(audioHandler: audioHandler),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'Settings',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SettingsPage()),
               ),
             ),
-          if (queueExpanded)
-            const Expanded(child: QueuePanel())
-          else
-            const QueuePanel(),
-        ],
+          ],
+          bottom: scan.scanning ? _scanProgressBar(scan) : null,
+        ),
+        body: Column(
+          children: [
+            if (!queueExpanded)
+              Expanded(
+                // Artist | right pane (horizontal), with the right pane stacking
+                // Album over Track (vertical). Custom ResizableSplit (opaque drag
+                // handle) — see its doc for why multi_split_view's translucent
+                // divider didn't resize here.
+                child: ResizableSplit(
+                  axis: Axis.horizontal,
+                  ratio: _artistRatio,
+                  minFirst: 220,
+                  minSecond: 320,
+                  onRatioSettled: (r) {
+                    _artistRatio = r;
+                    _saveRatio(layoutArtistsKey, r);
+                  },
+                  first: const ArtistColumn(),
+                  second: ResizableSplit(
+                    axis: Axis.vertical,
+                    ratio: _albumRatio,
+                    minFirst: 80,
+                    minSecond: 80,
+                    onRatioSettled: (r) {
+                      _albumRatio = r;
+                      _saveRatio(layoutRightPaneKey, r);
+                    },
+                    first: const AlbumColumn(),
+                    second: const TrackColumn(),
+                  ),
+                ),
+              ),
+            if (queueExpanded)
+              const Expanded(child: QueuePanel())
+            else
+              const QueuePanel(),
+          ],
+        ),
+        bottomNavigationBar:
+            widget.nowPlaying ?? NowPlayingBar(audioHandler: audioHandler),
       ),
-      bottomNavigationBar:
-          widget.nowPlaying ?? NowPlayingBar(audioHandler: audioHandler),
     );
   }
 
