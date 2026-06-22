@@ -506,3 +506,105 @@ async fn browse_all_editions<H: MbHttp, P: Pacer>(
     }
     Ok(out)
 }
+
+#[cfg(test)]
+mod gate_tests {
+    use super::*;
+    use crate::enrich::model::{MbMedium, MbRecording};
+
+    fn rep(script: &str, language: &str) -> Option<MbTextRepresentation> {
+        Some(MbTextRepresentation {
+            script: Some(script.to_string()),
+            language: Some(language.to_string()),
+        })
+    }
+
+    fn track(title: &str, rec: &str) -> MbTrack {
+        MbTrack {
+            title: title.to_string(),
+            recording: Some(MbRecording {
+                id: rec.to_string(),
+            }),
+        }
+    }
+
+    /// End-to-end gate: a mixed JP/English album. `apply_edition_alts` builds the
+    /// recording→original-title map from the ORIGINAL edition, then stores a
+    /// `translit` reading ONLY for the track whose original is non-Latin. The
+    /// English-original track (same English title in both editions) is gated out.
+    #[test]
+    fn translit_gated_to_non_latin_originals() {
+        let conn = crate::db::open(":memory:").unwrap();
+        // `release_title_alt.release_mbid` has an FK to `release(mbid)`; seed the
+        // parent release row so a release-alt write (if any) is valid. The album
+        // title here is Latin, so no release alt is actually written, but seeding
+        // keeps the test honest if the gating ever changed.
+        conn.execute(
+            "INSERT INTO release(mbid,title) VALUES ('R','chilldspot album')",
+            [],
+        )
+        .unwrap();
+
+        // ORIGINAL edition R: Japanese script. Mixed tracklist — a Japanese
+        // original ("夜の探検", recording jp1) and an English original
+        // ("Lukewarm", recording en1). Album title is English/Latin.
+        let original = MbRelease {
+            id: "R".to_string(),
+            title: "chilldspot album".to_string(),
+            date: None,
+            text_representation: rep("Jpan", "jpn"),
+            release_group: None,
+            media: vec![MbMedium {
+                tracks: vec![track("夜の探検", "jp1"), track("Lukewarm", "en1")],
+            }],
+        };
+
+        // ROMANIZED sibling R2: Latin script (MB would tag a romanization). Same
+        // recordings; the JP track is romanized, the English track is unchanged.
+        let romanized = MbRelease {
+            id: "R2".to_string(),
+            title: "chilldspot album".to_string(),
+            date: None,
+            text_representation: rep("Latn", "jpn"),
+            release_group: None,
+            media: vec![MbMedium {
+                tracks: vec![track("Yoru no Tanken", "jp1"), track("Lukewarm", "en1")],
+            }],
+        };
+
+        let editions = vec![original, romanized];
+        let log = DecisionLog::to_path(None);
+
+        apply_edition_alts(
+            &conn,
+            "R",
+            editions[0].text_representation.as_ref(),
+            &editions,
+            &log,
+            "chilldspot album",
+        )
+        .unwrap();
+
+        // The JP-original track got a reading from the romanized sibling.
+        let jp_title: String = conn
+            .query_row(
+                "SELECT title FROM track_title_alt
+                 WHERE recording_mbid='jp1' AND kind='translit'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(jp_title, "Yoru no Tanken");
+
+        // The English-original track was gated out: no translit reading stored.
+        let en_count: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM track_title_alt
+                 WHERE recording_mbid='en1' AND kind='translit'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(en_count, 0);
+    }
+}
