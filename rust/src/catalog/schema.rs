@@ -33,6 +33,30 @@ pub struct TitleOverride {
     pub translate_override: Option<String>,
 }
 
+/// One track search hit, carrying the cascade nav keys (`release_mbid` +
+/// `album_artist_mbid`) the plain `Track` struct lacks, plus album-artist
+/// display fields for the result subtitle.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchTrack {
+    pub id: i64,
+    pub title: String,
+    pub title_translit: Option<String>,
+    pub title_translate: Option<String>,
+    pub album_artist: Option<String>,
+    pub album_artist_original: Option<String>,
+    pub album_artist_reading: Option<String>,
+    pub album_artist_mbid: Option<String>,
+    pub release_mbid: String,
+}
+
+/// Grouped results for a global search query.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchResults {
+    pub artists: Vec<Artist>,
+    pub albums: Vec<Album>,
+    pub tracks: Vec<SearchTrack>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Album {
     pub release_mbid: String,

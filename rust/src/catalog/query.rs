@@ -1,4 +1,6 @@
-use crate::catalog::schema::{Album, Artist, ArtistReading, QueueTrack, TitleOverride, Track};
+use crate::catalog::schema::{
+    Album, Artist, ArtistReading, QueueTrack, SearchResults, SearchTrack, TitleOverride, Track,
+};
 use rusqlite::{Connection, OptionalExtension};
 
 /// Keyset page of album-artists ordered by sort_name (case-insensitive). Pass
@@ -434,4 +436,165 @@ pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<V
         }));
     }
     Ok(out)
+}
+
+/// Escape LIKE metacharacters so a user query matches literally under
+/// `LIKE ? ESCAPE '\'`.
+fn like_escape(q: &str) -> String {
+    q.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+/// Global search across artists, albums, and tracks. Each entity matches only
+/// on its OWN text (original title/name, romanized reading, translation —
+/// override-aware), case-insensitively (ASCII) with literal substrings for
+/// non-Latin. Each group is capped at `limit`, prefix-matches first.
+pub fn search_catalog(conn: &Connection, query: &str, limit: u32) -> anyhow::Result<SearchResults> {
+    let esc = like_escape(query);
+    let contains = format!("%{esc}%");
+    let prefix = format!("{esc}%");
+
+    let mut artists = Vec::new();
+    {
+        let mut stmt = conn.prepare(
+            "SELECT a.mbid, a.name,
+                    COALESCE(a.sort_name_override, a.sort_name),
+                    COALESCE(a.transliteration_override, a.transliteration),
+                    a.name_original
+             FROM artist a
+             WHERE a.mbid IN (SELECT DISTINCT album_artist_mbid FROM release)
+               AND (a.name LIKE ?1 ESCAPE '\\'
+                 OR a.name_original LIKE ?1 ESCAPE '\\'
+                 OR COALESCE(a.transliteration_override, a.transliteration) LIKE ?1 ESCAPE '\\'
+                 OR COALESCE(a.sort_name_override, a.sort_name) LIKE ?1 ESCAPE '\\')
+             ORDER BY CASE WHEN (a.name LIKE ?2 ESCAPE '\\'
+                              OR a.name_original LIKE ?2 ESCAPE '\\'
+                              OR COALESCE(a.transliteration_override, a.transliteration) LIKE ?2 ESCAPE '\\')
+                          THEN 0 ELSE 1 END,
+                      COALESCE(a.sort_name_override, a.sort_name) COLLATE NOCASE
+             LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![contains, prefix, limit], |r| {
+            Ok(Artist {
+                mbid: r.get(0)?,
+                name: r.get(1)?,
+                sort_name: r.get(2)?,
+                transliteration: r.get(3)?,
+                name_original: r.get(4)?,
+            })
+        })?;
+        for r in rows {
+            artists.push(r?);
+        }
+    }
+
+    let mut albums = Vec::new();
+    {
+        let mut stmt = conn.prepare(
+            "SELECT r.mbid, r.title, a.name,
+                    substr(rg.first_release_date, 1, 4), substr(r.date, 1, 4),
+                    NULLIF(COALESCE(
+                        (SELECT translit FROM release_title_override WHERE release_mbid = r.mbid),
+                        (SELECT title FROM release_title_alt WHERE release_mbid = r.mbid AND kind = 'translit')
+                    ), ''),
+                    NULLIF(COALESCE(
+                        (SELECT translate FROM release_title_override WHERE release_mbid = r.mbid),
+                        (SELECT title FROM release_title_alt WHERE release_mbid = r.mbid AND kind = 'translate')
+                    ), ''),
+                    (SELECT MIN(f.added_at) FROM track t JOIN file f ON f.track_id = t.id
+                       WHERE t.release_mbid = r.mbid),
+                    a.name_original,
+                    COALESCE(a.transliteration_override, a.transliteration),
+                    r.album_artist_mbid
+             FROM release r
+             JOIN artist a ON a.mbid = r.album_artist_mbid
+             LEFT JOIN release_group rg ON rg.mbid = r.release_group_mbid
+             WHERE r.title LIKE ?1 ESCAPE '\\'
+                OR COALESCE(
+                       (SELECT translit FROM release_title_override WHERE release_mbid = r.mbid),
+                       (SELECT title FROM release_title_alt WHERE release_mbid = r.mbid AND kind = 'translit')
+                   ) LIKE ?1 ESCAPE '\\'
+                OR COALESCE(
+                       (SELECT translate FROM release_title_override WHERE release_mbid = r.mbid),
+                       (SELECT title FROM release_title_alt WHERE release_mbid = r.mbid AND kind = 'translate')
+                   ) LIKE ?1 ESCAPE '\\'
+             ORDER BY CASE WHEN r.title LIKE ?2 ESCAPE '\\' THEN 0 ELSE 1 END,
+                      COALESCE(rg.first_release_date, r.date, '9999'), r.title COLLATE NOCASE
+             LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![contains, prefix, limit], |r| {
+            Ok(Album {
+                release_mbid: r.get(0)?,
+                title: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                album_artist: r.get(2)?,
+                original_year: r.get(3)?,
+                reissue_year: r.get(4)?,
+                title_translit: r.get(5)?,
+                title_translate: r.get(6)?,
+                added_at: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
+                album_artist_original: r.get(8)?,
+                album_artist_reading: r.get(9)?,
+                album_artist_mbid: r.get(10)?,
+            })
+        })?;
+        for r in rows {
+            albums.push(r?);
+        }
+    }
+
+    let mut tracks = Vec::new();
+    {
+        let mut stmt = conn.prepare(
+            "SELECT t.id, t.title,
+                    NULLIF(COALESCE(
+                        (SELECT translit FROM track_title_override WHERE recording_mbid = t.recording_mbid),
+                        (SELECT title FROM track_title_alt WHERE recording_mbid = t.recording_mbid AND kind = 'translit')
+                    ), ''),
+                    NULLIF(COALESCE(
+                        (SELECT translate FROM track_title_override WHERE recording_mbid = t.recording_mbid),
+                        (SELECT title FROM track_title_alt WHERE recording_mbid = t.recording_mbid AND kind = 'translate')
+                    ), ''),
+                    aa.name, aa.name_original,
+                    COALESCE(aa.transliteration_override, aa.transliteration),
+                    r.album_artist_mbid, r.mbid
+             FROM track t
+             JOIN release r ON r.mbid = t.release_mbid
+             LEFT JOIN artist aa ON aa.mbid = r.album_artist_mbid
+             WHERE t.title LIKE ?1 ESCAPE '\\'
+                OR COALESCE(
+                       (SELECT translit FROM track_title_override WHERE recording_mbid = t.recording_mbid),
+                       (SELECT title FROM track_title_alt WHERE recording_mbid = t.recording_mbid AND kind = 'translit')
+                   ) LIKE ?1 ESCAPE '\\'
+                OR COALESCE(
+                       (SELECT translate FROM track_title_override WHERE recording_mbid = t.recording_mbid),
+                       (SELECT title FROM track_title_alt WHERE recording_mbid = t.recording_mbid AND kind = 'translate')
+                   ) LIKE ?1 ESCAPE '\\'
+             ORDER BY CASE WHEN t.title LIKE ?2 ESCAPE '\\' THEN 0 ELSE 1 END,
+                      t.title COLLATE NOCASE
+             LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![contains, prefix, limit], |r| {
+            Ok(SearchTrack {
+                id: r.get(0)?,
+                title: r.get(1)?,
+                title_translit: r.get(2)?,
+                title_translate: r.get(3)?,
+                album_artist: r.get(4)?,
+                album_artist_original: r.get(5)?,
+                album_artist_reading: r.get(6)?,
+                album_artist_mbid: r.get(7)?,
+                release_mbid: r.get(8)?,
+            })
+        })?;
+        for r in rows {
+            tracks.push(r?);
+        }
+    }
+
+    Ok(SearchResults {
+        artists,
+        albums,
+        tracks,
+    })
 }
