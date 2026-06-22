@@ -335,7 +335,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                     ),
                     child: Material(
                       color: selected
-                          ? scheme.primaryContainer
+                          ? scheme.tertiaryContainer
                           : Colors.transparent,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(

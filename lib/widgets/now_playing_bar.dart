@@ -34,6 +34,8 @@ class NowPlayingBar extends ConsumerWidget {
     final leads = ref.watch(languageLeadsProvider);
     return Material(
       elevation: 8,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      surfaceTintColor: Colors.transparent,
       child: SizedBox(
         // Grow the bar with the OS text size so the (up to) two-line bilingual
         // title plus the artist line never overflow at large accessibility scale.

@@ -114,9 +114,11 @@ void main() {
   });
 
   // Spec §7: the currently-playing row is visually distinguished with a
-  // primaryContainer-colored Material. The stub QueueView has currentIndex == 0,
-  // so the first row must carry the highlight and the second row must not.
-  testWidgets('current-track row has primaryContainer highlight, others do not',
+  // tertiaryContainer-colored (red) Material. The stub QueueView has
+  // currentIndex == 0, so the first row must carry the highlight and the second
+  // row must not.
+  testWidgets(
+      'current-track row has tertiaryContainer highlight, others do not',
       (tester) async {
     final c = await _seededController();
     await tester.pumpWidget(_app(c.qc));
@@ -125,14 +127,14 @@ void main() {
 
     // Locate the Material widget that wraps each row in the expanded list.
     // Each item is keyed by '${path}#${index}'; the widget builder wraps it in
-    // a Material whose `color` is set to primaryContainer for the current row.
+    // a Material whose `color` is set to tertiaryContainer for the current row.
     final theme = Theme.of(
       tester.element(find.text('Kabukicho no Joo · Queen of Kabuki-cho')),
     );
-    final highlightColor = theme.colorScheme.primaryContainer;
+    final highlightColor = theme.colorScheme.tertiaryContainer;
 
     // Find all Material widgets that are direct wrappers of list items.
-    // The highlighted row's Material must have `color == primaryContainer`.
+    // The highlighted row's Material must have `color == tertiaryContainer`.
     // We inspect by finding the Text for each row, then climbing to its Material.
     final highlightedRowFinder = find.ancestor(
       of: find.text('Kabukicho no Joo · Queen of Kabuki-cho'),
@@ -148,9 +150,9 @@ void main() {
     );
 
     expect(highlightedRowFinder, findsWidgets,
-        reason: 'index-0 row must have primaryContainer Material');
+        reason: 'index-0 row must have tertiaryContainer Material');
     expect(unhighlightedRowFinder, findsNothing,
-        reason: 'non-current row must NOT have primaryContainer Material');
+        reason: 'non-current row must NOT have tertiaryContainer Material');
   });
 
   // When the queue is expanded, BrowserPage wraps QueuePanel in Expanded so it
