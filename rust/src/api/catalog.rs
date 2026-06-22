@@ -2,7 +2,9 @@ use crate::catalog::deletes;
 use crate::catalog::query;
 use crate::catalog::roots;
 use crate::catalog::scan::{self, ScanProgress};
-use crate::catalog::schema::{Album, Artist, ArtistReading, QueueTrack, TitleOverride, Track};
+use crate::catalog::schema::{
+    Album, Artist, ArtistReading, QueueTrack, SearchResults, TitleOverride, Track,
+};
 use crate::db;
 use crate::decision_log::DecisionLog;
 use crate::frb_generated::StreamSink;
@@ -91,6 +93,10 @@ pub fn set_release_title_override(
 
 pub fn list_albums(db_path: String, album_artist_mbid: String) -> anyhow::Result<Vec<Album>> {
     query::albums_for_artist(&db::open(&db_path)?, &album_artist_mbid)
+}
+
+pub fn search_catalog(db_path: String, q: String, limit: u32) -> anyhow::Result<SearchResults> {
+    query::search_catalog(&db::open(&db_path)?, &q, limit)
 }
 
 pub fn list_tracks(db_path: String, release_mbid: String) -> anyhow::Result<Vec<Track>> {

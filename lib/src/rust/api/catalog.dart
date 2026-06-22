@@ -78,6 +78,11 @@ Future<List<Album>> listAlbums(
     RustLib.instance.api.crateApiCatalogListAlbums(
         dbPath: dbPath, albumArtistMbid: albumArtistMbid);
 
+Future<SearchResults> searchCatalog(
+        {required String dbPath, required String q, required int limit}) =>
+    RustLib.instance.api
+        .crateApiCatalogSearchCatalog(dbPath: dbPath, q: q, limit: limit);
+
 Future<List<Track>> listTracks(
         {required String dbPath, required String releaseMbid}) =>
     RustLib.instance.api

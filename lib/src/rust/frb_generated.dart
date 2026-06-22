@@ -81,7 +81,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1600968571;
+  int get rustContentHash => -296346039;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -176,6 +176,9 @@ abstract class RustLibApi extends BaseApi {
 
   Stream<ScanProgress> crateApiCatalogScanLibrary(
       {required String dbPath, required List<String> roots});
+
+  Future<SearchResults> crateApiCatalogSearchCatalog(
+      {required String dbPath, required String q, required int limit});
 
   Future<void> crateApiCatalogSetArtistReadingOverride(
       {required String dbPath,
@@ -966,6 +969,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<SearchResults> crateApiCatalogSearchCatalog(
+      {required String dbPath, required String q, required int limit}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(dbPath, serializer);
+        sse_encode_String(q, serializer);
+        sse_encode_u_32(limit, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 29, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_search_results,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCatalogSearchCatalogConstMeta,
+      argValues: [dbPath, q, limit],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCatalogSearchCatalogConstMeta =>
+      const TaskConstMeta(
+        debugName: "search_catalog",
+        argNames: ["dbPath", "q", "limit"],
+      );
+
+  @override
   Future<void> crateApiCatalogSetArtistReadingOverride(
       {required String dbPath,
       required String mbid,
@@ -979,7 +1010,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(reading, serializer);
         sse_encode_opt_String(sort, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 29, port: port_);
+            funcId: 30, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1011,7 +1042,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(translit, serializer);
         sse_encode_opt_String(translate, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 30, port: port_);
+            funcId: 31, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1039,7 +1070,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(key, serializer);
         sse_encode_String(value, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 31, port: port_);
+            funcId: 32, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1070,7 +1101,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(translit, serializer);
         sse_encode_opt_String(translate, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 32, port: port_);
+            funcId: 33, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1097,7 +1128,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_i_64(trackId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 33, port: port_);
+            funcId: 34, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_String,
@@ -1123,7 +1154,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_String(albumArtistMbid, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 34, port: port_);
+            funcId: 35, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -1149,7 +1180,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(dbPath, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 35, port: port_);
+            funcId: 36, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -1176,7 +1207,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_String(recordingMbid, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 36, port: port_);
+            funcId: 37, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_title_override,
@@ -1203,7 +1234,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(dbPath, serializer);
         sse_encode_list_String(paths, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 37, port: port_);
+            funcId: 38, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_queue_track,
@@ -1380,6 +1411,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<SearchTrack> dco_decode_list_search_track(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_search_track).toList();
+  }
+
+  @protected
   List<Track> dco_decode_list_track(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_track).toList();
@@ -1465,6 +1502,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       filesChanged: dco_decode_u_64(arr[1]),
       current: dco_decode_String(arr[2]),
       done: dco_decode_bool(arr[3]),
+    );
+  }
+
+  @protected
+  SearchResults dco_decode_search_results(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return SearchResults(
+      artists: dco_decode_list_artist(arr[0]),
+      albums: dco_decode_list_album(arr[1]),
+      tracks: dco_decode_list_search_track(arr[2]),
+    );
+  }
+
+  @protected
+  SearchTrack dco_decode_search_track(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return SearchTrack(
+      id: dco_decode_i_64(arr[0]),
+      title: dco_decode_String(arr[1]),
+      titleTranslit: dco_decode_opt_String(arr[2]),
+      titleTranslate: dco_decode_opt_String(arr[3]),
+      albumArtist: dco_decode_opt_String(arr[4]),
+      albumArtistOriginal: dco_decode_opt_String(arr[5]),
+      albumArtistReading: dco_decode_opt_String(arr[6]),
+      albumArtistMbid: dco_decode_opt_String(arr[7]),
+      releaseMbid: dco_decode_String(arr[8]),
     );
   }
 
@@ -1759,6 +1828,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<SearchTrack> sse_decode_list_search_track(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <SearchTrack>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_search_track(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<Track> sse_decode_list_track(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -1888,6 +1969,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         filesChanged: var_filesChanged,
         current: var_current,
         done: var_done);
+  }
+
+  @protected
+  SearchResults sse_decode_search_results(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_artists = sse_decode_list_artist(deserializer);
+    var var_albums = sse_decode_list_album(deserializer);
+    var var_tracks = sse_decode_list_search_track(deserializer);
+    return SearchResults(
+        artists: var_artists, albums: var_albums, tracks: var_tracks);
+  }
+
+  @protected
+  SearchTrack sse_decode_search_track(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_titleTranslit = sse_decode_opt_String(deserializer);
+    var var_titleTranslate = sse_decode_opt_String(deserializer);
+    var var_albumArtist = sse_decode_opt_String(deserializer);
+    var var_albumArtistOriginal = sse_decode_opt_String(deserializer);
+    var var_albumArtistReading = sse_decode_opt_String(deserializer);
+    var var_albumArtistMbid = sse_decode_opt_String(deserializer);
+    var var_releaseMbid = sse_decode_String(deserializer);
+    return SearchTrack(
+        id: var_id,
+        title: var_title,
+        titleTranslit: var_titleTranslit,
+        titleTranslate: var_titleTranslate,
+        albumArtist: var_albumArtist,
+        albumArtistOriginal: var_albumArtistOriginal,
+        albumArtistReading: var_albumArtistReading,
+        albumArtistMbid: var_albumArtistMbid,
+        releaseMbid: var_releaseMbid);
   }
 
   @protected
@@ -2187,6 +2302,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_search_track(
+      List<SearchTrack> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_search_track(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_track(List<Track> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
@@ -2283,6 +2408,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.filesChanged, serializer);
     sse_encode_String(self.current, serializer);
     sse_encode_bool(self.done, serializer);
+  }
+
+  @protected
+  void sse_encode_search_results(SearchResults self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_artist(self.artists, serializer);
+    sse_encode_list_album(self.albums, serializer);
+    sse_encode_list_search_track(self.tracks, serializer);
+  }
+
+  @protected
+  void sse_encode_search_track(SearchTrack self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_opt_String(self.titleTranslit, serializer);
+    sse_encode_opt_String(self.titleTranslate, serializer);
+    sse_encode_opt_String(self.albumArtist, serializer);
+    sse_encode_opt_String(self.albumArtistOriginal, serializer);
+    sse_encode_opt_String(self.albumArtistReading, serializer);
+    sse_encode_opt_String(self.albumArtistMbid, serializer);
+    sse_encode_String(self.releaseMbid, serializer);
   }
 
   @protected

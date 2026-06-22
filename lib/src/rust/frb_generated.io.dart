@@ -89,6 +89,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<QueueTrack> dco_decode_list_queue_track(dynamic raw);
 
   @protected
+  List<SearchTrack> dco_decode_list_search_track(dynamic raw);
+
+  @protected
   List<Track> dco_decode_list_track(dynamic raw);
 
   @protected
@@ -114,6 +117,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ScanProgress dco_decode_scan_progress(dynamic raw);
+
+  @protected
+  SearchResults dco_decode_search_results(dynamic raw);
+
+  @protected
+  SearchTrack dco_decode_search_track(dynamic raw);
 
   @protected
   TitleOverride dco_decode_title_override(dynamic raw);
@@ -197,6 +206,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<QueueTrack> sse_decode_list_queue_track(SseDeserializer deserializer);
 
   @protected
+  List<SearchTrack> sse_decode_list_search_track(SseDeserializer deserializer);
+
+  @protected
   List<Track> sse_decode_list_track(SseDeserializer deserializer);
 
   @protected
@@ -223,6 +235,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ScanProgress sse_decode_scan_progress(SseDeserializer deserializer);
+
+  @protected
+  SearchResults sse_decode_search_results(SseDeserializer deserializer);
+
+  @protected
+  SearchTrack sse_decode_search_track(SseDeserializer deserializer);
 
   @protected
   TitleOverride sse_decode_title_override(SseDeserializer deserializer);
@@ -314,6 +332,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<QueueTrack> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_search_track(
+      List<SearchTrack> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_track(List<Track> self, SseSerializer serializer);
 
   @protected
@@ -341,6 +363,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_scan_progress(ScanProgress self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_search_results(SearchResults self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_search_track(SearchTrack self, SseSerializer serializer);
 
   @protected
   void sse_encode_title_override(TitleOverride self, SseSerializer serializer);

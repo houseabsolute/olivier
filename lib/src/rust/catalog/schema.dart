@@ -225,6 +225,85 @@ class QueueTrack {
           albumArtistMbid == other.albumArtistMbid;
 }
 
+/// Grouped results for a global search query.
+class SearchResults {
+  final List<Artist> artists;
+  final List<Album> albums;
+  final List<SearchTrack> tracks;
+
+  const SearchResults({
+    required this.artists,
+    required this.albums,
+    required this.tracks,
+  });
+
+  @override
+  int get hashCode => artists.hashCode ^ albums.hashCode ^ tracks.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchResults &&
+          runtimeType == other.runtimeType &&
+          artists == other.artists &&
+          albums == other.albums &&
+          tracks == other.tracks;
+}
+
+/// One track search hit, carrying the cascade nav keys (`release_mbid` +
+/// `album_artist_mbid`) the plain `Track` struct lacks, plus album-artist
+/// display fields for the result subtitle.
+class SearchTrack {
+  final PlatformInt64 id;
+  final String title;
+  final String? titleTranslit;
+  final String? titleTranslate;
+  final String? albumArtist;
+  final String? albumArtistOriginal;
+  final String? albumArtistReading;
+  final String? albumArtistMbid;
+  final String releaseMbid;
+
+  const SearchTrack({
+    required this.id,
+    required this.title,
+    this.titleTranslit,
+    this.titleTranslate,
+    this.albumArtist,
+    this.albumArtistOriginal,
+    this.albumArtistReading,
+    this.albumArtistMbid,
+    required this.releaseMbid,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      titleTranslit.hashCode ^
+      titleTranslate.hashCode ^
+      albumArtist.hashCode ^
+      albumArtistOriginal.hashCode ^
+      albumArtistReading.hashCode ^
+      albumArtistMbid.hashCode ^
+      releaseMbid.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchTrack &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          titleTranslit == other.titleTranslit &&
+          titleTranslate == other.titleTranslate &&
+          albumArtist == other.albumArtist &&
+          albumArtistOriginal == other.albumArtistOriginal &&
+          albumArtistReading == other.albumArtistReading &&
+          albumArtistMbid == other.albumArtistMbid &&
+          releaseMbid == other.releaseMbid;
+}
+
 /// Current enriched + manual-override reading/translation for one title, for the
 /// "Set reading…" dialog. Each override field: None = automatic, Some("") =
 /// suppress, Some(text) = override.
