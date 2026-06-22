@@ -1,5 +1,6 @@
 import 'dart:async' show unawaited;
 
+import 'package:flutter/widgets.dart' show FocusNode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/src/rust/api/catalog.dart';
@@ -204,6 +205,58 @@ typedef LibraryPathsFn = Future<List<String>> Function();
 final libraryPathsFnProvider = Provider<LibraryPathsFn>((ref) {
   final db = ref.watch(dbPathProvider);
   return () => trackPathsForLibrary(dbPath: db);
+});
+
+// --- Global search ---
+
+class SearchQuery extends Notifier<String> {
+  @override
+  String build() => '';
+  void set(String q) => state = q;
+  void clear() => state = '';
+}
+
+final searchQueryProvider =
+    NotifierProvider<SearchQuery, String>(SearchQuery.new);
+
+class HighlightedSearchIndex extends Notifier<int> {
+  @override
+  int build() => -1;
+  void set(int i) => state = i;
+  void reset() => state = -1;
+}
+
+final highlightedSearchIndexProvider =
+    NotifierProvider<HighlightedSearchIndex, int>(HighlightedSearchIndex.new);
+
+// Shared focus node for the search field, so Ctrl-F can focus it from elsewhere.
+final searchFocusNodeProvider = Provider<FocusNode>((ref) {
+  final node = FocusNode(debugLabel: 'search');
+  ref.onDispose(node.dispose);
+  return node;
+});
+
+// Seam so searchResultsProvider is testable without the FFI.
+typedef SearchCatalogFn = Future<SearchResults> Function(
+    String query, int limit);
+
+final searchCatalogFnProvider = Provider<SearchCatalogFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (query, limit) => searchCatalog(dbPath: db, q: query, limit: limit);
+});
+
+/// Per-group result cap. A group rendered at exactly this many rows shows a
+/// "refine search" footer (there may be more matches).
+const kSearchGroupLimit = 8;
+
+final searchResultsProvider = FutureProvider<SearchResults>((ref) {
+  final q = ref.watch(searchQueryProvider).trim();
+  if (q.isEmpty) {
+    return Future.value(
+        const SearchResults(artists: [], albums: [], tracks: []));
+  }
+  final search = ref.watch(searchCatalogFnProvider);
+  return search(q, kSearchGroupLimit);
 });
 
 const _languageLeadsKey = 'language_leads';
