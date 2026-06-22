@@ -9,6 +9,7 @@ import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 import 'package:olivier/widgets/context_menu.dart';
 import 'package:olivier/widgets/info_dialog.dart';
+import 'package:olivier/widgets/title_override_dialog.dart';
 import 'package:olivier/widgets/track_meta.dart';
 
 const double _trackNumWidth = 32;
@@ -69,6 +70,7 @@ class _TrackList extends ConsumerWidget {
               final trackId = track.id;
               final isSelected = selectedTrack == trackId;
               final entity = QueueEntityRef.track(trackId);
+              final recordingMbid = track.recordingMbid;
               return LongPressDraggable<QueueEntityRef>(
                 data: entity,
                 feedback: Material(
@@ -92,6 +94,27 @@ class _TrackList extends ConsumerWidget {
                     successMessage: 'Tags re-read',
                     failureMessage: 'Failed to re-read tags',
                   ),
+                  onSetReading: recordingMbid == null
+                      ? null
+                      : (_) async {
+                          final current = await ref.read(
+                              trackTitleOverrideFnProvider)(recordingMbid);
+                          if (!context.mounted) return;
+                          await showTitleOverrideDialog(
+                            context,
+                            label: track.title,
+                            current: current,
+                            onSubmit: (t, tr) =>
+                                ref.read(setTrackTitleOverrideFnProvider)(
+                                    recordingMbid, t, tr),
+                            onSaved: () {
+                              ref
+                                  .read(queueControllerProvider)
+                                  .refreshMetadata();
+                              ref.invalidate(tracksProvider);
+                            },
+                          );
+                        },
                   onRemove: (_) => runCatalogMutation(
                     context,
                     ref,

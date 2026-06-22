@@ -8,10 +8,19 @@ import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/catalog/track_column.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/widgets/title_override_dialog.dart';
 
 import 'support/fake_queue_player.dart';
 
 final _track = Track(id: 7, disc: 1, position: 1, title: 'Song', addedAt: 0);
+final _trackWithRecording = Track(
+  id: 7,
+  disc: 1,
+  position: 1,
+  title: 'Song',
+  addedAt: 0,
+  recordingMbid: 'rec-1',
+);
 
 class _StubAlbum extends SelectedAlbum {
   _StubAlbum(this._initial);
@@ -117,5 +126,45 @@ void main() {
 
     expect(removed, [7]);
     expect(find.text('Removed "Song"'), findsOneWidget);
+  });
+
+  testWidgets('track menu "Set reading…" opens the override dialog',
+      (tester) async {
+    final qc = QueueController.withPlayer(FakeQueuePlayer(),
+        dbPath: '/x.db', saveQueue: (_) async {});
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        getSettingFnProvider.overrideWithValue((key) async => null),
+        tracksProvider.overrideWith((ref) => [_trackWithRecording]),
+        selectedAlbumProvider.overrideWith(() => _StubAlbum('rel-1')),
+        queueControllerProvider.overrideWithValue(qc),
+        trackTitleOverrideFnProvider.overrideWithValue(
+          (mbid) async => const TitleOverride(
+            translit: 'Songu',
+            translate: null,
+            translitOverride: null,
+            translateOverride: null,
+          ),
+        ),
+      ],
+      child: const MaterialApp(
+        home: Scaffold(
+            body: SizedBox(width: 320, height: 600, child: TrackColumn())),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Song')),
+      buttons: kSecondaryButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Set reading…'), findsOneWidget);
+    await tester.tap(find.text('Set reading…'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TitleOverrideDialog), findsOneWidget);
   });
 }

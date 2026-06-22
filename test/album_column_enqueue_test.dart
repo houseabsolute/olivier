@@ -8,6 +8,7 @@ import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/catalog/album_column.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/widgets/title_override_dialog.dart';
 
 import 'support/fake_queue_player.dart';
 
@@ -135,6 +136,45 @@ void main() {
 
     expect(removed, ['rel-1']);
     expect(find.text('Removed "Album One"'), findsOneWidget);
+  });
+
+  testWidgets('album menu "Set reading…" opens the override dialog',
+      (tester) async {
+    final qc = QueueController.withPlayer(
+      FakeQueuePlayer(),
+      dbPath: '/x.db',
+      saveQueue: (_) async {},
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        getSettingFnProvider.overrideWithValue((key) async => null),
+        albumsProvider.overrideWith((ref) => [_album]),
+        queueControllerProvider.overrideWithValue(qc),
+        releaseTitleOverrideFnProvider.overrideWithValue(
+          (mbid) async => const TitleOverride(
+            translit: 'Arubamu',
+            translate: null,
+            translitOverride: null,
+            translateOverride: null,
+          ),
+        ),
+      ],
+      child: const MaterialApp(home: Scaffold(body: AlbumColumn())),
+    ));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Album One')),
+      buttons: kSecondaryButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Set reading…'), findsOneWidget);
+    await tester.tap(find.text('Set reading…'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TitleOverrideDialog), findsOneWidget);
   });
 
   // Spec §4: single-click selects the album (updates selectedAlbumProvider) and

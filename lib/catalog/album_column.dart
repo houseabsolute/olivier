@@ -11,6 +11,7 @@ import 'package:olivier/widgets/album_cover.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 import 'package:olivier/widgets/context_menu.dart';
 import 'package:olivier/widgets/info_dialog.dart';
+import 'package:olivier/widgets/title_override_dialog.dart';
 
 Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
   final paths = await resolveEntityPaths(
@@ -90,6 +91,24 @@ class _AlbumList extends ConsumerWidget {
               successMessage: 'Tags re-read',
               failureMessage: 'Failed to re-read tags',
             ),
+            onSetReading: (_) async {
+              final current = await ref
+                  .read(releaseTitleOverrideFnProvider)(album.releaseMbid);
+              if (!context.mounted) return;
+              await showTitleOverrideDialog(
+                context,
+                label: album.title,
+                current: current,
+                onSubmit: (t, tr) =>
+                    ref.read(setReleaseTitleOverrideFnProvider)(
+                        album.releaseMbid, t, tr),
+                onSaved: () {
+                  ref.read(queueControllerProvider).refreshMetadata();
+                  ref.invalidate(albumsProvider);
+                  ref.invalidate(tracksProvider);
+                },
+              );
+            },
             onRemove: (_) => runCatalogMutation(
               context,
               ref,
