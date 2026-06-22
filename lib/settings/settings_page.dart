@@ -24,11 +24,12 @@ class SettingsPage extends ConsumerWidget {
           Text('Music folders', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           if (scan.roots.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
                 'No music folders yet. Add one to build your library.',
-                style: TextStyle(color: Colors.grey),
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             )
           else
@@ -90,12 +91,14 @@ class SettingsPage extends ConsumerWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                Icon(Icons.error_outline,
+                    color: Theme.of(context).colorScheme.error, size: 16),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     'Error: ${scan.lastError}',
-                    style: const TextStyle(color: Colors.red),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ),
               ],
@@ -105,10 +108,11 @@ class SettingsPage extends ConsumerWidget {
           Text('Music metadata',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Fetch readings, translations, and original dates from MusicBrainz '
             'for your tagged files. Runs automatically after a scan.',
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 8),
           Row(
@@ -158,12 +162,14 @@ class SettingsPage extends ConsumerWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                Icon(Icons.error_outline,
+                    color: Theme.of(context).colorScheme.error, size: 16),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     'Enrich error: ${enrich.lastError}',
-                    style: const TextStyle(color: Colors.red),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ),
               ],
@@ -172,9 +178,10 @@ class SettingsPage extends ConsumerWidget {
           const SizedBox(height: 24),
           Text('Display', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Language leads: which script shows first in bilingual rows.',
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 8),
           SegmentedButton<LanguageLeads>(

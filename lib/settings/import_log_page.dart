@@ -60,9 +60,10 @@ class _ImportLogPageState extends ConsumerState<ImportLogPage> {
           }
           final text = snap.data ?? '';
           if (text.trim().isEmpty) {
-            return const Center(
+            return Center(
               child: Text('No import activity logged yet.',
-                  style: TextStyle(color: Colors.grey)),
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
             );
           }
           // Resolve the log path for display. In tests the provider may be
