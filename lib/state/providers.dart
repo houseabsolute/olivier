@@ -161,6 +161,30 @@ final setArtistReadingOverrideFnProvider =
       dbPath: db, mbid: mbid, reading: reading, sort: sort);
 });
 
+// Loads/writes one track's or release's reading + translation override. Seams.
+typedef TitleOverrideFn = Future<TitleOverride> Function(String mbid);
+typedef SetTitleOverrideFn = Future<void> Function(
+    String mbid, String? translit, String? translate);
+
+final trackTitleOverrideFnProvider = Provider<TitleOverrideFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (mbid) => trackTitleOverride(dbPath: db, recordingMbid: mbid);
+});
+final releaseTitleOverrideFnProvider = Provider<TitleOverrideFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (mbid) => releaseTitleOverride(dbPath: db, releaseMbid: mbid);
+});
+final setTrackTitleOverrideFnProvider = Provider<SetTitleOverrideFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (mbid, t, tr) => setTrackTitleOverride(
+      dbPath: db, recordingMbid: mbid, translit: t, translate: tr);
+});
+final setReleaseTitleOverrideFnProvider = Provider<SetTitleOverrideFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (mbid, t, tr) => setReleaseTitleOverride(
+      dbPath: db, releaseMbid: mbid, translit: t, translate: tr);
+});
+
 // --- Entity → paths FFI seams (overridable in tests) ---
 
 final entityPathFnsProvider = Provider<EntityPathFns>((ref) {
