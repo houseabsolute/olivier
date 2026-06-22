@@ -13,6 +13,7 @@ import 'package:olivier/catalog/browser_page.dart';
 import 'package:olivier/src/rust/api/queue.dart';
 import 'package:olivier/src/rust/frb_generated.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/theme.dart';
 import 'package:path_provider/path_provider.dart';
 
 late final OlivierAudioHandler audioHandler;
@@ -194,6 +195,7 @@ class OlivierApp extends StatelessWidget {
         },
         child: MaterialApp(
           title: 'Olivier',
+          theme: olivierTheme(),
           home: home ?? const BrowserPage(),
         ),
       ),
