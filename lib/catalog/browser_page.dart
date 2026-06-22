@@ -12,6 +12,7 @@ import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/scan_controller.dart';
 import 'package:olivier/widgets/now_playing_bar.dart';
 import 'package:olivier/widgets/resizable_split.dart';
+import 'package:olivier/widgets/search_results_panel.dart';
 import 'package:olivier/widgets/top_controls.dart';
 
 /// The first pane's fraction of a persisted `(f0, f1)` flex pair.
@@ -114,42 +115,47 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
           ],
           bottom: scan.scanning ? _scanProgressBar(scan) : null,
         ),
-        body: Column(
+        body: Stack(
           children: [
-            if (!queueExpanded)
-              Expanded(
-                // Artist | right pane (horizontal), with the right pane stacking
-                // Album over Track (vertical). Custom ResizableSplit (opaque drag
-                // handle) — see its doc for why multi_split_view's translucent
-                // divider didn't resize here.
-                child: ResizableSplit(
-                  axis: Axis.horizontal,
-                  ratio: _artistRatio,
-                  minFirst: 220,
-                  minSecond: 320,
-                  onRatioSettled: (r) {
-                    _artistRatio = r;
-                    _saveRatio(layoutArtistsKey, r);
-                  },
-                  first: const ArtistColumn(),
-                  second: ResizableSplit(
-                    axis: Axis.vertical,
-                    ratio: _albumRatio,
-                    minFirst: 80,
-                    minSecond: 80,
-                    onRatioSettled: (r) {
-                      _albumRatio = r;
-                      _saveRatio(layoutRightPaneKey, r);
-                    },
-                    first: const AlbumColumn(),
-                    second: const TrackColumn(),
+            Column(
+              children: [
+                if (!queueExpanded)
+                  Expanded(
+                    // Artist | right pane (horizontal), with the right pane
+                    // stacking Album over Track (vertical). Custom
+                    // ResizableSplit (opaque drag handle) — see its doc for why
+                    // multi_split_view's translucent divider didn't resize here.
+                    child: ResizableSplit(
+                      axis: Axis.horizontal,
+                      ratio: _artistRatio,
+                      minFirst: 220,
+                      minSecond: 320,
+                      onRatioSettled: (r) {
+                        _artistRatio = r;
+                        _saveRatio(layoutArtistsKey, r);
+                      },
+                      first: const ArtistColumn(),
+                      second: ResizableSplit(
+                        axis: Axis.vertical,
+                        ratio: _albumRatio,
+                        minFirst: 80,
+                        minSecond: 80,
+                        onRatioSettled: (r) {
+                          _albumRatio = r;
+                          _saveRatio(layoutRightPaneKey, r);
+                        },
+                        first: const AlbumColumn(),
+                        second: const TrackColumn(),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            if (queueExpanded)
-              const Expanded(child: QueuePanel())
-            else
-              const QueuePanel(),
+                if (queueExpanded)
+                  const Expanded(child: QueuePanel())
+                else
+                  const QueuePanel(),
+              ],
+            ),
+            const SearchResultsPanel(),
           ],
         ),
         bottomNavigationBar:
