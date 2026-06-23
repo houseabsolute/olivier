@@ -57,6 +57,16 @@ Track error timestamps during a pass; if the number of errors within any rolling
 
 In `fetch_with_backoff`, include a truncated snippet of the response body in the non-200/503 error: `anyhow!("MB returned HTTP {s} for {url}: {body_snippet}")`, so the activity-log ERROR line shows MB's reason (e.g. `Invalid mbid.`).
 
+## Resumability (errors don't waste prior work)
+
+Enrichment is already incrementally resumable, and this design preserves that:
+
+- Each release marks its files `enriched=1` inside its **own** transaction (`store::mark_release_files_enriched`), committed per-release. With the per-entity error handling above, an **errored release's transaction rolls back** (uncommitted → dropped on the `Err` path) so its files stay `enriched=0`; a **succeeded** release stays `enriched=1`. A circuit-breaker abort therefore preserves every release completed before it.
+- **Re-running the default pass resumes.** `enrich(force=false)` (the Settings "Enrich library" button) selects only releases with `enriched=0` files and artists that are unenriched or own un-enriched files — so already-enriched data is **not** re-processed. The `mb_cache` further means any re-touched entity isn't re-fetched from the network. ("Re-fetch from MusicBrainz" / `force=true` is the deliberate full redo and is unchanged.)
+- **Resume hint:** the circuit-breaker abort message tells the user how to resume (re-run enrichment; already-enriched items are skipped).
+
+No new "resume" command is needed — "Enrich library" *is* the resume.
+
 ## Edge cases
 
 - **Single-entity re-fetch** (`enrich_artist`/`enrich_album` from the right-click menu): there is nothing to "skip to," so a failure legitimately ends the (one-entity) pass; it is logged as `ERROR` and surfaced via the global guard's snackbar. The circuit-breaker is irrelevant for one entity.

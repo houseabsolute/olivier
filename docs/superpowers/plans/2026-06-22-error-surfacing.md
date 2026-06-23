@@ -118,9 +118,10 @@ use rust_lib_olivier::enrich::run::enrich;
 // ---- FakeHttp (copied from enrich_test.rs) ----
 struct FakeHttp {
     responses: std::collections::HashMap<String, MbResponse>,
+    calls: std::cell::RefCell<Vec<String>>,
 }
 impl FakeHttp {
-    fn new() -> Self { Self { responses: Default::default() } }
+    fn new() -> Self { Self { responses: Default::default(), calls: Default::default() } }
     fn with(mut self, url: &str, status: u16, body: &str) -> Self {
         self.responses.insert(url.to_string(), MbResponse { status, body: body.to_string() });
         self
@@ -129,6 +130,7 @@ impl FakeHttp {
 #[async_trait::async_trait(?Send)]
 impl MbHttp for FakeHttp {
     async fn get(&self, url: &str) -> anyhow::Result<MbResponse> {
+        self.calls.borrow_mut().push(url.to_string());
         self.responses.get(url).cloned()
             .ok_or_else(|| anyhow::anyhow!("no canned response for {url}"))
     }
@@ -190,9 +192,44 @@ async fn circuit_breaker_aborts_after_more_than_ten_errors() {
     assert!(res.is_err(), "should abort once >10 errors pile up");
     assert!(format!("{}", res.unwrap_err()).contains("aborted"));
 }
+
+#[tokio::test]
+async fn already_enriched_data_is_not_refetched_on_resume() {
+    let conn = open(":memory:").unwrap();
+    // An album-artist already enriched (name_original set) whose release's files
+    // are already enriched=1 — i.e. a prior pass completed it.
+    let ambid = "00000000-0000-0000-0000-0000000000aa";
+    conn.execute(
+        "INSERT INTO artist(mbid,name,sort_name,name_original) VALUES (?1,'A','A','エー')",
+        [ambid],
+    ).unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid,album_artist_mbid,title) VALUES ('R',?1,'T')",
+        [ambid],
+    ).unwrap();
+    conn.execute(
+        "INSERT INTO track(id,release_mbid,recording_mbid,disc,position,title) VALUES (1,'R','REC',1,1,'t')",
+        [],
+    ).unwrap();
+    conn.execute(
+        "INSERT INTO file(id,path,mtime,size,track_id,enriched,added_at) VALUES (1,'/m/a.flac',0,0,1,1,0)",
+        [],
+    ).unwrap();
+
+    let http = FakeHttp::new(); // no canned responses — any fetch would error
+    let client = MbClient::new(http);
+    let res = enrich(&conn, &client, false, &DecisionLog::to_path(None), |_p| true).await;
+
+    assert!(res.is_ok(), "a resume pass over fully-enriched data is a clean no-op: {res:?}");
+    assert!(
+        client.http().calls.borrow().is_empty(),
+        "already-enriched artist+release must not be re-fetched: {:?}",
+        client.http().calls.borrow()
+    );
+}
 ```
 
-(Note: the breaker counts errors across the whole pass within a 30 s window; in a fast test all 11 fall inside the window, so the 11th trips it.)
+(Note: the breaker counts errors across the whole pass within a 30 s window; in a fast test all 11 fall inside the window, so the 11th trips it. The resume test relies on the non-force selection — `artists_to_enrich`/`releases_to_enrich` skip entities with `name_original` set and no `enriched=0` files. Confirm the `file` columns match the real schema; adjust the INSERT if needed.)
 
 - [ ] **Step 2: Run to verify failure**
 
@@ -268,7 +305,7 @@ Replace the **artist loop body** (from `let mb = client.fetch_artist(...).await?
                 log.line("ERROR", &format!("artist {artist_mbid}: {e}"));
                 if breaker_tripped(&mut error_times) {
                     return Err(anyhow::anyhow!(
-                        "Enrichment aborted: more than {ENRICH_ERROR_LIMIT} errors in {}s — see Activity & errors",
+                        "Enrichment aborted after more than {ENRICH_ERROR_LIMIT} errors in {}s — see Activity & errors. Re-run enrichment to resume; already-enriched items are skipped.",
                         ENRICH_ERROR_WINDOW.as_secs()
                     ));
                 }
@@ -326,7 +363,7 @@ Replace the **release loop body** (from `let release = client.fetch_release(...)
             log.line("ERROR", &format!("release {rel_mbid} (\"{title}\"): {e}"));
             if breaker_tripped(&mut error_times) {
                 return Err(anyhow::anyhow!(
-                    "Enrichment aborted: more than {ENRICH_ERROR_LIMIT} errors in {}s — see Activity & errors",
+                    "Enrichment aborted after more than {ENRICH_ERROR_LIMIT} errors in {}s — see Activity & errors. Re-run enrichment to resume; already-enriched items are skipped.",
                     ENRICH_ERROR_WINDOW.as_secs()
                 ));
             }
@@ -347,7 +384,7 @@ Replace the **release loop body** (from `let release = client.fetch_release(...)
 
 - [ ] **Step 5: Run to verify pass; full suite; lint; commit**
 
-Run: `cd rust && cargo test --test enrich_resilience_test` (2 pass), `cd rust && cargo test` (FULL suite green — the existing `enrich_test` happy-path still passes; per-entity wrapping doesn't change success behavior), `just lint --all` (PASS). Then:
+Run: `cd rust && cargo test --test enrich_resilience_test` (3 pass — the resumability test characterizes existing skip-already-enriched behavior and passes from the start; the other two are the red→green ones), `cd rust && cargo test` (FULL suite green — the existing `enrich_test` happy-path still passes; per-entity wrapping doesn't change success behavior), `just lint --all` (PASS). Then:
 ```bash
 git add rust/src/enrich/client.rs rust/src/enrich/run.rs rust/tests/enrich_resilience_test.rs
 git commit -m "$(cat <<'EOF'
