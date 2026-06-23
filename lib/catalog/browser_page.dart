@@ -108,9 +108,13 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
             IconButton(
               icon: const Icon(Icons.settings_outlined),
               tooltip: 'Settings',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsPage()),
-              ),
+              onPressed: () {
+                // Dismiss the search overlay before leaving the browse page.
+                ref.read(searchQueryProvider.notifier).clear();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsPage()),
+                );
+              },
             ),
           ],
           bottom: scan.scanning ? _scanProgressBar(scan) : null,
