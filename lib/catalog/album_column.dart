@@ -36,24 +36,61 @@ class AlbumColumn extends ConsumerWidget {
   }
 }
 
-class _AlbumList extends ConsumerWidget {
+class _AlbumList extends ConsumerStatefulWidget {
   const _AlbumList({required this.albums});
 
   final List<Album> albums;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AlbumList> createState() => _AlbumListState();
+}
+
+class _AlbumListState extends ConsumerState<_AlbumList> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scrollToSelected(String? selected) {
+    if (selected == null) return;
+    final index = widget.albums.indexWhere((a) => a.releaseMbid == selected);
+    if (index < 0) return;
+    final extent = bilingualRowExtent(context, 48);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      final pos = _scroll.position;
+      final rowTop = index * extent;
+      // Already fully visible: leave it. Only an off-screen row (e.g. a search
+      // hit) scrolls in — ordinary in-view clicks must not yank the list.
+      if (rowTop >= pos.pixels &&
+          rowTop + extent <= pos.pixels + pos.viewportDimension) {
+        return;
+      }
+      _scroll.jumpTo(rowTop.clamp(0.0, pos.maxScrollExtent));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final selected = ref.watch(selectedAlbumProvider);
     final leads = ref.watch(languageLeadsProvider);
-    if (albums.isEmpty) {
+    if (widget.albums.isEmpty) {
       return const Center(child: Text('Select an artist'));
     }
+    ref.listen<String?>(
+        selectedAlbumProvider, (_, next) => _scrollToSelected(next));
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _scrollToSelected(selected));
     return ListView.builder(
-      itemCount: albums.length,
+      controller: _scroll,
+      itemCount: widget.albums.length,
       itemExtent: bilingualRowExtent(context, 48),
       scrollCacheExtent: const ScrollCacheExtent.pixels(600),
       itemBuilder: (context, index) {
-        final album = albums[index];
+        final album = widget.albums[index];
         final isSelected = selected == album.releaseMbid;
         final year = album.originalYear ?? album.reissueYear ?? '';
         final entity = QueueEntityRef.album(album.releaseMbid);

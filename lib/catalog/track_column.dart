@@ -42,13 +42,46 @@ class TrackColumn extends ConsumerWidget {
   }
 }
 
-class _TrackList extends ConsumerWidget {
+class _TrackList extends ConsumerStatefulWidget {
   const _TrackList({required this.tracks});
 
   final List<Track> tracks;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_TrackList> createState() => _TrackListState();
+}
+
+class _TrackListState extends ConsumerState<_TrackList> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scrollToSelected(int? selected) {
+    if (selected == null) return;
+    final index = widget.tracks.indexWhere((t) => t.id == selected);
+    if (index < 0) return;
+    final extent = bilingualRowExtent(context, _trackRowBase);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      final pos = _scroll.position;
+      final rowTop = index * extent;
+      // Already fully visible: leave it. Only an off-screen row (e.g. a search
+      // hit) scrolls in — ordinary in-view clicks must not yank the list.
+      if (rowTop >= pos.pixels &&
+          rowTop + extent <= pos.pixels + pos.viewportDimension) {
+        return;
+      }
+      _scroll.jumpTo(rowTop.clamp(0.0, pos.maxScrollExtent));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tracks = widget.tracks;
     if (tracks.isEmpty) {
       return const Center(child: Text('Select an album'));
     }
@@ -56,12 +89,18 @@ class _TrackList extends ConsumerWidget {
     final leads = ref.watch(languageLeadsProvider);
     final selectedTrack = ref.watch(selectedTrackProvider);
 
+    ref.listen<int?>(
+        selectedTrackProvider, (_, next) => _scrollToSelected(next));
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _scrollToSelected(selectedTrack));
+
     return Column(
       children: [
         const _TrackListHeader(),
         const Divider(height: 1),
         Expanded(
           child: ListView.builder(
+            controller: _scroll,
             itemCount: tracks.length,
             itemExtent: bilingualRowExtent(context, _trackRowBase),
             scrollCacheExtent: const ScrollCacheExtent.pixels(600),

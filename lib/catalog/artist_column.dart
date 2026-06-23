@@ -33,24 +33,61 @@ class ArtistColumn extends ConsumerWidget {
   }
 }
 
-class _ArtistList extends ConsumerWidget {
+class _ArtistList extends ConsumerStatefulWidget {
   const _ArtistList({required this.artists});
 
   final List<Artist> artists;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ArtistList> createState() => _ArtistListState();
+}
+
+class _ArtistListState extends ConsumerState<_ArtistList> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scrollToSelected(String? selected) {
+    if (selected == null) return;
+    final index = widget.artists.indexWhere((a) => a.mbid == selected);
+    if (index < 0) return;
+    final extent = bilingualRowExtent(context, 48);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      final pos = _scroll.position;
+      final rowTop = index * extent;
+      // Already fully visible: leave it. Only an off-screen row (e.g. a search
+      // hit) scrolls in — ordinary in-view clicks must not yank the list.
+      if (rowTop >= pos.pixels &&
+          rowTop + extent <= pos.pixels + pos.viewportDimension) {
+        return;
+      }
+      _scroll.jumpTo(rowTop.clamp(0.0, pos.maxScrollExtent));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final selected = ref.watch(selectedArtistProvider);
     final leads = ref.watch(languageLeadsProvider);
-    if (artists.isEmpty) {
+    if (widget.artists.isEmpty) {
       return const Center(child: Text('No artists — scan a folder first'));
     }
+    ref.listen<String?>(
+        selectedArtistProvider, (_, next) => _scrollToSelected(next));
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _scrollToSelected(selected));
     return ListView.builder(
-      itemCount: artists.length,
+      controller: _scroll,
+      itemCount: widget.artists.length,
       itemExtent: bilingualRowExtent(context, 48),
       scrollCacheExtent: const ScrollCacheExtent.pixels(600),
       itemBuilder: (context, index) {
-        final artist = artists[index];
+        final artist = widget.artists[index];
         final isSelected = selected == artist.mbid;
         final entity = QueueEntityRef.artist(artist.mbid);
         return LongPressDraggable<QueueEntityRef>(
