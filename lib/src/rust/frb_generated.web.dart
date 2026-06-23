@@ -6,6 +6,7 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
+import 'api/activity.dart';
 import 'api/catalog.dart';
 import 'api/cover.dart';
 import 'api/enrich.dart';
