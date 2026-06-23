@@ -11,9 +11,35 @@ use crate::enrich::select::{
 };
 use crate::enrich::store;
 use std::collections::HashMap;
+use std::time::Duration;
 
 fn is_real_mbid(mbid: &str) -> bool {
     !mbid.is_empty() && !mbid.starts_with("synth:")
+}
+
+const ENRICH_ERROR_WINDOW: Duration = Duration::from_secs(30);
+const ENRICH_ERROR_LIMIT: usize = 10;
+
+/// Record an error at "now" and report whether more than ENRICH_ERROR_LIMIT
+/// errors occurred within the last ENRICH_ERROR_WINDOW (rolling). Tuned for
+/// fast/systematic failures (e.g. 4xx at the ~1.05s request pace trips in ~12s);
+/// a slow 503 storm — where each entity burns ≥31s of 503 backoff before
+/// failing — spaces errors past the window and is instead bounded by the
+/// existing per-request 503 retry/backoff.
+fn breaker_tripped(times: &mut Vec<std::time::Instant>) -> bool {
+    let now = std::time::Instant::now();
+    times.push(now);
+    times.retain(|t| now.duration_since(*t) <= ENRICH_ERROR_WINDOW);
+    times.len() > ENRICH_ERROR_LIMIT
+}
+
+/// The circuit-breaker abort error (shared by the artist + release loops so the
+/// message can't drift between them).
+fn enrich_aborted_error() -> anyhow::Error {
+    anyhow::anyhow!(
+        "Enrichment aborted after more than {ENRICH_ERROR_LIMIT} errors in {}s — see Activity & errors. Re-run enrichment to resume; already-enriched items are skipped.",
+        ENRICH_ERROR_WINDOW.as_secs()
+    )
 }
 
 /// Unique real-MBID album-artists needing (re)enrichment. With `force`, every
@@ -139,6 +165,7 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
 ) -> anyhow::Result<()> {
     let total = (artists.len() + releases.len()) as u64;
     let mut done = 0u64;
+    let mut error_times: Vec<std::time::Instant> = Vec::new();
 
     // ── artists ──
     for artist_mbid in &artists {
@@ -153,34 +180,48 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
             },
             &format!("artist {artist_mbid}"),
         );
-        let mb = client.fetch_artist(conn, artist_mbid).await?;
-        if let Some(chosen) = select_transliteration(&mb) {
-            store::apply_artist_transliteration(conn, artist_mbid, &chosen, &mb.name)?;
-            if chosen.from_entity_sort_name {
-                log.line(
-                    "APPLY",
-                    &format!(
-                        "artist \"{}\": sort name = \"{}\"",
-                        mb.name, chosen.sort_name
-                    ),
-                );
+        let outcome: anyhow::Result<String> = async {
+            let mb = client.fetch_artist(conn, artist_mbid).await?;
+            if let Some(chosen) = select_transliteration(&mb) {
+                store::apply_artist_transliteration(conn, artist_mbid, &chosen, &mb.name)?;
+                if chosen.from_entity_sort_name {
+                    log.line(
+                        "APPLY",
+                        &format!(
+                            "artist \"{}\": sort name = \"{}\"",
+                            mb.name, chosen.sort_name
+                        ),
+                    );
+                } else {
+                    log.line(
+                        "APPLY",
+                        &format!("artist \"{}\": reading = \"{}\"", mb.name, chosen.name),
+                    );
+                }
             } else {
                 log.line(
-                    "APPLY",
-                    &format!("artist \"{}\": reading = \"{}\"", mb.name, chosen.name),
+                    "NOMATCH",
+                    &format!("artist \"{}\": no reading from MusicBrainz", mb.name),
                 );
             }
-        } else {
-            log.line(
-                "NOMATCH",
-                &format!("artist \"{}\": no reading from MusicBrainz", mb.name),
-            );
+            Ok(mb.name)
         }
+        .await;
+        let current = match outcome {
+            Ok(name) => name,
+            Err(e) => {
+                log.line("ERROR", &format!("artist {artist_mbid}: {e}"));
+                if breaker_tripped(&mut error_times) {
+                    return Err(enrich_aborted_error());
+                }
+                artist_mbid.clone()
+            }
+        };
         done += 1;
         if !on_progress(EnrichProgress {
             entities_done: done,
             entities_total: total,
-            current: mb.name.clone(),
+            current,
             done: false,
         }) {
             return Ok(()); // cancelled
@@ -203,60 +244,70 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
             },
             &format!("release {rel_mbid}"),
         );
-        let release = client.fetch_release(conn, rel_mbid).await?;
+        let outcome: anyhow::Result<()> = async {
+            let release = client.fetch_release(conn, rel_mbid).await?;
 
-        // Title alts come from this release's SIBLING EDITIONS in the same
-        // release group: a regular international edition (Latin/English) or a
-        // Pseudo-Release (which IS just a sibling release in the group with a
-        // Latin `text-representation`) is handled uniformly. We browse the REAL
-        // release group from the fetched JSON (`release.release-group.id`), NOT
-        // the catalog's possibly-`synth:` release_group_mbid, then page until
-        // we've seen every edition.
-        let mut editions = Vec::new();
-        if let Some(rg) = release.release_group.as_ref() {
-            if is_real_mbid(&rg.id) {
-                editions = browse_all_editions(conn, client, &rg.id).await?;
+            // Title alts come from this release's SIBLING EDITIONS in the same
+            // release group: a regular international edition (Latin/English) or a
+            // Pseudo-Release (which IS just a sibling release in the group with a
+            // Latin `text-representation`) is handled uniformly. We browse the REAL
+            // release group from the fetched JSON (`release.release-group.id`), NOT
+            // the catalog's possibly-`synth:` release_group_mbid, then page until
+            // we've seen every edition.
+            let mut editions = Vec::new();
+            if let Some(rg) = release.release_group.as_ref() {
+                if is_real_mbid(&rg.id) {
+                    editions = browse_all_editions(conn, client, &rg.id).await?;
+                }
             }
-        }
 
-        // ── per-release unit of work: ONE transaction ──
-        // apply dates + all sibling-edition title-alts + mark files enriched
-        // commit together, so a crash can't leave dates committed but files
-        // un-enriched (inconsistent). Uses the codebase's existing
-        // `conn.unchecked_transaction()` pattern. One commit per release.
-        let tx = conn.unchecked_transaction()?;
+            // ── per-release unit of work: ONE transaction ──
+            // apply dates + all sibling-edition title-alts + mark files enriched
+            // commit together, so a crash can't leave dates committed but files
+            // un-enriched (inconsistent). Uses the codebase's existing
+            // `conn.unchecked_transaction()` pattern. One commit per release.
+            let tx = conn.unchecked_transaction()?;
 
-        // dates: original ← release-group first-release-date written to the REAL
-        // RG (release.release-group.id), NOT the catalog's possibly-synthetic
-        // release_group_mbid; reissue ← release date.
-        if let Some(rg) = release.release_group.as_ref() {
-            store::apply_dates(
+            // dates: original ← release-group first-release-date written to the REAL
+            // RG (release.release-group.id), NOT the catalog's possibly-synthetic
+            // release_group_mbid; reissue ← release date.
+            if let Some(rg) = release.release_group.as_ref() {
+                store::apply_dates(
+                    &tx,
+                    rel_mbid,
+                    &rg.id,
+                    title,
+                    rg.first_release_date.as_deref(),
+                    release.date.as_deref(),
+                )?;
+                if let Some(d) = rg.first_release_date.as_deref() {
+                    log.line("APPLY", &format!("release \"{title}\": original date {d}"));
+                }
+                if let Some(d) = release.date.as_deref() {
+                    log.line("APPLY", &format!("release \"{title}\": reissue date {d}"));
+                }
+            }
+
+            apply_edition_alts(
                 &tx,
                 rel_mbid,
-                &rg.id,
+                release.text_representation.as_ref(),
+                &editions,
+                log,
                 title,
-                rg.first_release_date.as_deref(),
-                release.date.as_deref(),
             )?;
-            if let Some(d) = rg.first_release_date.as_deref() {
-                log.line("APPLY", &format!("release \"{title}\": original date {d}"));
-            }
-            if let Some(d) = release.date.as_deref() {
-                log.line("APPLY", &format!("release \"{title}\": reissue date {d}"));
+
+            store::mark_release_files_enriched(&tx, rel_mbid)?;
+            tx.commit()?;
+            Ok(())
+        }
+        .await;
+        if let Err(e) = outcome {
+            log.line("ERROR", &format!("release {rel_mbid} (\"{title}\"): {e}"));
+            if breaker_tripped(&mut error_times) {
+                return Err(enrich_aborted_error());
             }
         }
-
-        apply_edition_alts(
-            &tx,
-            rel_mbid,
-            release.text_representation.as_ref(),
-            &editions,
-            log,
-            title,
-        )?;
-
-        store::mark_release_files_enriched(&tx, rel_mbid)?;
-        tx.commit()?;
 
         done += 1;
         if !on_progress(EnrichProgress {

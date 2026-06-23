@@ -166,7 +166,10 @@ impl<H: MbHttp, P: Pacer> MbClient<H, P> {
                     self.pacer.backoff(attempt).await;
                     attempt += 1;
                 }
-                s => return Err(anyhow::anyhow!("MB returned HTTP {s} for {url}")),
+                s => {
+                    let snippet: String = resp.body.chars().take(200).collect();
+                    return Err(anyhow::anyhow!("MB returned HTTP {s} for {url}: {snippet}"));
+                }
             }
         }
     }
