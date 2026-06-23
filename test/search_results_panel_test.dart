@@ -63,6 +63,70 @@ void main() {
     expect(container.read(searchQueryProvider), '');
   });
 
+  testWidgets('moving the highlight deep scrolls the dropdown to it',
+      (tester) async {
+    final artists = [
+      for (var i = 0; i < 8; i++)
+        Artist(
+            mbid: 'A$i',
+            name: 'Artist $i',
+            sortName: 'Artist $i',
+            transliteration: null,
+            nameOriginal: null),
+    ];
+    final albums = [
+      for (var i = 0; i < 8; i++)
+        Album(
+            releaseMbid: 'R$i',
+            title: 'Album $i',
+            albumArtist: 'x',
+            originalYear: null,
+            reissueYear: null,
+            titleTranslit: null,
+            titleTranslate: null,
+            addedAt: 0,
+            albumArtistOriginal: null,
+            albumArtistReading: null,
+            albumArtistMbid: 'A0'),
+    ];
+    final tracks = [
+      for (var i = 0; i < 8; i++)
+        SearchTrack(
+            id: i,
+            title: 'Track $i',
+            titleTranslit: null,
+            titleTranslate: null,
+            albumArtist: null,
+            albumArtistOriginal: null,
+            albumArtistReading: null,
+            albumArtistMbid: 'A0',
+            releaseMbid: 'R0'),
+    ];
+    final container = ProviderContainer(overrides: [
+      dbPathProvider.overrideWithValue(':memory:'),
+      getSettingFnProvider.overrideWithValue((key) async => null),
+      searchCatalogFnProvider.overrideWithValue((q, limit) async =>
+          SearchResults(artists: artists, albums: albums, tracks: tracks)),
+    ]);
+    addTearDown(container.dispose);
+    container.read(searchQueryProvider.notifier).set('x');
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        home: Scaffold(body: Stack(children: [SearchResultsPanel()])),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    container.read(highlightedSearchIndexProvider.notifier).set(23);
+    await tester.pumpAndSettle();
+
+    final position =
+        tester.state<ScrollableState>(find.byType(Scrollable)).position;
+    expect(position.pixels, greaterThan(0.0));
+  });
+
   testWidgets('hidden when query is blank', (tester) async {
     final container = ProviderContainer(
       overrides: [dbPathProvider.overrideWithValue(':memory:')],

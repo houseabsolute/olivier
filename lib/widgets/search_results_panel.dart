@@ -66,12 +66,35 @@ class SearchResultsPanel extends ConsumerWidget {
   }
 }
 
-class _ResultsList extends ConsumerWidget {
+class _ResultsList extends ConsumerStatefulWidget {
   const _ResultsList({required this.results});
   final SearchResults results;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ResultsList> createState() => _ResultsListState();
+}
+
+class _ResultsListState extends ConsumerState<_ResultsList> {
+  final _highlightKey = GlobalKey();
+  int _lastScrolledIndex = -1;
+
+  void _ensureHighlightVisible(int index) {
+    if (index < 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _highlightKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 120),
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final results = widget.results;
     final hits = flattenHits(results);
     if (hits.isEmpty) {
       return const Padding(
@@ -82,6 +105,15 @@ class _ResultsList extends ConsumerWidget {
     final leads = ref.watch(languageLeadsProvider);
     final highlighted = ref.watch(highlightedSearchIndexProvider);
     final scheme = Theme.of(context).colorScheme;
+
+    // Scroll the keyboard-highlighted row into view after this build attaches
+    // the GlobalKey to it. Triggered from build (not ref.listen) because
+    // Riverpod fires listeners before the dependent widget rebuilds, so the
+    // key wouldn't be on the new row yet when the callback ran.
+    if (highlighted != _lastScrolledIndex) {
+      _lastScrolledIndex = highlighted;
+      _ensureHighlightVisible(highlighted);
+    }
 
     final children = <Widget>[];
     SearchHit? prev;
@@ -96,7 +128,9 @@ class _ResultsList extends ConsumerWidget {
               TrackHit() => 'Tracks',
             }));
       }
-      children.add(_row(context, ref, hit, leads, i == highlighted, scheme));
+      final isHighlighted = i == highlighted;
+      children.add(_row(context, ref, hit, leads, isHighlighted, scheme,
+          isHighlighted ? _highlightKey : null));
       final lastOfKind =
           i == hits.length - 1 || hits[i + 1].runtimeType != hit.runtimeType;
       if (lastOfKind && _groupFull(hit, results)) {
@@ -104,8 +138,13 @@ class _ResultsList extends ConsumerWidget {
       }
       prev = hit;
     }
-    return ListView(
-        shrinkWrap: true, padding: EdgeInsets.zero, children: children);
+    // SingleChildScrollView (not a lazy ListView) so every row is laid out and
+    // keeps a context — Scrollable.ensureVisible can't target an off-screen row
+    // that a lazy viewport has culled.
+    return SingleChildScrollView(
+      padding: EdgeInsets.zero,
+      child: Column(mainAxisSize: MainAxisSize.min, children: children),
+    );
   }
 
   bool _groupFull(SearchHit h, SearchResults r) => switch (h) {
@@ -133,7 +172,7 @@ class _ResultsList extends ConsumerWidget {
       );
 
   Widget _row(BuildContext context, WidgetRef ref, SearchHit hit,
-      LanguageLeads leads, bool highlighted, ColorScheme scheme) {
+      LanguageLeads leads, bool highlighted, ColorScheme scheme, Key? key) {
     final (original, translit, translate, subtitle, icon) = switch (hit) {
       ArtistHit(:final artist) => (
           artist.nameOriginal ?? artist.name,
@@ -158,6 +197,7 @@ class _ResultsList extends ConsumerWidget {
         ),
     };
     return InkWell(
+      key: key,
       onTap: () => selectHit(ref, hit),
       child: Container(
         color: highlighted ? scheme.primaryContainer : null,
