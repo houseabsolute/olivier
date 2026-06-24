@@ -111,7 +111,11 @@ pub async fn enrich<H: MbHttp, P: Pacer>(
     let artists = artists_to_enrich(conn, force)?;
     let releases = releases_to_enrich(conn, force)?;
     log.header("Enrich library");
-    enrich_lists(conn, client, artists, releases, log, on_progress).await
+    // Library pass: per-entity errors are logged + skipped (not fatal); only a
+    // circuit-breaker abort returns Err. Ignore the per-entity error count.
+    enrich_lists(conn, client, artists, releases, log, on_progress)
+        .await
+        .map(|_| ())
 }
 
 /// Re-enrich ONE artist and all of its releases, refetching from the network.
@@ -126,7 +130,9 @@ pub async fn enrich_artist<H: MbHttp, P: Pacer>(
     clear_artist_cache(conn, artist_mbid)?;
     let releases = artist_releases(conn, artist_mbid)?;
     log.header(&format!("Enrich artist {artist_mbid}"));
-    enrich_lists(
+    // Single deliberate re-fetch: surface a failure (the breaker is irrelevant
+    // for one entity) so it reaches the user, not just the activity log.
+    let errors = enrich_lists(
         conn,
         client,
         vec![artist_mbid.to_string()],
@@ -134,7 +140,11 @@ pub async fn enrich_artist<H: MbHttp, P: Pacer>(
         log,
         on_progress,
     )
-    .await
+    .await?;
+    if errors > 0 {
+        anyhow::bail!("Re-fetch failed for artist {artist_mbid} — see Activity & errors");
+    }
+    Ok(())
 }
 
 /// Re-enrich ONE release (and its sibling editions), refetching from the network.
@@ -149,7 +159,11 @@ pub async fn enrich_album<H: MbHttp, P: Pacer>(
     clear_album_cache(conn, release_mbid)?;
     let releases = one_release(conn, release_mbid)?;
     log.header(&format!("Enrich album {release_mbid}"));
-    enrich_lists(conn, client, Vec::new(), releases, log, on_progress).await
+    let errors = enrich_lists(conn, client, Vec::new(), releases, log, on_progress).await?;
+    if errors > 0 {
+        anyhow::bail!("Re-fetch failed for album {release_mbid} — see Activity & errors");
+    }
+    Ok(())
 }
 
 /// The shared artist-loop + release-loop body. `enrich` (full library) and the
@@ -162,10 +176,14 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
     releases: Vec<(String, Option<String>, String)>,
     log: &DecisionLog,
     mut on_progress: impl FnMut(EnrichProgress) -> bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<usize> {
     let total = (artists.len() + releases.len()) as u64;
     let mut done = 0u64;
     let mut error_times: Vec<std::time::Instant> = Vec::new();
+    // Total per-entity errors logged this pass; the single-entity entry points
+    // turn a non-zero count into an Err so a failed re-fetch surfaces (the
+    // library pass ignores it — its per-entity errors live in the log).
+    let mut error_count = 0usize;
 
     // ── artists ──
     for artist_mbid in &artists {
@@ -211,6 +229,7 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
             Ok(name) => name,
             Err(e) => {
                 log.line("ERROR", &format!("artist {artist_mbid}: {e}"));
+                error_count += 1;
                 if breaker_tripped(&mut error_times) {
                     return Err(enrich_aborted_error());
                 }
@@ -224,7 +243,7 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
             current,
             done: false,
         }) {
-            return Ok(()); // cancelled
+            return Ok(error_count); // cancelled
         }
     }
 
@@ -304,6 +323,7 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
         .await;
         if let Err(e) = outcome {
             log.line("ERROR", &format!("release {rel_mbid} (\"{title}\"): {e}"));
+            error_count += 1;
             if breaker_tripped(&mut error_times) {
                 return Err(enrich_aborted_error());
             }
@@ -316,7 +336,7 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
             current: title.clone(),
             done: false,
         }) {
-            return Ok(()); // cancelled
+            return Ok(error_count); // cancelled
         }
     }
 
@@ -326,7 +346,7 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
         current: String::new(),
         done: true,
     });
-    Ok(())
+    Ok(error_count)
 }
 
 /// The real-MBID releases owned by one album-artist (skipping synthetic keys).

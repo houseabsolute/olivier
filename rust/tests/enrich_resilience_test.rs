@@ -2,7 +2,7 @@ use rust_lib_olivier::db::open;
 use rust_lib_olivier::decision_log::DecisionLog;
 use rust_lib_olivier::enrich::client::MbClient;
 use rust_lib_olivier::enrich::http::{MbHttp, MbResponse};
-use rust_lib_olivier::enrich::run::enrich;
+use rust_lib_olivier::enrich::run::{enrich, enrich_artist};
 
 // ---- FakeHttp (mirrors the one in enrich_test.rs; records calls) ----
 struct FakeHttp {
@@ -141,5 +141,23 @@ async fn already_enriched_data_is_not_refetched_on_resume() {
         client.http().calls.borrow().is_empty(),
         "already-enriched artist+release must not be re-fetched: {:?}",
         client.http().calls.borrow()
+    );
+}
+
+#[tokio::test]
+async fn single_entity_refetch_surfaces_its_failure() {
+    // A deliberate right-click "Re-fetch" of one artist must return Err on
+    // failure (so the global guard shows a snackbar) — not silently log+Ok the
+    // way a bulk-library pass skips a bad entity.
+    let conn = open(":memory:").unwrap();
+    let mbid = "00000000-0000-0000-0000-0000000000bb";
+    seed_artist(&conn, mbid);
+    let http = FakeHttp::new().with(&artist_url(mbid), 400, "{\"error\":\"Invalid mbid.\"}");
+    let client = MbClient::new(http);
+
+    let res = enrich_artist(&conn, &client, mbid, &DecisionLog::to_path(None), |_p| true).await;
+    assert!(
+        res.is_err(),
+        "a single-entity re-fetch failure must surface as Err: {res:?}"
     );
 }
