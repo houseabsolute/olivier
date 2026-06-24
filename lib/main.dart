@@ -1,4 +1,6 @@
+import 'dart:async' show runZonedGuarded;
 import 'dart:io' show Directory, File, Platform;
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_service_mpris/audio_service_mpris.dart';
@@ -10,8 +12,10 @@ import 'package:olivier/audio/audio_handler.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/catalog/browser_page.dart';
+import 'package:olivier/src/rust/api/activity.dart';
 import 'package:olivier/src/rust/api/queue.dart';
 import 'package:olivier/src/rust/frb_generated.dart';
+import 'package:olivier/state/error_reporter.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/theme.dart';
 import 'package:path_provider/path_provider.dart';
@@ -21,65 +25,96 @@ late final String dbPath;
 late final QueueController queueController;
 late final PlaybackController playbackController;
 
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+ErrorReporter? errorReporter;
+
+/// Route Flutter framework + platform async errors to [reporter]. Exposed for
+/// testing the routing contract.
+void installErrorHandlers(ErrorReporter reporter) {
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    reporter.report(details.exception, stack: details.stack);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    reporter.report(error, stack: stack);
+    return true;
+  };
+}
+
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  JustAudioMediaKit.ensureInitialized(
-    linux: true,
-    windows: false,
-    android: false,
-    iOS: false,
-    macOS: false,
-  );
-  await RustLib.init();
-
-  // Compute DB path once for the entire app lifetime. Stored under the XDG data
-  // dir (~/.local/share/olivier on Linux), migrating any DB from the old
-  // documents-dir location on first run.
-  dbPath = await _resolveDbPath();
-
-  if (Platform.isLinux) {
-    AudioServiceMpris.init(
-      dBusName: 'OlivierMusicPlayer',
-      identity: 'Olivier',
-      canControl: true,
-      canPlay: true,
-      canPause: true,
-      canGoNext: true,
-      canGoPrevious: true,
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    JustAudioMediaKit.ensureInitialized(
+      linux: true,
+      windows: false,
+      android: false,
+      iOS: false,
+      macOS: false,
     );
-  }
-  audioHandler = await AudioService.init(
-    builder: () => OlivierAudioHandler(),
-    config: const AudioServiceConfig(
-      androidNotificationChannelId: 'org.urth.olivier.channel.audio',
-      androidNotificationChannelName: 'Music playback',
-      androidNotificationOngoing: true,
-    ),
-  );
+    await RustLib.init();
 
-  queueController = QueueController(audioHandler.player, dbPath: dbPath);
-  playbackController = PlaybackController(
-    audioHandler: audioHandler,
-    queueController: queueController,
-    dbPath: dbPath,
-  );
+    // Compute DB path once for the entire app lifetime. Stored under the XDG
+    // data dir (~/.local/share/olivier on Linux), migrating any DB from the old
+    // documents-dir location on first run.
+    dbPath = await _resolveDbPath();
 
-  // Restore persisted queue from the last session if present.
-  final snap = await loadQueue(dbPath: dbPath);
-  if (snap != null && snap.paths.isNotEmpty) {
-    await queueController.restoreFromSnapshot(snap);
-    await playbackController.restoreNowPlaying();
-  }
+    final reporter = ErrorReporter(
+      messengerKey: scaffoldMessengerKey,
+      logActivity: (category, detail) =>
+          logActivity(dbPath: dbPath, category: category, detail: detail),
+    );
+    errorReporter = reporter;
+    installErrorHandlers(reporter);
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        dbPathProvider.overrideWithValue(dbPath),
-        playbackControllerProvider.overrideWithValue(playbackController),
-      ],
-      child: const OlivierApp(),
-    ),
-  );
+    if (Platform.isLinux) {
+      AudioServiceMpris.init(
+        dBusName: 'OlivierMusicPlayer',
+        identity: 'Olivier',
+        canControl: true,
+        canPlay: true,
+        canPause: true,
+        canGoNext: true,
+        canGoPrevious: true,
+      );
+    }
+    audioHandler = await AudioService.init(
+      builder: () => OlivierAudioHandler(),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'org.urth.olivier.channel.audio',
+        androidNotificationChannelName: 'Music playback',
+        androidNotificationOngoing: true,
+      ),
+    );
+
+    queueController = QueueController(audioHandler.player, dbPath: dbPath);
+    playbackController = PlaybackController(
+      audioHandler: audioHandler,
+      queueController: queueController,
+      dbPath: dbPath,
+    );
+
+    // Restore persisted queue from the last session if present.
+    final snap = await loadQueue(dbPath: dbPath);
+    if (snap != null && snap.paths.isNotEmpty) {
+      await queueController.restoreFromSnapshot(snap);
+      await playbackController.restoreNowPlaying();
+    }
+
+    runApp(
+      ProviderScope(
+        overrides: [
+          dbPathProvider.overrideWithValue(dbPath),
+          playbackControllerProvider.overrideWithValue(playbackController),
+          errorReporterProvider.overrideWithValue(reporter),
+        ],
+        child: const OlivierApp(),
+      ),
+    );
+  }, (error, stack) {
+    // Uncaught async errors (incl. the unawaited streaming-FFI return port).
+    errorReporter?.report(error, stack: stack);
+  });
 }
 
 /// Resolve the database path under the XDG data directory (`$XDG_DATA_HOME`,
@@ -196,6 +231,7 @@ class OlivierApp extends StatelessWidget {
         child: MaterialApp(
           title: 'Olivier',
           theme: olivierTheme(),
+          scaffoldMessengerKey: scaffoldMessengerKey,
           home: home ?? const BrowserPage(),
         ),
       ),
