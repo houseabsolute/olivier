@@ -1,6 +1,15 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
+/// Clamp a relative seek target to the playable range. With no known duration
+/// only the lower bound (zero) is applied.
+Duration clampSeek(Duration position, Duration delta, Duration? duration) {
+  final target = position + delta;
+  if (target < Duration.zero) return Duration.zero;
+  if (duration != null && target > duration) return duration;
+  return target;
+}
+
 class OlivierAudioHandler extends BaseAudioHandler
     with QueueHandler, SeekHandler {
   final AudioPlayer player = AudioPlayer();
@@ -24,6 +33,10 @@ class OlivierAudioHandler extends BaseAudioHandler
   Future<void> stop() => player.stop();
   @override
   Future<void> seek(Duration position) => player.seek(position);
+
+  /// Seek relative to the current position, clamped to [0, duration].
+  Future<void> seekBy(Duration delta) =>
+      seek(clampSeek(player.position, delta, player.duration));
   @override
   Future<void> skipToNext() => player.seekToNext();
   @override
