@@ -21,7 +21,8 @@ void main() {
 
     test('applies no upper clamp when duration is null', () {
       expect(
-        clampSeek(const Duration(seconds: 5), const Duration(seconds: 10), null),
+        clampSeek(
+            const Duration(seconds: 5), const Duration(seconds: 10), null),
         const Duration(seconds: 15),
       );
     });
