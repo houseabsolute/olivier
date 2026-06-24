@@ -3,6 +3,7 @@ import 'dart:async' show unawaited;
 import 'package:flutter/widgets.dart' show FocusNode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/queue_entity.dart';
+import 'package:olivier/src/rust/api/activity.dart';
 import 'package:olivier/src/rust/api/catalog.dart';
 import 'package:olivier/src/rust/api/settings.dart' as rust_settings;
 import 'package:olivier/src/rust/catalog/schema.dart';
@@ -13,6 +14,16 @@ import 'package:olivier/widgets/bilingual_text.dart';
 final dbPathProvider = Provider<String>((ref) => throw UnimplementedError(
       'dbPathProvider must be overridden in ProviderScope',
     ));
+
+// Seam for the activity/error-log FFI, so the ErrorReporter can append an
+// ERROR line without depending on the raw FFI directly.
+typedef LogActivityFn = Future<void> Function(String category, String detail);
+
+final logActivityFnProvider = Provider<LogActivityFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (category, detail) =>
+      logActivity(dbPath: db, category: category, detail: detail);
+});
 
 // --- Selected artist ---
 
