@@ -17,7 +17,7 @@ The display is *not* broken — the album already shows as "k. / Low" via the `A
 
 ## Decisions (from brainstorming)
 
-- A **multi-value or otherwise-malformed MB-ID is dropped** (`None`) rather than guessed-at. For the album-artist this makes the release group under a synthetic combined credit (`synth:aa:k. / low`) — matching how it's actually credited. (Rejected: "pick the first ID" — mis-files the album under one artist and silently drops the other. Deferred: a full many-to-many model where the split shows under *both* "k." and "Low" — a larger schema + browse-UI feature, not this bug fix.)
+- A **multi-value or otherwise-malformed MB-ID is dropped** (`None`) rather than guessed-at. For the album-artist this makes the release group under a synthetic combined credit (`synth:aa:k. / low`) — matching how it's actually credited. (Rejected: "pick the first ID" — files the album under just one of the artists and silently drops the other. Deferred: a full many-to-many model where the split shows under *both* "k." and "Low" — a larger schema + browse-UI feature, not this bug fix.)
 - **Never send a non-UUID to MusicBrainz** — defense-in-depth so existing bad rows (and any future regression) can't cause 400s / IP blocks.
 
 ## Architecture
