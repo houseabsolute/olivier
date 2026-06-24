@@ -17,6 +17,7 @@ import 'package:olivier/src/rust/api/queue.dart';
 import 'package:olivier/src/rust/frb_generated.dart';
 import 'package:olivier/state/error_reporter.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/volume.dart';
 import 'package:olivier/theme.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -108,7 +109,14 @@ Future<void> main() async {
           playbackControllerProvider.overrideWithValue(playbackController),
           errorReporterProvider.overrideWithValue(reporter),
         ],
-        child: const OlivierApp(),
+        child: Consumer(
+          builder: (context, ref, _) => OlivierApp(
+            onVolumeUp: () =>
+                ref.read(volumeProvider.notifier).nudge(volumeStep),
+            onVolumeDown: () =>
+                ref.read(volumeProvider.notifier).nudge(-volumeStep),
+          ),
+        ),
       ),
     );
   }, (error, stack) {
@@ -185,11 +193,21 @@ Future<void> _migrateLegacyDb(String newDbPath) async {
   }
 }
 
+/// Per-keypress steps for the transport/volume keyboard shortcuts.
+const volumeStep = 0.05;
+const seekStep = Duration(seconds: 10);
+
 class OlivierApp extends StatelessWidget {
   const OlivierApp({
     super.key,
     this.onQuit,
     this.onTogglePlayPause,
+    this.onNextTrack,
+    this.onPreviousTrack,
+    this.onSeekForward,
+    this.onSeekBackward,
+    this.onVolumeUp,
+    this.onVolumeDown,
     this.home,
   });
 
@@ -199,6 +217,19 @@ class OlivierApp extends StatelessWidget {
   /// Injectable so the space-bar play/pause binding is testable; defaults to
   /// toggling the global audio handler.
   final VoidCallback? onTogglePlayPause;
+
+  /// Injectable transport actions (Ctrl/Cmd+←/→, Shift+←/→). Default to the
+  /// global audio handler; overridden in tests.
+  final VoidCallback? onNextTrack;
+  final VoidCallback? onPreviousTrack;
+  final VoidCallback? onSeekForward;
+  final VoidCallback? onSeekBackward;
+
+  /// Injectable volume actions (Ctrl/Cmd+↑/↓). No global default — volume needs
+  /// the provider, which this StatelessWidget can't read, so they are injected
+  /// in main() under the ProviderScope (null ⇒ the chord is ignored).
+  final VoidCallback? onVolumeUp;
+  final VoidCallback? onVolumeDown;
 
   /// Injectable home widget so the app can be widget-tested without the full
   /// BrowserPage + Riverpod provider stack. Defaults to [BrowserPage].
@@ -220,12 +251,52 @@ class OlivierApp extends StatelessWidget {
         // consumed as a key event), so we explicitly yield when a text field
         // holds focus.
         onKeyEvent: (node, event) {
-          if (event is KeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.space &&
-              !_textInputHasFocus()) {
+          // Media shortcuts fire on key-down only (no auto-repeat on hold) and
+          // yield entirely to a focused text field, so typing — including
+          // in-field Ctrl+←/→ word-jump and Shift+←/→ selection — is preserved.
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          if (_textInputHasFocus()) return KeyEventResult.ignored;
+
+          final key = event.logicalKey;
+          final kb = HardwareKeyboard.instance;
+          final mod = kb.isControlPressed || kb.isMetaPressed; // Ctrl or Cmd
+          final shift = kb.isShiftPressed;
+
+          if (key == LogicalKeyboardKey.space && !mod && !shift) {
             (onTogglePlayPause ?? () => audioHandler.togglePlayPause())();
             return KeyEventResult.handled;
           }
+
+          if (mod && !shift) {
+            if (key == LogicalKeyboardKey.arrowRight) {
+              (onNextTrack ?? () => audioHandler.skipToNext())();
+              return KeyEventResult.handled;
+            }
+            if (key == LogicalKeyboardKey.arrowLeft) {
+              (onPreviousTrack ?? () => audioHandler.skipToPrevious())();
+              return KeyEventResult.handled;
+            }
+            if (key == LogicalKeyboardKey.arrowUp && onVolumeUp != null) {
+              onVolumeUp!();
+              return KeyEventResult.handled;
+            }
+            if (key == LogicalKeyboardKey.arrowDown && onVolumeDown != null) {
+              onVolumeDown!();
+              return KeyEventResult.handled;
+            }
+          }
+
+          if (shift && !mod) {
+            if (key == LogicalKeyboardKey.arrowRight) {
+              (onSeekForward ?? () => audioHandler.seekBy(seekStep))();
+              return KeyEventResult.handled;
+            }
+            if (key == LogicalKeyboardKey.arrowLeft) {
+              (onSeekBackward ?? () => audioHandler.seekBy(-seekStep))();
+              return KeyEventResult.handled;
+            }
+          }
+
           return KeyEventResult.ignored;
         },
         child: MaterialApp(
