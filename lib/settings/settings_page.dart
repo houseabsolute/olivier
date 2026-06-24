@@ -205,7 +205,7 @@ class SettingsPage extends ConsumerWidget {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.receipt_long_outlined),
-            title: const Text('Import log'),
+            title: const Text('Activity & errors'),
             subtitle: const Text(
               'What the scanner and enricher decided — de-dupe, removals, failures.',
             ),

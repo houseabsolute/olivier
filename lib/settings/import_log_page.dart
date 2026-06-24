@@ -35,7 +35,7 @@ class _ImportLogPageState extends ConsumerState<ImportLogPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Import log'),
+        title: const Text('Activity & errors'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -57,6 +57,14 @@ class _ImportLogPageState extends ConsumerState<ImportLogPage> {
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Could not read the log: ${snap.error}'),
+              ),
+            );
           }
           final text = snap.data ?? '';
           if (text.trim().isEmpty) {

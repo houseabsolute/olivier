@@ -24,7 +24,7 @@ class _StubEnrichController extends EnrichController {
 }
 
 void main() {
-  testWidgets('Settings has an Import log entry that opens the page',
+  testWidgets('Settings has an Activity & errors entry that opens the page',
       (tester) async {
     // Use a taller surface so the full Settings ListView can be scrolled into view.
     await tester.binding.setSurfaceSize(const Size(800, 1200));
@@ -42,7 +42,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    final entry = find.text('Import log', skipOffstage: false);
+    final entry = find.text('Activity & errors', skipOffstage: false);
     expect(entry, findsOneWidget);
 
     await tester.scrollUntilVisible(entry, 50);
