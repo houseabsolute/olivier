@@ -255,7 +255,7 @@ class OlivierApp extends StatelessWidget {
           // yield entirely to a focused text field, so typing — including
           // in-field Ctrl+←/→ word-jump and Shift+←/→ selection — is preserved.
           if (event is! KeyDownEvent) return KeyEventResult.ignored;
-          if (_textInputHasFocus()) return KeyEventResult.ignored;
+          if (textInputHasFocus()) return KeyEventResult.ignored;
 
           final key = event.logicalKey;
           final kb = HardwareKeyboard.instance;
@@ -310,9 +310,15 @@ class OlivierApp extends StatelessWidget {
   }
 }
 
-/// Whether a text-editing widget currently holds focus, so global single-key
-/// shortcuts (like space → play/pause) can yield to typing.
-bool _textInputHasFocus() {
+/// Whether a text-editing widget currently holds focus, so the global media
+/// shortcuts yield to typing. On a real device a modifier/space key event still
+/// bubbles to the root [Focus] while a field is focused (the character is
+/// inserted via the text-input system), so this gate is what suppresses it; in
+/// the widget-test harness the focused [EditableText] consumes the event first,
+/// so the gate is exercised directly by its own unit test rather than through a
+/// shortcut. Exposed for that test.
+@visibleForTesting
+bool textInputHasFocus() {
   final ctx = FocusManager.instance.primaryFocus?.context;
   if (ctx == null) return false;
   return ctx.widget is EditableText ||

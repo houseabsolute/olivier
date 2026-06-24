@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olivier/main.dart';
+import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/volume.dart';
 
 void main() {
   Future<void> pump(WidgetTester tester, OlivierApp app) async {
@@ -95,7 +98,12 @@ void main() {
     expect(back, 1);
   });
 
-  testWidgets('chords are suppressed while a text field is focused',
+  // End-to-end behavior guard: while a text field is focused the chords must not
+  // control playback. NOTE: in the widget-test harness the focused EditableText
+  // consumes these key events before they reach the root handler, so this proves
+  // the user-facing outcome but does NOT exercise the textInputHasFocus() gate
+  // (which is real-device defense covered by text_input_focus_test.dart).
+  testWidgets('chords do not control playback while a text field is focused',
       (tester) async {
     var n = 0, up = 0, fwd = 0;
     await pump(
@@ -116,8 +124,65 @@ void main() {
     await chord(
         tester, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.arrowRight);
 
-    expect(n, 0, reason: 'Ctrl+Right must yield word-jump to the field');
+    expect(n, 0);
     expect(up, 0);
-    expect(fwd, 0, reason: 'Shift+Right must yield selection to the field');
+    expect(fwd, 0);
+  });
+
+  // Exclusivity: a combined Ctrl+Shift+arrow matches neither the Ctrl/Cmd chords
+  // (mod && !shift) nor the Shift chords (shift && !mod), so nothing fires. This
+  // is sent with no text field focused, so the event reaches the root handler.
+  testWidgets('Ctrl+Shift+Right triggers neither next-track nor seek',
+      (tester) async {
+    var n = 0, fwd = 0;
+    await pump(
+        tester,
+        OlivierApp(
+          onNextTrack: () => n++,
+          onSeekForward: () => fwd++,
+          home: const Scaffold(body: Center(child: Text('body'))),
+        ));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    expect(n, 0);
+    expect(fwd, 0);
+  });
+
+  // Production path: wire the volume callbacks to nudge() exactly as main() does
+  // (under a ProviderScope) and confirm Ctrl+Up actually raises the volume.
+  testWidgets('Ctrl+Up wired to nudge() raises the volume', (tester) async {
+    final applied = <double>[];
+    final container = ProviderContainer(overrides: [
+      getSettingFnProvider
+          .overrideWithValue((key) async => key == volumeKey ? '0.5' : null),
+      setSettingFnProvider.overrideWithValue((key, value) async {}),
+      setVolumeFnProvider.overrideWithValue((v) async => applied.add(v)),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(volumeProvider.future); // build at 0.5
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: OlivierApp(
+        onVolumeUp: () =>
+            container.read(volumeProvider.notifier).nudge(volumeStep),
+        home: const Scaffold(body: Center(child: Text('body'))),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    applied.clear();
+
+    await chord(
+        tester, LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.arrowUp);
+
+    expect(
+        container.read(volumeProvider).value, closeTo(0.5 + volumeStep, 1e-9));
+    expect(applied.single, closeTo(0.5 + volumeStep, 1e-9));
   });
 }
