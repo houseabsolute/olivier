@@ -47,4 +47,40 @@ void main() {
     expect(applied, [0.6]);
     expect(saved, isEmpty);
   });
+
+  test('nudge changes volume by delta, clamps to [0,1], and persists',
+      () async {
+    final applied = <double>[];
+    final saved = <(String, String)>[];
+    final container = ProviderContainer(overrides: [
+      getSettingFnProvider
+          .overrideWithValue((key) async => key == volumeKey ? '0.5' : null),
+      setSettingFnProvider
+          .overrideWithValue((key, value) async => saved.add((key, value))),
+      setVolumeFnProvider.overrideWithValue((v) async => applied.add(v)),
+    ]);
+    addTearDown(container.dispose);
+
+    expect(await container.read(volumeProvider.future), 0.5);
+    final n = container.read(volumeProvider.notifier);
+
+    // Up by 0.05 → ~0.55: applied to the player AND persisted.
+    applied.clear();
+    saved.clear();
+    await n.nudge(0.05);
+    expect(container.read(volumeProvider).value, closeTo(0.55, 1e-9));
+    expect(applied.single, closeTo(0.55, 1e-9));
+    expect(saved.single.$1, volumeKey);
+    expect(double.parse(saved.single.$2), closeTo(0.55, 1e-9));
+
+    // Down past zero clamps to 0.0.
+    await n.setVolume(0.02);
+    await n.nudge(-0.05);
+    expect(container.read(volumeProvider).value, 0.0);
+
+    // Up past one clamps to 1.0.
+    await n.setVolume(0.98);
+    await n.nudge(0.05);
+    expect(container.read(volumeProvider).value, 1.0);
+  });
 }

@@ -37,6 +37,11 @@ class VolumeNotifier extends AsyncNotifier<double> {
       await ref.read(setSettingFnProvider)(volumeKey, clamped.toString());
     }
   }
+
+  /// Nudge the volume by [delta] (keyboard Up/Down). Delegates to [setVolume]
+  /// (which clamps to [0,1]) and persists so the level survives a restart.
+  Future<void> nudge(double delta) =>
+      setVolume((state.value ?? defaultVolume) + delta, persist: true);
 }
 
 final volumeProvider =
