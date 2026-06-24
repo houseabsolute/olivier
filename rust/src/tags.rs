@@ -277,6 +277,11 @@ pub fn read_tags(path: &Path) -> anyhow::Result<TrackTags> {
     out.release_track_mbid = clean_mbid(out.release_track_mbid.take());
     out.artist = clean_credit(out.artist.take());
     out.album_artist = clean_credit(out.album_artist.take());
+    // Sort names come from the same multi-value sources (ID3 TSOP/TSO2,
+    // ARTISTSORT/ALBUMARTISTSORT) and can be NUL-joined too — clean them so a
+    // split album doesn't store a NUL-bearing sort key.
+    out.artist_sort = clean_credit(out.artist_sort.take());
+    out.album_artist_sort = clean_credit(out.album_artist_sort.take());
 
     Ok(out)
 }

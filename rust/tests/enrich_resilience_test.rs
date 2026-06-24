@@ -185,6 +185,56 @@ async fn malformed_mbid_is_skipped_not_queried() {
 }
 
 #[tokio::test]
+async fn malformed_release_mbid_is_skipped_not_queried() {
+    // Covers the RELEASE-loop guard (the one that builds the release URL): a
+    // release whose OWN mbid is a NUL-joined pair from before tag sanitization.
+    // album_artist is NULL so no artist is queried, isolating the release path.
+    let conn = open(":memory:").unwrap();
+    let garbage = "04816b1b-e203-4917-b4a1-8c31ced2eb82\x0042faad37-8aaa-42e4-a300-5a7dae79ed24";
+    conn.execute(
+        "INSERT INTO release(mbid,album_artist_mbid,title) VALUES (?1,NULL,'Split')",
+        [garbage],
+    )
+    .unwrap();
+    // A track + un-enriched file so the release is selected by releases_to_enrich
+    // (which JOINs release→track→file).
+    conn.execute(
+        "INSERT INTO track(release_mbid,recording_mbid,disc,position,title) VALUES (?1,'rec1',1,1,'X')",
+        [garbage],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path,mtime,size,track_id,added_at,enriched) VALUES ('/m/a.flac',0,0,1,0,0)",
+        [],
+    )
+    .unwrap();
+
+    let http = FakeHttp::new(); // records calls; no canned responses
+    let client = MbClient::new(http);
+    let logdir = std::env::temp_dir().join(format!("olivier_malformed_rel_{}", std::process::id()));
+    std::fs::create_dir_all(&logdir).unwrap();
+    let log = DecisionLog::to_path(Some(logdir.join("import-log.log")));
+
+    let res = enrich(&conn, &client, true, &log, |_p| true).await;
+
+    assert!(
+        res.is_ok(),
+        "a malformed release mbid must be skipped, not abort: {res:?}"
+    );
+    assert!(
+        client.http().calls.borrow().is_empty(),
+        "malformed release mbid must NOT be queried: {:?}",
+        client.http().calls.borrow()
+    );
+    let logged = std::fs::read_to_string(logdir.join("import-log.log")).unwrap();
+    assert!(
+        logged.contains("malformed MBID") && logged.contains("Split"),
+        "expected a release-line malformed-MBID log: {logged}"
+    );
+    std::fs::remove_dir_all(&logdir).ok();
+}
+
+#[tokio::test]
 async fn single_entity_refetch_surfaces_its_failure() {
     // A deliberate right-click "Re-fetch" of one artist must return Err on
     // failure (so the global guard shows a snackbar) — not silently log+Ok the
