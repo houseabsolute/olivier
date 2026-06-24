@@ -145,6 +145,46 @@ async fn already_enriched_data_is_not_refetched_on_resume() {
 }
 
 #[tokio::test]
+async fn malformed_mbid_is_skipped_not_queried() {
+    let conn = open(":memory:").unwrap();
+    // A split-release album-artist stored as two NUL-joined MBIDs ("k. / Low")
+    // that predates tag sanitization. \x00 is NUL (written as \x00 not \0 to
+    // avoid clippy's octal_escapes lint when followed by digits).
+    let garbage = "04816b1b-e203-4917-b4a1-8c31ced2eb82\x0042faad37-8aaa-42e4-a300-5a7dae79ed24";
+    conn.execute(
+        "INSERT INTO artist(mbid,name,sort_name) VALUES (?1,'k. / Low','k. / Low')",
+        [garbage],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO release(mbid,album_artist_mbid,title) VALUES ('R',?1,'Split')",
+        [garbage],
+    )
+    .unwrap();
+
+    let http = FakeHttp::new(); // records calls; no canned responses
+    let client = MbClient::new(http);
+    let logdir = std::env::temp_dir().join(format!("olivier_malformed_{}", std::process::id()));
+    std::fs::create_dir_all(&logdir).unwrap();
+    let log = DecisionLog::to_path(Some(logdir.join("import-log.log")));
+
+    let res = enrich(&conn, &client, true, &log, |_p| true).await;
+
+    assert!(
+        res.is_ok(),
+        "a malformed mbid must be skipped, not abort: {res:?}"
+    );
+    assert!(
+        client.http().calls.borrow().is_empty(),
+        "malformed mbid must NOT be queried: {:?}",
+        client.http().calls.borrow()
+    );
+    let logged = std::fs::read_to_string(logdir.join("import-log.log")).unwrap();
+    assert!(logged.contains("malformed MBID"), "logged: {logged}");
+    std::fs::remove_dir_all(&logdir).ok();
+}
+
+#[tokio::test]
 async fn single_entity_refetch_surfaces_its_failure() {
     // A deliberate right-click "Re-fetch" of one artist must return Err on
     // failure (so the global guard shows a snackbar) — not silently log+Ok the

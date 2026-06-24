@@ -1,17 +1,17 @@
 {
-  "id": "s0000000-0000-0000-0000-00000000jpan",
+  "id": "00000000-0000-0000-0000-0000000000b0",
   "title": "スキップ",
   "status": "Official",
   "date": "2010-01-01",
   "text-representation": { "script": "Jpan", "language": "jpn" },
   "release-group": {
-    "id": "55555555-ced2-4356-ac0f-686cc9d9skip",
+    "id": "55555555-ced2-4356-ac0f-686cc9d9fc55",
     "first-release-date": "2010-01-01"
   },
   "media": [
     {
       "tracks": [
-        { "title": "スキップ", "recording": { "id": "rec00000-0000-0000-0000-00000000skip" } }
+        { "title": "スキップ", "recording": { "id": "rec00000-0000-0000-0000-0000000000b2" } }
       ]
     }
   ]

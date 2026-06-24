@@ -3,7 +3,7 @@
   "release-offset": 0,
   "releases": [
     {
-      "id": "w0000000-0000-0000-0000-00000000jpan",
+      "id": "00000000-0000-0000-0000-0000000000a0",
       "title": "W",
       "status": "Official",
       "text-representation": { "script": "Jpan", "language": "jpn" },
@@ -18,7 +18,7 @@
       ]
     },
     {
-      "id": "w0000000-0000-0000-0000-00000000latn",
+      "id": "00000000-0000-0000-0000-0000000000a2",
       "title": "W",
       "status": "Official",
       "text-representation": { "script": "Latn", "language": "eng" },

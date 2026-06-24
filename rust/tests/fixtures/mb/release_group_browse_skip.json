@@ -3,26 +3,26 @@
   "release-offset": 0,
   "releases": [
     {
-      "id": "s0000000-0000-0000-0000-00000000jpan",
+      "id": "00000000-0000-0000-0000-0000000000b0",
       "title": "スキップ",
       "status": "Official",
       "text-representation": { "script": "Jpan", "language": "jpn" },
       "media": [
         {
           "tracks": [
-            { "title": "スキップ", "recording": { "id": "rec00000-0000-0000-0000-00000000skip" } }
+            { "title": "スキップ", "recording": { "id": "rec00000-0000-0000-0000-0000000000b2" } }
           ]
         }
       ]
     },
     {
-      "id": "s0000000-0000-0000-0000-0000000notr",
+      "id": "00000000-0000-0000-0000-0000000000b3",
       "title": "Some Title",
       "status": "Official",
       "media": [
         {
           "tracks": [
-            { "title": "Some Title", "recording": { "id": "rec00000-0000-0000-0000-00000000skip" } }
+            { "title": "Some Title", "recording": { "id": "rec00000-0000-0000-0000-0000000000b2" } }
           ]
         }
       ]

@@ -960,8 +960,11 @@ async fn enriches_catalog_end_to_end() {
 #[tokio::test]
 async fn international_edition_supplies_translate_alts() {
     const W_RG: &str = "03271c5b-ced2-4356-ac0f-686cc9d9fc52";
-    const W_REL: &str = "w0000000-0000-0000-0000-00000000jpan";
-    const W_ARTIST: &str = "aaaaaaaa-0000-0000-0000-00000000akir";
+    // Valid UUID-shaped ids: the enrich release/artist guards (is_mbid) now skip
+    // non-UUID MBIDs without querying, so test ids must be syntactically valid.
+    // W_REL matches the "id" in release_w_jpan.json + release_group_browse_w_intl.json.
+    const W_REL: &str = "00000000-0000-0000-0000-0000000000a0";
+    const W_ARTIST: &str = "aaaaaaaa-0000-0000-0000-0000000000a1";
     const REC1: &str = "rec00000-0000-0000-0000-000000000001"; // 拍手喝采 / Applause
     const REC2: &str = "rec00000-0000-0000-0000-000000000002"; // 火傷    / Burn
     const REC3: &str = "rec00000-0000-0000-0000-000000000003"; // 二酸化炭素 / CO2
@@ -1075,10 +1078,13 @@ async fn international_edition_supplies_translate_alts() {
 /// guess rather than mislabel.
 #[tokio::test]
 async fn no_text_representation_edition_is_skipped() {
-    const RG: &str = "55555555-ced2-4356-ac0f-686cc9d9skip";
-    const REL: &str = "s0000000-0000-0000-0000-00000000jpan";
-    const ARTIST: &str = "aaaaaaaa-0000-0000-0000-0000000aaskip";
-    const REC_SKIP: &str = "rec00000-0000-0000-0000-00000000skip";
+    const RG: &str = "55555555-ced2-4356-ac0f-686cc9d9fc55";
+    // Valid UUID-shaped ids: the enrich release/artist guards (is_mbid) now skip
+    // non-UUID MBIDs without querying, so test ids must be syntactically valid.
+    // REL matches the "id" in release_skip_jpan.json + release_group_browse_skip.json.
+    const REL: &str = "00000000-0000-0000-0000-0000000000b0";
+    const ARTIST: &str = "aaaaaaaa-0000-0000-0000-0000000000b1";
+    const REC_SKIP: &str = "rec00000-0000-0000-0000-0000000000b2";
 
     let conn = open(":memory:").unwrap();
     conn.execute(
@@ -1166,10 +1172,12 @@ async fn no_text_representation_edition_is_skipped() {
 /// if paging fetched page 2. (Verified to FAIL when paging is disabled; see report.)
 #[tokio::test]
 async fn multi_page_browse_fetches_all_pages() {
-    const RG: &str = "99999999-ced2-4356-ac0f-686cc9d9page";
-    const REL: &str = "p0000000-0000-0000-0000-00000000jpan";
-    const ARTIST: &str = "aaaaaaaa-0000-0000-0000-0000000aapage";
-    const REC_PAGE: &str = "rec00000-0000-0000-0000-00000000page";
+    const RG: &str = "99999999-ced2-4356-ac0f-686cc9d9face";
+    // Valid UUID-shaped ids: the enrich release/artist guards (is_mbid) now skip
+    // non-UUID MBIDs without querying, so test ids must be syntactically valid.
+    const REL: &str = "90000000-0000-0000-0000-0000000000ce";
+    const ARTIST: &str = "aaaaaaaa-0000-0000-0000-00000000face";
+    const REC_PAGE: &str = "rec00000-0000-0000-0000-0000000000ce";
 
     let conn = open(":memory:").unwrap();
     conn.execute(

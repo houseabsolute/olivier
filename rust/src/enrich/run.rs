@@ -1,5 +1,6 @@
 use rusqlite::Connection;
 
+use crate::catalog::ids::is_mbid;
 use crate::decision_log::DecisionLog;
 use crate::enrich::client::{MbClient, Pacer};
 use crate::enrich::http::MbHttp;
@@ -190,6 +191,16 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
         if !is_real_mbid(artist_mbid) {
             continue;
         }
+        if !is_mbid(artist_mbid) {
+            log.line(
+                "ERROR",
+                &format!(
+                    "artist {artist_mbid}: malformed MBID (multi-value?), skipping — not queried"
+                ),
+            );
+            error_count += 1;
+            continue;
+        }
         log.line(
             if client.is_cached_artist(conn, artist_mbid) {
                 "CACHE"
@@ -252,6 +263,16 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
     // it is NOT used for the sibling-edition browse — that browses the REAL RG
     // read from the release JSON. The original date is written to the REAL RG too.
     for (rel_mbid, _rg_mbid, title) in &releases {
+        if !is_mbid(rel_mbid) {
+            log.line(
+                "ERROR",
+                &format!(
+                    "release {rel_mbid} (\"{title}\"): malformed MBID (multi-value?), skipping — not queried"
+                ),
+            );
+            error_count += 1;
+            continue;
+        }
         // Network fetches happen OUTSIDE the per-release transaction (a tokio
         // sleep must not hold a SQLite write lock). The release + its sibling
         // editions are fetched first, then all DB writes commit atomically.
