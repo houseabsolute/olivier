@@ -11,6 +11,8 @@ use lofty::prelude::{Accessor, ItemKey};
 use lofty::probe::Probe;
 use lofty::tag::Tag;
 
+use crate::catalog::ids::is_mbid;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TrackTags {
     pub title: Option<String>,
@@ -52,6 +54,35 @@ fn fill_common(out: &mut TrackTags, tag: &Tag) {
     out.original_date = tag
         .get_string(ItemKey::OriginalReleaseDate)
         .map(|s| s.to_string());
+}
+
+/// A MusicBrainz ID read from a tag may be multi-valued (several IDs joined by a
+/// NUL on a split/collab release) or otherwise malformed; either is unusable as
+/// a single MBID and would 400 MusicBrainz, so drop it (the scanner then falls
+/// back to a synthetic credit key). A clean single UUID is kept (trimmed).
+fn clean_mbid(raw: Option<String>) -> Option<String> {
+    let v = raw?;
+    if v.contains('\0') {
+        return None;
+    }
+    let t = v.trim();
+    is_mbid(t).then(|| t.to_string())
+}
+
+/// A credit *name* may also be NUL-joined for multi-artist releases; render it as
+/// a single combined credit (e.g. "k. / Low") for display + synthetic keying.
+fn clean_credit(raw: Option<String>) -> Option<String> {
+    let v = raw?;
+    if !v.contains('\0') {
+        return Some(v);
+    }
+    let joined = v
+        .split('\0')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(" / ");
+    (!joined.is_empty()).then_some(joined)
 }
 
 pub fn read_tags(path: &Path) -> anyhow::Result<TrackTags> {
@@ -234,6 +265,19 @@ pub fn read_tags(path: &Path) -> anyhow::Result<TrackTags> {
         _ => {}
     }
 
+    // Sanitize tag-derived MB IDs + credit names: a multi-valued (NUL-joined)
+    // split/collab tag must not yield a malformed MBID (which would 400 MB and
+    // risk an IP block) or a NUL-bearing display name. A dropped album-artist
+    // MBID becomes a synthetic combined credit via ids::album_artist_key.
+    out.recording_mbid = clean_mbid(out.recording_mbid.take());
+    out.release_mbid = clean_mbid(out.release_mbid.take());
+    out.release_group_mbid = clean_mbid(out.release_group_mbid.take());
+    out.artist_mbid = clean_mbid(out.artist_mbid.take());
+    out.album_artist_mbid = clean_mbid(out.album_artist_mbid.take());
+    out.release_track_mbid = clean_mbid(out.release_track_mbid.take());
+    out.artist = clean_credit(out.artist.take());
+    out.album_artist = clean_credit(out.album_artist.take());
+
     Ok(out)
 }
 
@@ -321,4 +365,43 @@ pub fn extract_cover_to(path: &str, cache_dir: &str) -> anyhow::Result<Option<St
             .ok_or_else(|| anyhow::anyhow!("cache path is not valid UTF-8"))?
             .to_owned(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clean_mbid_keeps_single_uuid_drops_multi_and_garbage() {
+        assert_eq!(
+            clean_mbid(Some("9e414497-23b7-4ab7-9ec6-8ea9864c9e87".into())).as_deref(),
+            Some("9e414497-23b7-4ab7-9ec6-8ea9864c9e87")
+        );
+        assert_eq!(
+            clean_mbid(Some(" 9e414497-23b7-4ab7-9ec6-8ea9864c9e87 ".into())).as_deref(),
+            Some("9e414497-23b7-4ab7-9ec6-8ea9864c9e87")
+        );
+        assert_eq!(
+            clean_mbid(Some(
+                "04816b1b-e203-4917-b4a1-8c31ced2eb82\x0042faad37-8aaa-42e4-a300-5a7dae79ed24"
+                    .into()
+            )),
+            None
+        );
+        assert_eq!(clean_mbid(Some("garbage".into())), None);
+        assert_eq!(clean_mbid(None), None);
+    }
+
+    #[test]
+    fn clean_credit_joins_nul_values() {
+        assert_eq!(
+            clean_credit(Some("k.\0Low".into())).as_deref(),
+            Some("k. / Low")
+        );
+        assert_eq!(
+            clean_credit(Some("k. / Low".into())).as_deref(),
+            Some("k. / Low")
+        );
+        assert_eq!(clean_credit(None), None);
+    }
 }
