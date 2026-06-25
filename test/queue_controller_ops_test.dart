@@ -82,4 +82,40 @@ void main() {
     expect(player.seeks.single.index, 2);
     expect(player.played, isTrue);
   });
+
+  test(
+      'removePaths drops all matching entries incl. duplicates, mirrors player',
+      () async {
+    await controller
+        .append(['/a.flac', '/b.flac', '/c.flac', '/b.flac', '/d.flac']);
+
+    await controller.removePaths({'/b.flac', '/d.flac'});
+
+    expect(controller.orderedPaths, ['/a.flac', '/c.flac']);
+    expect(controller.playOrder, ['/a.flac', '/c.flac']);
+    expect(player.sources, ['/a.flac', '/c.flac']);
+    // Descending removal: indices 4 (/d), 3 (/b), 1 (/b).
+    expect(player.removedIndexes, [4, 3, 1]);
+    expect(saved.last!.paths, ['/a.flac', '/c.flac']);
+  });
+
+  test('removePaths that empties the queue clears the player', () async {
+    await controller.append(['/a.flac', '/b.flac']);
+
+    await controller.removePaths({'/a.flac', '/b.flac'});
+
+    expect(controller.orderedPaths, isEmpty);
+    expect(controller.playOrder, isEmpty);
+    expect(player.sources, isEmpty);
+  });
+
+  test('removePaths is a no-op for an empty set', () async {
+    await controller.append(['/a.flac']);
+    final removedBefore = player.removedIndexes.length;
+
+    await controller.removePaths({});
+
+    expect(controller.orderedPaths, ['/a.flac']);
+    expect(player.removedIndexes.length, removedBefore);
+  });
 }

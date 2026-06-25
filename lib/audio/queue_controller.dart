@@ -106,6 +106,24 @@ class QueueController implements ShuffleAllTarget {
     revision.value++;
   }
 
+  /// Drop every queue entry whose path is in [paths] — e.g. tracks just removed
+  /// from the library. Occurrence-aware (all copies go); mirrors each removal to
+  /// the player (descending so source indices stay valid). If the
+  /// currently-playing source is removed, just_audio advances to the next;
+  /// emptying the queue stops playback. No-op for an empty set.
+  Future<void> removePaths(Set<String> paths) async {
+    if (paths.isEmpty) return;
+    for (var i = _playOrder.length - 1; i >= 0; i--) {
+      if (paths.contains(_playOrder[i])) {
+        _playOrder.removeAt(i);
+        await _player.removeAudioSourceAt(i);
+      }
+    }
+    _orderedPaths.removeWhere((p) => paths.contains(p));
+    await _persist();
+    revision.value++;
+  }
+
   /// Maps a canonical _orderedPaths index to the matching player source index in
   /// _playOrder, accounting for the same path appearing multiple times. Returns
   /// the same index when not shuffled (orders are in sync).
