@@ -580,6 +580,8 @@ Expected: FAIL — `lib/state/playlists.dart` / `PlaylistFns` don't exist.
 - [ ] **Step 3: Implement** — `lib/state/playlists.dart`:
 
 ```dart
+import 'dart:typed_data'; // Int64List — frb maps Vec<i64> to Int64List
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/src/rust/api/playlists.dart' as ffi;
@@ -617,7 +619,7 @@ final playlistFnsProvider = Provider<PlaylistFns>((ref) {
     create: (name) => ffi.createPlaylist(dbPath: db, name: name),
     rename: (id, name) => ffi.renamePlaylist(dbPath: db, id: id, name: name),
     delete: (id) => ffi.deletePlaylist(dbPath: db, id: id),
-    reorder: (ids) => ffi.reorderPlaylists(dbPath: db, ids: ids),
+    reorder: (ids) => ffi.reorderPlaylists(dbPath: db, ids: Int64List.fromList(ids)),
     tracks: (id) => ffi.playlistTracks(dbPath: db, id: id),
     add: (id, paths) => ffi.addToPlaylist(dbPath: db, id: id, paths: paths),
     setItems: (id, paths) =>
