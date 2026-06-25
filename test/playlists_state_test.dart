@@ -46,7 +46,8 @@ void main() {
   }
 
   test('build loads the list', () async {
-    final store = _FakeStore()..lists.add(const Playlist(id: 1, name: 'X', count: 0));
+    final store = _FakeStore()
+      ..lists.add(const Playlist(id: 1, name: 'X', count: 0));
     final c = containerWith(store);
     final lists = await c.read(playlistsProvider.future);
     expect(lists.map((p) => p.name), ['X']);
@@ -70,6 +71,7 @@ void main() {
     await n.reorder([3, 1, 2]);
     await n.setItems(7, ['/m/a.flac']);
     await n.addTracks(7, ['/m/b.flac']);
-    expect(store.calls, containsAll(['reorder:3,1,2', 'set:7:/m/a.flac', 'add:7:/m/b.flac']));
+    expect(store.calls,
+        containsAll(['reorder:3,1,2', 'set:7:/m/a.flac', 'add:7:/m/b.flac']));
   });
 }

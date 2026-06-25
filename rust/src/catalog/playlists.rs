@@ -81,7 +81,9 @@ pub fn playlist_tracks(conn: &Connection, id: i64) -> anyhow::Result<Vec<QueueTr
     let paths: Vec<String> = {
         let mut stmt = conn
             .prepare("SELECT path FROM playlist_item WHERE playlist_id = ?1 ORDER BY position")?;
-        let paths = stmt.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+        let paths = stmt
+            .query_map([id], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
         paths
     };
     query::tracks_for_paths(conn, &paths)
@@ -90,17 +92,16 @@ pub fn playlist_tracks(conn: &Connection, id: i64) -> anyhow::Result<Vec<QueueTr
 /// Append paths to the end of a playlist.
 pub fn add_to_playlist(conn: &Connection, id: i64, paths: &[String]) -> anyhow::Result<()> {
     let tx = conn.unchecked_transaction()?;
-    let mut pos: i64 = tx.query_row(
+    let base: i64 = tx.query_row(
         "SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_item WHERE playlist_id = ?1",
         params![id],
         |r| r.get(0),
     )?;
-    for p in paths {
+    for (offset, p) in paths.iter().enumerate() {
         tx.execute(
             "INSERT INTO playlist_item(playlist_id, position, path) VALUES (?1, ?2, ?3)",
-            params![id, pos, p],
+            params![id, base + offset as i64, p],
         )?;
-        pos += 1;
     }
     tx.commit()?;
     Ok(())

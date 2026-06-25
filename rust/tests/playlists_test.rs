@@ -24,7 +24,11 @@ fn seed() -> rusqlite::Connection {
         )
         .unwrap();
     }
-    for (id, path, tid) in [(1, "/m/a.flac", 1), (2, "/m/b.flac", 2), (3, "/m/c.flac", 3)] {
+    for (id, path, tid) in [
+        (1, "/m/a.flac", 1),
+        (2, "/m/b.flac", 2),
+        (3, "/m/c.flac", 3),
+    ] {
         conn.execute(
             "INSERT INTO file(id,path,mtime,size,track_id,added_at) VALUES (?1,?2,0,0,?3,0)",
             params![id, path, tid],
@@ -59,7 +63,11 @@ fn add_preserves_order_and_duplicates() {
     let p = create_playlist(&conn, "P").unwrap();
     add_to_playlist(&conn, p, &[s("/m/c.flac"), s("/m/a.flac"), s("/m/a.flac")]).unwrap();
 
-    let paths: Vec<String> = playlist_tracks(&conn, p).unwrap().into_iter().map(|t| t.path).collect();
+    let paths: Vec<String> = playlist_tracks(&conn, p)
+        .unwrap()
+        .into_iter()
+        .map(|t| t.path)
+        .collect();
     assert_eq!(paths, vec![s("/m/c.flac"), s("/m/a.flac"), s("/m/a.flac")]);
 }
 
@@ -70,7 +78,11 @@ fn set_items_rewrites_order_and_removes() {
     add_to_playlist(&conn, p, &[s("/m/a.flac"), s("/m/b.flac"), s("/m/c.flac")]).unwrap();
     set_playlist_items(&conn, p, &[s("/m/c.flac"), s("/m/a.flac")]).unwrap();
 
-    let paths: Vec<String> = playlist_tracks(&conn, p).unwrap().into_iter().map(|t| t.path).collect();
+    let paths: Vec<String> = playlist_tracks(&conn, p)
+        .unwrap()
+        .into_iter()
+        .map(|t| t.path)
+        .collect();
     assert_eq!(paths, vec![s("/m/c.flac"), s("/m/a.flac")]);
 }
 
@@ -98,7 +110,11 @@ fn reorder_playlists_changes_listing_order() {
     let c = create_playlist(&conn, "C").unwrap();
     reorder_playlists(&conn, &[c, a, b]).unwrap();
 
-    let names: Vec<String> = list_playlists(&conn).unwrap().into_iter().map(|p| p.name).collect();
+    let names: Vec<String> = list_playlists(&conn)
+        .unwrap()
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
     assert_eq!(names, vec![s("C"), s("A"), s("B")]);
 }
 
@@ -124,7 +140,11 @@ fn removing_one_track_prunes_only_that_entry() {
 
     remove_track(&conn, 1).unwrap(); // /m/a.flac
 
-    let paths: Vec<String> = playlist_tracks(&conn, p).unwrap().into_iter().map(|t| t.path).collect();
+    let paths: Vec<String> = playlist_tracks(&conn, p)
+        .unwrap()
+        .into_iter()
+        .map(|t| t.path)
+        .collect();
     assert_eq!(paths, vec![s("/m/b.flac")]);
 }
 

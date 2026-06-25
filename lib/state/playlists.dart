@@ -38,7 +38,8 @@ final playlistFnsProvider = Provider<PlaylistFns>((ref) {
     create: (name) => ffi.createPlaylist(dbPath: db, name: name),
     rename: (id, name) => ffi.renamePlaylist(dbPath: db, id: id, name: name),
     delete: (id) => ffi.deletePlaylist(dbPath: db, id: id),
-    reorder: (ids) => ffi.reorderPlaylists(dbPath: db, ids: Int64List.fromList(ids)),
+    reorder: (ids) =>
+        ffi.reorderPlaylists(dbPath: db, ids: Int64List.fromList(ids)),
     tracks: (id) => ffi.playlistTracks(dbPath: db, id: id),
     add: (id, paths) => ffi.addToPlaylist(dbPath: db, id: id, paths: paths),
     setItems: (id, paths) =>

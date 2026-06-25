@@ -30,7 +30,8 @@ void main() {
   late List<String> played;
   late List<String> setItemsCalls;
 
-  PlaylistFns fakeFns(List<Playlist> lists, Map<int, List<QueueTrack>> tracks) =>
+  PlaylistFns fakeFns(
+          List<Playlist> lists, Map<int, List<QueueTrack>> tracks) =>
       PlaylistFns(
         list: () async => List.of(lists),
         create: (name) async => 99,

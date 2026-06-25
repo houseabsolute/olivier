@@ -5,14 +5,12 @@ import 'package:olivier/state/playlists.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 
-/// Pure reorder helper using ReorderableListView's index convention (when an
-/// item moves down, newIndex counts the slot it's leaving).
+/// Pure reorder helper for ReorderableListView's `onReorderItem` callback,
+/// where [newIndex] is already the post-removal destination (no adjustment).
 List<T> reordered<T>(List<T> items, int oldIndex, int newIndex) {
   final copy = List<T>.of(items);
-  var to = newIndex;
-  if (to > oldIndex) to -= 1;
   final item = copy.removeAt(oldIndex);
-  copy.insert(to, item);
+  copy.insert(newIndex, item);
   return copy;
 }
 
@@ -97,10 +95,9 @@ class _PlaylistSidebar extends ConsumerWidget {
         }
         return ReorderableListView.builder(
           itemCount: lists.length,
-          onReorder: (oldIndex, newIndex) {
-            final ids = reordered(lists, oldIndex, newIndex)
-                .map((p) => p.id)
-                .toList();
+          onReorderItem: (oldIndex, newIndex) {
+            final ids =
+                reordered(lists, oldIndex, newIndex).map((p) => p.id).toList();
             ref.read(playlistsProvider.notifier).reorder(ids);
           },
           itemBuilder: (context, i) {
@@ -215,7 +212,7 @@ class _PlaylistDetail extends ConsumerWidget {
                   ? const Center(child: Text('This playlist is empty'))
                   : ReorderableListView.builder(
                       itemCount: tracks.length,
-                      onReorder: (oldIndex, newIndex) {
+                      onReorderItem: (oldIndex, newIndex) {
                         final newPaths = reordered(paths, oldIndex, newIndex);
                         ref
                             .read(playlistsProvider.notifier)
