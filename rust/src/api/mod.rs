@@ -2,6 +2,7 @@ pub mod activity;
 pub mod catalog;
 pub mod cover;
 pub mod enrich;
+pub mod playlists;
 pub mod queue;
 pub mod settings;
 pub mod simple;

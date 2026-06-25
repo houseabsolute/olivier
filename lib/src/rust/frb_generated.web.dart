@@ -10,10 +10,12 @@ import 'api/activity.dart';
 import 'api/catalog.dart';
 import 'api/cover.dart';
 import 'api/enrich.dart';
+import 'api/playlists.dart';
 import 'api/queue.dart';
 import 'api/settings.dart';
 import 'api/simple.dart';
 import 'api/tags.dart';
+import 'catalog/playlists.dart';
 import 'catalog/scan.dart';
 import 'catalog/schema.dart';
 import 'dart:async';
@@ -86,6 +88,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Artist> dco_decode_list_artist(dynamic raw);
 
   @protected
+  List<Playlist> dco_decode_list_playlist(dynamic raw);
+
+  @protected
+  Int64List dco_decode_list_prim_i_64_strict(dynamic raw);
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
@@ -111,6 +119,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  Playlist dco_decode_playlist(dynamic raw);
 
   @protected
   QueueSnapshot dco_decode_queue_snapshot(dynamic raw);
@@ -203,6 +214,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Artist> sse_decode_list_artist(SseDeserializer deserializer);
 
   @protected
+  List<Playlist> sse_decode_list_playlist(SseDeserializer deserializer);
+
+  @protected
+  Int64List sse_decode_list_prim_i_64_strict(SseDeserializer deserializer);
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
@@ -229,6 +246,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  Playlist sse_decode_playlist(SseDeserializer deserializer);
 
   @protected
   QueueSnapshot sse_decode_queue_snapshot(SseDeserializer deserializer);
@@ -327,6 +347,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_artist(List<Artist> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_playlist(List<Playlist> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_prim_i_64_strict(
+      Int64List self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
       Uint8List self, SseSerializer serializer);
 
@@ -357,6 +384,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_playlist(Playlist self, SseSerializer serializer);
 
   @protected
   void sse_encode_queue_snapshot(QueueSnapshot self, SseSerializer serializer);
