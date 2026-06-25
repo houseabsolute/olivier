@@ -149,7 +149,8 @@ class ScanController extends Notifier<ScanState> {
           queued: _queue.length,
           lastError: null,
         );
-        // Fresh gate per root: the scanner's changed-count restarts at 0.
+        // Fresh gate per scanLibrary call (we scan one root per call), so its
+        // changed-count mark starts at 0.
         final refreshGate = ScanRefreshGate();
         try {
           await for (final p in scanLibrary(dbPath: db, roots: [root])) {

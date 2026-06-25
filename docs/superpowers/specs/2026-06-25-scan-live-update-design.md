@@ -24,11 +24,15 @@ views staying frozen until the whole scan finishes.
   (`ref.invalidate(artistsProvider/albumsProvider/tracksProvider)`) **after** the
   loop, once per folder. Scanning one large root therefore shows nothing until it
   completes. `state.filesChanged` is reset to 0 at the start of each root.
-- **The browse columns flash on reload.** `artist_column.dart`,
-  `album_column.dart`, `track_column.dart` each render
-  `asyncValue.when(loading: CircularProgressIndicator(), …)` with **no**
-  `skipLoadingOnReload`, so invalidating a provider drops the current list and
-  shows a spinner until the refetch returns.
+- **The browse columns already avoid a refresh flash.** `artist_column.dart`,
+  `album_column.dart`, `track_column.dart` each render `asyncValue.when(...)`.
+  CORRECTION (verified against riverpod 3.3.2 `async_value.dart:197-255`): an
+  earlier draft assumed `skipLoadingOnReload` was needed. In fact `ref.invalidate`
+  produces a *refresh* (`AsyncData` with `isLoading`), which `.when` routes via
+  `skipLoadingOnRefresh` — which **defaults to `true`** — so the previous list
+  stays on screen and **no spinner flashes**. `skipLoadingOnReload` (default
+  false) governs a different `isReloading` path the scan never triggers. So **no
+  column change is required**; a regression test locks the behavior.
 - **Sorting + selection are already correct on refetch.** `artistsProvider`
   queries `listArtists` (`ORDER BY sort_name`), so a refetch places new artists
   in order. Selection lives in separate providers (`selectedArtistProvider` holds
@@ -40,8 +44,9 @@ views staying frozen until the whole scan finishes.
 - Refresh cadence: every **50 *changed* files** (new/modified), not files seen —
   so a re-scan with no changes does no mid-scan churn. Plus the existing
   per-folder and post-drain refresh.
-- Avoid the spinner flash by keeping the current list visible during reload
-  (`skipLoadingOnReload: true`).
+- The mid-scan refresh must not flash a spinner. This already holds via `.when`'s
+  default `skipLoadingOnRefresh: true` (see Background), so no column change is
+  needed — a regression test guards it.
 
 ## Architecture
 
@@ -69,14 +74,16 @@ await for (final p in scanLibrary(dbPath: db, roots: [root])) {
 post-drain `_reconcileSelection()` remain, so the final state is always fully
 refreshed and the selection reconciled once at the end.
 
-### 2. No spinner flash (the three browse columns)
+### 2. No spinner flash — already handled (no code change)
 
-Add `skipLoadingOnReload: true` to the `.when(...)` in `artist_column.dart`,
-`album_column.dart`, and `track_column.dart`. During a mid-scan invalidation the
-provider enters `AsyncLoading` *with* its previous value retained; with this flag
-`.when` keeps rendering the previous data instead of the `loading:` branch, then
-swaps in the new rows when the refetch completes. Initial (no-data) loads still
-show the spinner once.
+`ref.invalidate` makes the provider *refresh* (`AsyncData` with `isLoading`),
+which `.when` routes via `skipLoadingOnRefresh` (default `true`), so the columns
+already keep their previous list on screen during a mid-scan refresh and swap in
+the new rows when the refetch completes. No `skipLoadingOnReload` is needed (it
+governs the unrelated `isReloading` path). A regression widget test locks this
+(`test/artist_column_reload_test.dart`): after `invalidate` over existing data,
+no `CircularProgressIndicator` appears. Initial (no-data) loads still show the
+spinner once.
 
 ### 3. Sorting + selection
 
@@ -106,9 +113,11 @@ separate selection providers (see Background).
     `ProviderContainer` listener or an injected invalidate spy.
   - a no-change stream (`filesChanged` stays 0) asserts **no** mid-scan refresh
     occurs before the final per-folder one.
-- **Widget test** (light) confirming a browse column keeps showing its current
+- **Regression widget test** confirming a browse column keeps showing its current
   rows (no `CircularProgressIndicator`) when its provider is invalidated while it
-  already has data — i.e. `skipLoadingOnReload` is in effect.
+  already has data — i.e. `.when`'s default `skipLoadingOnRefresh` keeps the list
+  during a mid-scan refresh. (Verified it fails if a column sets
+  `skipLoadingOnRefresh: false`.)
 
 ## Out of scope
 

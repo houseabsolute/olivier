@@ -2,8 +2,9 @@
 const kScanRefreshEvery = 50;
 
 /// Gates the periodic browse refresh during a scan: fires once per [every]
-/// newly-changed files. Stateful across one root's scan; create a fresh instance
-/// per root (the scanner's changed-count restarts at 0 each root).
+/// newly-changed files. Stateful for one scan call; create a fresh instance per
+/// `scanLibrary` call. The catalog scanner is invoked one root per call, so the
+/// changed-count this gate tracks starts at 0 each time.
 class ScanRefreshGate {
   ScanRefreshGate([this.every = kScanRefreshEvery]);
 
