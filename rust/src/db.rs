@@ -118,6 +118,22 @@ const MIGRATION_SLICE: &[M<'_>] = &[
             translate      TEXT
          );",
     ),
+    // ── Playlists ────────────────────────────────────────────────────────
+    M::up(
+        "CREATE TABLE playlist (
+            id          INTEGER PRIMARY KEY,
+            name        TEXT NOT NULL,
+            position    INTEGER NOT NULL,
+            created_at  INTEGER NOT NULL
+         );
+         CREATE TABLE playlist_item (
+            playlist_id INTEGER NOT NULL REFERENCES playlist(id) ON DELETE CASCADE,
+            position    INTEGER NOT NULL,
+            path        TEXT NOT NULL REFERENCES file(path) ON DELETE CASCADE,
+            PRIMARY KEY (playlist_id, position)
+         );
+         CREATE INDEX idx_playlist_item_path ON playlist_item(path);",
+    ),
 ];
 const MIGRATIONS: Migrations<'_> = Migrations::from_slice(MIGRATION_SLICE);
 
