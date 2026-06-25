@@ -50,28 +50,32 @@ Future<void> _newPlaylist(BuildContext context, WidgetRef ref) async {
 }
 
 Future<String?> _promptName(BuildContext context,
-    {required String title, String initial = ''}) {
+    {required String title, String initial = ''}) async {
   final controller = TextEditingController(text: initial);
-  return showDialog<String>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        decoration: const InputDecoration(hintText: 'Playlist name'),
-        onSubmitted: (v) => Navigator.of(context).pop(v),
+  try {
+    return await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Playlist name'),
+          onSubmitted: (v) => Navigator.of(context).pop(v),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('OK')),
+        ],
       ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel')),
-        FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('OK')),
-      ],
-    ),
-  );
+    );
+  } finally {
+    controller.dispose();
+  }
 }
 
 class _PlaylistSidebar extends ConsumerWidget {
