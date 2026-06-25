@@ -10,6 +10,7 @@ class RowContextMenu extends StatelessWidget {
     super.key,
     required this.entity,
     this.onAddToQueue,
+    this.onAddToPlaylist,
     this.onInfo,
     this.onReadTags,
     this.onRefetch,
@@ -20,6 +21,7 @@ class RowContextMenu extends StatelessWidget {
 
   final QueueEntityRef entity;
   final ValueChanged<QueueEntityRef>? onAddToQueue;
+  final ValueChanged<QueueEntityRef>? onAddToPlaylist;
   final ValueChanged<QueueEntityRef>? onInfo;
   final ValueChanged<QueueEntityRef>? onReadTags;
   final ValueChanged<QueueEntityRef>? onRefetch;
@@ -40,6 +42,9 @@ class RowContextMenu extends StatelessWidget {
         if (onAddToQueue != null)
           const PopupMenuItem<String>(
               value: 'add', child: Text('Add to queue')),
+        if (onAddToPlaylist != null)
+          const PopupMenuItem<String>(
+              value: 'playlist', child: Text('Add to playlist…')),
         if (onInfo != null)
           const PopupMenuItem<String>(value: 'info', child: Text('Info')),
         if (onReadTags != null)
@@ -59,6 +64,8 @@ class RowContextMenu extends StatelessWidget {
     switch (selected) {
       case 'add':
         onAddToQueue?.call(entity);
+      case 'playlist':
+        onAddToPlaylist?.call(entity);
       case 'info':
         onInfo?.call(entity);
       case 'reread':

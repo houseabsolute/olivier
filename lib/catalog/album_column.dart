@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/catalog/catalog_mutation.dart';
+import 'package:olivier/playlists/add_to_playlist_dialog.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
@@ -106,6 +107,8 @@ class _AlbumListState extends ConsumerState<_AlbumList> {
           child: RowContextMenu(
             entity: entity,
             onAddToQueue: (e) => _enqueue(ref, e),
+            onAddToPlaylist: (entity) =>
+                showAddToPlaylistDialog(context, ref, entity),
             onInfo: (_) => showInfoDialog(context,
                 title: 'Album',
                 fields: albumInfoFields(album),
