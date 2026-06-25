@@ -1,4 +1,5 @@
 use rusqlite::params;
+use rust_lib_olivier::catalog::deletes::{remove_album, remove_track};
 use rust_lib_olivier::catalog::playlists::*;
 use rust_lib_olivier::db::open;
 
@@ -99,4 +100,53 @@ fn reorder_playlists_changes_listing_order() {
 
     let names: Vec<String> = list_playlists(&conn).unwrap().into_iter().map(|p| p.name).collect();
     assert_eq!(names, vec![s("C"), s("A"), s("B")]);
+}
+
+#[test]
+fn removing_album_from_library_prunes_playlist_entries() {
+    let conn = seed();
+    let p = create_playlist(&conn, "P").unwrap();
+    add_to_playlist(&conn, p, &[s("/m/a.flac"), s("/m/b.flac"), s("/m/c.flac")]).unwrap();
+
+    remove_album(&conn, "R1").unwrap(); // deletes the file rows -> cascade
+
+    assert!(
+        playlist_tracks(&conn, p).unwrap().is_empty(),
+        "tracks removed from the library must cascade out of playlists"
+    );
+}
+
+#[test]
+fn removing_one_track_prunes_only_that_entry() {
+    let conn = seed();
+    let p = create_playlist(&conn, "P").unwrap();
+    add_to_playlist(&conn, p, &[s("/m/a.flac"), s("/m/b.flac")]).unwrap();
+
+    remove_track(&conn, 1).unwrap(); // /m/a.flac
+
+    let paths: Vec<String> = playlist_tracks(&conn, p).unwrap().into_iter().map(|t| t.path).collect();
+    assert_eq!(paths, vec![s("/m/b.flac")]);
+}
+
+#[test]
+fn re_upserting_a_file_keeps_playlist_entries() {
+    // reread_track_tags upserts files with ON CONFLICT(path) DO UPDATE — a true
+    // update, not a delete — so it must NOT trip the ON DELETE CASCADE.
+    let conn = seed();
+    let p = create_playlist(&conn, "P").unwrap();
+    add_to_playlist(&conn, p, &[s("/m/a.flac")]).unwrap();
+
+    conn.execute(
+        "INSERT INTO file(path, mtime, size, track_id, added_at)
+         VALUES ('/m/a.flac', 99, 99, 1, 0)
+         ON CONFLICT(path) DO UPDATE SET mtime = 99, size = 99",
+        [],
+    )
+    .unwrap();
+
+    assert_eq!(
+        playlist_tracks(&conn, p).unwrap().len(),
+        1,
+        "a tag re-read (upsert) must not drop playlist entries"
+    );
 }
