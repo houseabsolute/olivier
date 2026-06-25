@@ -6,6 +6,7 @@ import 'package:olivier/catalog/artist_column.dart';
 import 'package:olivier/catalog/queue_panel.dart';
 import 'package:olivier/catalog/track_column.dart';
 import 'package:olivier/main.dart' show audioHandler;
+import 'package:olivier/playlists/playlists_page.dart';
 import 'package:olivier/settings/settings_page.dart';
 import 'package:olivier/state/layout_settings.dart';
 import 'package:olivier/state/providers.dart';
@@ -105,6 +106,16 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
         appBar: AppBar(
           title: widget.topControls ?? TopControls(audioHandler: audioHandler),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.playlist_play),
+              tooltip: 'Playlists',
+              onPressed: () {
+                ref.read(searchQueryProvider.notifier).clear();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const PlaylistsPage()),
+                );
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.settings_outlined),
               tooltip: 'Settings',
