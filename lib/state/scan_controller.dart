@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/src/rust/api/catalog.dart';
 import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/scan_refresh_gate.dart';
 
 /// Sentinel so [ScanState.copyWith] can distinguish "leave lastError unchanged"
 /// from "clear lastError to null".
@@ -148,6 +149,8 @@ class ScanController extends Notifier<ScanState> {
           queued: _queue.length,
           lastError: null,
         );
+        // Fresh gate per root: the scanner's changed-count restarts at 0.
+        final refreshGate = ScanRefreshGate();
         try {
           await for (final p in scanLibrary(dbPath: db, roots: [root])) {
             if (_disposed) return;
@@ -155,6 +158,12 @@ class ScanController extends Notifier<ScanState> {
               filesSeen: p.filesSeen.toInt(),
               filesChanged: p.filesChanged.toInt(),
             );
+            // Live-refresh the browse views as new music is committed (the Rust
+            // scanner commits each file in its own transaction, so the rows are
+            // already queryable), every kScanRefreshEvery changed files.
+            if (refreshGate.shouldRefresh(p.filesChanged.toInt())) {
+              _invalidateBrowse();
+            }
             if (p.done) break;
           }
         } catch (e) {
