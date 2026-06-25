@@ -118,4 +118,20 @@ void main() {
     expect(controller.orderedPaths, ['/a.flac']);
     expect(player.removedIndexes.length, removedBefore);
   });
+
+  test('removePaths keeps canonical + shuffled player order consistent',
+      () async {
+    await controller.append(['/a.flac', '/b.flac', '/c.flac', '/d.flac']);
+    await controller.setShuffle(true); // _playOrder is now a shuffle of the 4
+
+    await controller.removePaths({'/b.flac', '/d.flac'});
+
+    // Canonical order keeps its order, minus the removed paths.
+    expect(controller.orderedPaths, ['/a.flac', '/c.flac']);
+    // Player order survives as the same multiset (its shuffled order is random),
+    // and the fake player's sources stay 1:1 with it — i.e. no desync.
+    expect(controller.playOrder.toSet(), {'/a.flac', '/c.flac'});
+    expect(controller.playOrder.length, 2);
+    expect(player.sources, controller.playOrder);
+  });
 }

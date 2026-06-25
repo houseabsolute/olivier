@@ -35,20 +35,29 @@ final tracksForPathsFnProvider = Provider<TracksForPathsFn>((ref) {
 
 /// After a catalog removal, drop from the live queue any path no longer in the
 /// catalog (a track/album/root just removed). [tracksForPaths] returns one entry
-/// per path with `trackId == null` for paths gone from the catalog. Best-effort:
-/// callers run it last so a transient read error can't disrupt the removal.
+/// per path with `trackId == null` for paths gone from the catalog.
+///
+/// Best-effort and intentionally silent on failure: this is a non-actionable,
+/// self-healing cleanup (a transient catalog-read or persist error just leaves
+/// the stale entries, which are filtered on the next removal or restart), so it
+/// must not surface an error after a removal the user already saw succeed —
+/// matching the cover-art / layout-settings silent-degrade convention.
 Future<void> reconcileQueueWithCatalog(
   QueueController controller,
   Future<List<QueueTrack>> Function(List<String> paths) tracksForPaths,
 ) async {
-  final paths = controller.orderedPaths;
-  if (paths.isEmpty) return;
-  final tracks = await tracksForPaths(paths);
-  final missing = <String>{
-    for (final t in tracks)
-      if (t.trackId == null) t.path,
-  };
-  if (missing.isNotEmpty) await controller.removePaths(missing);
+  try {
+    final paths = controller.orderedPaths;
+    if (paths.isEmpty) return;
+    final tracks = await tracksForPaths(paths);
+    final missing = <String>{
+      for (final t in tracks)
+        if (t.trackId == null) t.path,
+    };
+    if (missing.isNotEmpty) await controller.removePaths(missing);
+  } catch (_) {
+    // Self-heals on the next removal or restart; never disrupt the removal.
+  }
 }
 
 class QueueNotifier extends AsyncNotifier<QueueView> {
