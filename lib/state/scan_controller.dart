@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/src/rust/api/catalog.dart';
 import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/state/scan_refresh_gate.dart';
 
 /// Sentinel so [ScanState.copyWith] can distinguish "leave lastError unchanged"
@@ -122,6 +124,11 @@ class ScanController extends Notifier<ScanState> {
     );
     _invalidateBrowse();
     await _reconcileSelection();
+    if (_disposed) return;
+    await reconcileQueueWithCatalog(
+      ref.read(queueControllerProvider),
+      ref.read(tracksForPathsFnProvider),
+    );
   }
 
   void _enqueue(String dir) {

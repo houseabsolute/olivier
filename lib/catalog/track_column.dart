@@ -165,6 +165,7 @@ class _TrackListState extends ConsumerState<_TrackList> {
                         ref.read(selectedTrackProvider.notifier).clear(),
                     successMessage: 'Removed "${track.title}"',
                     failureMessage: 'Failed to remove "${track.title}"',
+                    reconcileQueue: true,
                   ),
                   child: InkWell(
                     key: ValueKey(track.id),

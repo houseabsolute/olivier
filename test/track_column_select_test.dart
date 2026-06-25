@@ -8,6 +8,7 @@ import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/catalog/track_column.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/widgets/title_override_dialog.dart';
 
 import 'support/fake_queue_player.dart';
@@ -105,6 +106,7 @@ void main() {
         tracksProvider.overrideWith((ref) => [_track]),
         selectedAlbumProvider.overrideWith(() => _StubAlbum('rel-1')),
         queueControllerProvider.overrideWithValue(qc),
+        tracksForPathsFnProvider.overrideWithValue((paths) async => []),
         removeTrackFnProvider.overrideWithValue((id) async => removed.add(id)),
       ],
       child: const MaterialApp(

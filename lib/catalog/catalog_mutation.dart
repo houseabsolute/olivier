@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/queue_provider.dart';
 
 /// Runs a catalog-mutating context-menu action (remove / re-read tags) and
 /// reconciles the UI afterward.
@@ -23,6 +24,7 @@ Future<void> runCatalogMutation(
   required void Function() clearSelection,
   required String successMessage,
   required String failureMessage,
+  bool reconcileQueue = false,
 }) async {
   // Capture before the await so we never touch BuildContext across an async
   // gap (no use_build_context_synchronously).
@@ -47,6 +49,12 @@ Future<void> runCatalogMutation(
   messenger
     ..clearSnackBars()
     ..showSnackBar(SnackBar(content: Text(successMessage)));
+  if (reconcileQueue) {
+    await reconcileQueueWithCatalog(
+      ref.read(queueControllerProvider),
+      ref.read(tracksForPathsFnProvider),
+    );
+  }
 }
 
 /// If the mutation pruned the currently-selected artist (e.g. removing its last

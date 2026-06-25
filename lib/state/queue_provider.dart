@@ -33,6 +33,24 @@ final tracksForPathsFnProvider = Provider<TracksForPathsFn>((ref) {
   return (paths) => catalog.tracksForPaths(dbPath: db, paths: paths);
 });
 
+/// After a catalog removal, drop from the live queue any path no longer in the
+/// catalog (a track/album/root just removed). [tracksForPaths] returns one entry
+/// per path with `trackId == null` for paths gone from the catalog. Best-effort:
+/// callers run it last so a transient read error can't disrupt the removal.
+Future<void> reconcileQueueWithCatalog(
+  QueueController controller,
+  Future<List<QueueTrack>> Function(List<String> paths) tracksForPaths,
+) async {
+  final paths = controller.orderedPaths;
+  if (paths.isEmpty) return;
+  final tracks = await tracksForPaths(paths);
+  final missing = <String>{
+    for (final t in tracks)
+      if (t.trackId == null) t.path,
+  };
+  if (missing.isNotEmpty) await controller.removePaths(missing);
+}
+
 class QueueNotifier extends AsyncNotifier<QueueView> {
   QueueController get _controller => ref.read(queueControllerProvider);
 

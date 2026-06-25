@@ -157,6 +157,7 @@ class _AlbumListState extends ConsumerState<_AlbumList> {
                   ref.read(selectedAlbumProvider.notifier).clear(),
               successMessage: 'Removed "${album.title}"',
               failureMessage: 'Failed to remove "${album.title}"',
+              reconcileQueue: true,
             ),
             child: InkWell(
               key: ValueKey(album.releaseMbid),

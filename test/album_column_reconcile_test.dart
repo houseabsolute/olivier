@@ -7,6 +7,7 @@ import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/catalog/album_column.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/queue_provider.dart';
 
 import 'support/fake_queue_player.dart';
 
@@ -58,6 +59,7 @@ void main() {
       selectedAlbumObjectProvider
           .overrideWith(() => _PreselectedAlbumObject(_album)),
       queueControllerProvider.overrideWithValue(qc),
+      tracksForPathsFnProvider.overrideWithValue((paths) async => []),
       // Removing the album drops the artist from the backing list (prune).
       removeAlbumFnProvider.overrideWithValue((mbid) async {
         backing.removeWhere((a) => a.mbid == 'art-1');
