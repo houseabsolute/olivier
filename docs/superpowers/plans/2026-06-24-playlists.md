@@ -580,7 +580,8 @@ Expected: FAIL — `lib/state/playlists.dart` / `PlaylistFns` don't exist.
 - [ ] **Step 3: Implement** — `lib/state/playlists.dart`:
 
 ```dart
-import 'dart:typed_data'; // Int64List — frb maps Vec<i64> to Int64List
+// frb maps Vec<i64> to ITS OWN Int64List (a TypedList), not dart:typed_data's.
+import 'package:flutter_rust_bridge/flutter_rust_bridge.dart' show Int64List;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
