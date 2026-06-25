@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-use crate::enrich::select::{AltKind, ChosenAlias};
+use crate::enrich::select::{is_non_latin, AltKind, ChosenAlias};
 
 fn kind_str(k: AltKind) -> &'static str {
     match k {
@@ -42,10 +42,21 @@ pub fn apply_artist_transliteration(
     // sort key ≠ display reading), so in that case the reading is NULL and the
     // bilingual row collapses to the single original-script line. `sort_name` is
     // still written (it drives §6.1 ordering) and so is `name_original`.
-    let transliteration: Option<&str> = if chosen.from_entity_sort_name {
-        None
+    let transliteration: Option<String> = if chosen.from_entity_sort_name {
+        // Tier 3: MB gave only a "Surname, Given" sort key, never a reading. But
+        // the tag-derived `name` is often a Latin romanization of the non-Latin
+        // original — use it as the reading so the bilingual row leads with the
+        // Latin name. Guard: only when `name` is Latin-script and differs from
+        // the original, so we never duplicate the original or store a non-Latin
+        // string as a reading.
+        let name: String = conn.query_row(
+            "SELECT name FROM artist WHERE mbid = ?1",
+            rusqlite::params![artist_mbid],
+            |r| r.get(0),
+        )?;
+        (!name.is_empty() && !is_non_latin(&name) && name != original_name).then_some(name)
     } else {
-        Some(&chosen.name)
+        Some(chosen.name.clone())
     };
     conn.execute(
         "UPDATE artist SET transliteration = ?1, sort_name = ?2, name_original = ?3 WHERE mbid = ?4",

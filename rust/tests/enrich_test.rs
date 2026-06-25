@@ -604,14 +604,15 @@ fn applies_artist_transliteration_and_sort_key() {
     assert_eq!(embedded2.as_deref(), Some("椎名林檎"));
 }
 
-/// Bug 1: the §6.1 tier-3 entity-sort-name fallback (`from_entity_sort_name`)
-/// must NOT write the "Last, First" sort string into the `transliteration`
-/// (reading) column — the sort key is not a display reading (§6.1). The
-/// bilingual row should collapse to the single original-script line, so the
-/// reading is NULL. `sort_name` (for §6.1 ordering) and `name_original` are
-/// still written.
+/// The §6.1 tier-3 entity-sort-name fallback (`from_entity_sort_name`) must NOT
+/// write the "Last, First" sort string into the `transliteration` (reading)
+/// column — the sort key is not a display reading (§6.1). Instead it falls back
+/// to the Latin tag `name` ("Sheena Ringo") as the reading when that name is
+/// Latin-script and differs from the non-Latin original, so the bilingual row
+/// leads with the Latin name. `sort_name` (for §6.1 ordering) and `name_original`
+/// are still written.
 #[test]
-fn entity_sort_name_fallback_stores_no_reading() {
+fn entity_sort_name_fallback_uses_latin_tag_name_as_reading() {
     let conn = open(":memory:").unwrap();
     conn.execute(
         "INSERT INTO artist(mbid,name,sort_name) VALUES ('a1','Sheena Ringo','Ringo')",
@@ -636,8 +637,9 @@ fn entity_sort_name_fallback_stores_no_reading() {
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .unwrap();
-    // The sort-name fallback writes NO reading (would otherwise show "Sheena, Ringo").
-    assert_eq!(translit, None);
+    // The fallback uses the Latin tag name as the reading (NOT the "Last, First"
+    // sort key), so the bilingual row leads with the Latin name.
+    assert_eq!(translit.as_deref(), Some("Sheena Ringo"));
     // The sort key is still set for §6.1 ordering.
     assert_eq!(sort, "Sheena, Ringo");
     // The original-script name is still stored for the bilingual headline.

@@ -11,3 +11,5 @@ seeked = "seeked"
 Yoru = "Yoru"
 # "PNGs" splits into the sub-token "PN", which typos misreads as "ON". PNG = image format.
 PN = "PN"
+# "Asai" (浅井) is a Japanese surname (e.g. Kenichi Asai), not a misspelling of "Asia".
+Asai = "Asai"
