@@ -54,9 +54,11 @@ fn tier3_non_latin_tag_name_stays_null() {
 }
 
 #[test]
-fn tier1_alias_reading_is_unchanged() {
+fn tier1_alias_reading_ignores_the_tag_name_guard() {
     let conn = open(":memory:").unwrap();
-    seed_artist(&conn, "A3", "Kenichi Asai");
+    // Catalog tag name is non-Latin: if the tier-3 `name`-guard leaked into the
+    // tier-1/2 path it would null this reading. The alias must be used regardless.
+    seed_artist(&conn, "A3", "浅井健一");
     let chosen = ChosenAlias {
         name: "Kenichi Asai".to_string(),
         sort_name: "Asai, Kenichi".to_string(),
