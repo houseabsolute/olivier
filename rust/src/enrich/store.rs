@@ -39,9 +39,9 @@ pub fn apply_artist_transliteration(
     // The §6.1 tier-3 fallback (`from_entity_sort_name`) yields a "Last, First"
     // SORT string, not a display reading — `chosen.name == chosen.sort_name`. We
     // must NOT store that sort key as the `transliteration` (reading) line (§6.1:
-    // sort key ≠ display reading), so in that case the reading is NULL and the
-    // bilingual row collapses to the single original-script line. `sort_name` is
-    // still written (it drives §6.1 ordering) and so is `name_original`.
+    // sort key ≠ display reading); instead we fall back to the Latin tag `name`
+    // as the reading (see the tier-3 branch below). `sort_name` is still written
+    // (it drives §6.1 ordering) and so is `name_original`.
     let transliteration: Option<String> = if chosen.from_entity_sort_name {
         // Tier 3: MB gave only a "Surname, Given" sort key, never a reading. But
         // the tag-derived `name` is often a Latin romanization of the non-Latin
