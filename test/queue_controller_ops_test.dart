@@ -134,4 +134,18 @@ void main() {
     expect(controller.playOrder.length, 2);
     expect(player.sources, controller.playOrder);
   });
+
+  test('replaceLibraryShuffled makes the queue a shuffled list played from top',
+      () async {
+    await controller.replaceLibraryShuffled(['/a.flac', '/b.flac', '/c.flac']);
+
+    // The canonical (displayed) order is the shuffled track list — same multiset.
+    expect(controller.orderedPaths.toSet(), {'/a.flac', '/b.flac', '/c.flac'});
+    expect(controller.orderedPaths.length, 3);
+    // Not the separate play-order shuffle indirection.
+    expect(controller.shuffled, isFalse);
+    // Plays from the TOP of that list (canonical index 0), and is playing.
+    expect(controller.currentCanonicalIndex, 0);
+    expect(player.played, isTrue);
+  });
 }

@@ -180,14 +180,12 @@ class QueueController implements ShuffleAllTarget {
   /// shuffle on, and start playing. Used by "Shuffle entire library".
   @override
   Future<void> replaceLibraryShuffled(List<String> paths) async {
-    await setQueue(paths);
-    await setShuffle(true);
-    // setShuffle now preserves the currently-playing canonical track (here that
-    // is canonical-0). "Shuffle entire library" should instead START on a
-    // random track, so jump to player-order 0 (a random track after the
-    // shuffle) before playing.
-    await _player.seek(Duration.zero, index: 0);
-    await _player.play();
+    // Shuffle the tracks into the queue's own (canonical/displayed) order and
+    // play from the top — so the panel shows the shuffled order and playback
+    // starts at track 1, not a random point. (No separate _shuffled play-order.)
+    final shuffled = List.of(paths)..shuffle();
+    await setQueue(shuffled);
+    await playAt(0);
   }
 
   /// Rebuilds the player's sources from the canonical list. [canonicalIndex] is
