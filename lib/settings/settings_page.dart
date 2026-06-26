@@ -49,14 +49,15 @@ class SettingsPage extends ConsumerWidget {
               ),
             ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
             children: [
               FilledButton.icon(
                 icon: const Icon(Icons.create_new_folder_outlined),
                 label: const Text('Add folder'),
                 onPressed: () => _addFolder(ref),
               ),
-              const SizedBox(width: 12),
               OutlinedButton.icon(
                 icon: const Icon(Icons.refresh),
                 label: const Text('Rescan all'),
@@ -64,6 +65,15 @@ class SettingsPage extends ConsumerWidget {
                     ? null
                     : () =>
                         ref.read(scanControllerProvider.notifier).rescanAll(),
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.library_add_outlined),
+                label: const Text('Check for new music'),
+                onPressed: scan.roots.isEmpty
+                    ? null
+                    : () => ref
+                        .read(scanControllerProvider.notifier)
+                        .findNewFiles(),
               ),
             ],
           ),
