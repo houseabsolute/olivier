@@ -129,6 +129,10 @@ class PlaybackController {
     if (order.isEmpty) {
       _currentItems = [];
       audioHandler.queue.add(const []);
+      // Queue emptied (cleared, or the last/only track removed) — clear the
+      // now-playing item so the bottom bar resets instead of showing the
+      // removed track (mediaItem is a BehaviorSubject that holds its last value).
+      audioHandler.mediaItem.add(null);
       return;
     }
 
@@ -151,7 +155,15 @@ class PlaybackController {
 
   void _subscribeIndex() {
     audioHandler.player.currentIndexStream.listen((i) {
-      if (i == null || i >= _currentItems.length) return;
+      // No current track (queue emptied / playback stopped) — clear the
+      // now-playing item so the bottom bar resets to "Nothing playing".
+      if (i == null) {
+        audioHandler.mediaItem.add(null);
+        return;
+      }
+      // Transient out-of-range during a rebuild — leave the last item until the
+      // queue-revision sync settles (don't flicker to null).
+      if (i >= _currentItems.length) return;
 
       final item = _currentItems[i];
 

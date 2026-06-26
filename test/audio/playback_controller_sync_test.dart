@@ -116,6 +116,30 @@ void main() {
 
     expect(h2.mediaItem.value?.extras?['trackId'], 99);
   });
+
+  test('clearing the queue resets now-playing to null', () async {
+    await queue.setQueue(['/a.flac', '/b.flac']);
+    await pumpEventQueue();
+    expect(handler.mediaItem.value?.id, '/a.flac');
+
+    await queue.clear();
+    await pumpEventQueue();
+
+    expect(handler.mediaItem.value, isNull,
+        reason: 'an emptied queue must clear the now-playing item');
+  });
+
+  test('removing the last track resets now-playing to null', () async {
+    await queue.setQueue(['/a.flac']);
+    await pumpEventQueue();
+    expect(handler.mediaItem.value?.id, '/a.flac');
+
+    await queue.removeAt(0);
+    await pumpEventQueue();
+
+    expect(handler.mediaItem.value, isNull,
+        reason: 'removing the only/last track must reset now-playing');
+  });
 }
 
 // Coverage note: this drives the real revision -> _syncNowPlayingFromQueue ->
