@@ -17,11 +17,12 @@ pub struct ScanProgress {
     pub done: bool,
 }
 
-pub fn scan_roots(
+fn scan_roots_impl(
     conn: &mut Connection,
     roots: &[String],
     log: &DecisionLog,
     mut on_progress: impl FnMut(ScanProgress),
+    new_only: bool,
 ) -> anyhow::Result<()> {
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?;
     // scan_epoch is a per-run id used by the deletion sweep; use nanos so two scans
@@ -34,6 +35,16 @@ pub fn scan_roots(
     let mut files_changed: u64 = 0;
 
     log.header(&format!("Scan {}", roots.join(", ")));
+
+    let known: std::collections::HashSet<String> = if new_only {
+        let mut stmt = conn.prepare("SELECT path FROM file")?;
+        let set = stmt
+            .query_map([], |r| r.get::<_, String>(0))?
+            .collect::<Result<_, _>>()?;
+        set
+    } else {
+        std::collections::HashSet::new()
+    };
 
     for root in roots {
         let walker = ignore::WalkBuilder::new(root)
@@ -55,6 +66,17 @@ pub fn scan_roots(
             }
 
             let path_str = path.to_string_lossy().to_string();
+
+            if new_only && known.contains(&path_str) {
+                files_seen += 1;
+                on_progress(ScanProgress {
+                    files_seen,
+                    files_changed,
+                    current: path_str,
+                    done: false,
+                });
+                continue;
+            }
 
             let meta =
                 std::fs::metadata(path).with_context(|| format!("metadata for {path_str}"))?;
@@ -139,26 +161,28 @@ pub fn scan_roots(
     // root like `/m/Rock` from also matching a sibling `/m/RockAndRoll`, and the
     // char-counted substr keeps the prefix match correct for non-ASCII (e.g.
     // Japanese) paths.
-    for root in roots {
-        let prefix = format!("{}/", root.trim_end_matches('/'));
-        let plen = prefix.chars().count() as i64;
-        {
-            let mut stmt = conn.prepare(
-                "SELECT path FROM file WHERE scan_epoch != ?1 AND substr(path, 1, ?2) = ?3",
-            )?;
-            let gone = stmt
-                .query_map(rusqlite::params![epoch, plen, prefix], |r| {
-                    r.get::<_, String>(0)
-                })?
-                .collect::<Result<Vec<_>, _>>()?;
-            for path in gone {
-                log.record(&Decision::Remove { path });
+    if !new_only {
+        for root in roots {
+            let prefix = format!("{}/", root.trim_end_matches('/'));
+            let plen = prefix.chars().count() as i64;
+            {
+                let mut stmt = conn.prepare(
+                    "SELECT path FROM file WHERE scan_epoch != ?1 AND substr(path, 1, ?2) = ?3",
+                )?;
+                let gone = stmt
+                    .query_map(rusqlite::params![epoch, plen, prefix], |r| {
+                        r.get::<_, String>(0)
+                    })?
+                    .collect::<Result<Vec<_>, _>>()?;
+                for path in gone {
+                    log.record(&Decision::Remove { path });
+                }
             }
+            conn.execute(
+                "DELETE FROM file WHERE scan_epoch != ?1 AND substr(path, 1, ?2) = ?3",
+                rusqlite::params![epoch, plen, prefix],
+            )?;
         }
-        conn.execute(
-            "DELETE FROM file WHERE scan_epoch != ?1 AND substr(path, 1, ?2) = ?3",
-            rusqlite::params![epoch, plen, prefix],
-        )?;
     }
     // Files missing a MusicBrainz album-artist ID get a synthetic key; merge them
     // into a real same-name artist so an album-artist tagged inconsistently across
@@ -174,6 +198,27 @@ pub fn scan_roots(
     });
 
     Ok(())
+}
+
+/// Full scan: import new/changed files and prune files gone from disk.
+pub fn scan_roots(
+    conn: &mut Connection,
+    roots: &[String],
+    log: &DecisionLog,
+    on_progress: impl FnMut(ScanProgress),
+) -> anyhow::Result<()> {
+    scan_roots_impl(conn, roots, log, on_progress, false)
+}
+
+/// Additive scan: import only files whose path isn't already in the catalog;
+/// known paths are skipped without a stat, and no deletion sweep runs.
+pub fn scan_roots_new_only(
+    conn: &mut Connection,
+    roots: &[String],
+    log: &DecisionLog,
+    on_progress: impl FnMut(ScanProgress),
+) -> anyhow::Result<()> {
+    scan_roots_impl(conn, roots, log, on_progress, true)
 }
 
 /// Re-read the tags of every file backing one track and re-upsert it, re-homing
