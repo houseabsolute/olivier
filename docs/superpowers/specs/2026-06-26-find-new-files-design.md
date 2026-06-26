@@ -59,9 +59,12 @@ Add a `new_only: bool` parameter to `scan_roots`. When `true`:
   known files). Otherwise the file is new → run the existing stat + `read_tags` +
   `upsert_file` path (the cache-check branch is skipped for new files since
   there's nothing cached).
-- After the walk: run `reconcile_album_artists` (new files may add `synth:` album
-  artists to merge), and **skip** the deletion sweep + `prune_orphans` (nothing
-  was removed).
+- After the walk: **skip only the deletion sweep** (the per-root
+  `DELETE FROM file WHERE scan_epoch != ?`). Still run `reconcile_album_artists`
+  (new files may add `synth:` album artists to merge into a real same-name
+  artist) **and** `prune_orphans` — prune is required because reconcile re-points
+  releases off the synthetic artist, orphaning that synth row, which prune then
+  cleans. Since new-only deletes no files, prune removes nothing else.
 
 `scan_roots`'s existing logic, error handling (per-file `read_tags` failure logs
 + continues), and progress emission are reused; only the known-skip and the
