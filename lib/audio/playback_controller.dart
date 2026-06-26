@@ -155,15 +155,12 @@ class PlaybackController {
 
   void _subscribeIndex() {
     audioHandler.player.currentIndexStream.listen((i) {
-      // No current track (queue emptied / playback stopped) — clear the
-      // now-playing item so the bottom bar resets to "Nothing playing".
-      if (i == null) {
-        audioHandler.mediaItem.add(null);
-        return;
-      }
-      // Transient out-of-range during a rebuild — leave the last item until the
-      // queue-revision sync settles (don't flicker to null).
-      if (i >= _currentItems.length) return;
+      // NOTE: clearing now-playing when the queue empties is handled by the
+      // queue-revision path (_syncNowPlayingFromQueue's empty branch), NOT here:
+      // this stream is the player's own index, which reports null transiently
+      // (and always, headless) for reasons unrelated to an emptied queue, so
+      // clearing on null here would race the revision sync and wipe a valid item.
+      if (i == null || i >= _currentItems.length) return;
 
       final item = _currentItems[i];
 
