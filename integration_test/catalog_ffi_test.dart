@@ -24,7 +24,8 @@ void main() {
     await File('$fixturesDir/sample.mp3').copy('${musicDir.path}/sample.mp3');
 
     // Scan the library via the streaming FFI function.
-    await for (final p in scanLibrary(dbPath: dbPath, roots: [musicDir.path])) {
+    await for (final p in scanLibrary(
+        dbPath: dbPath, roots: [musicDir.path], newOnly: false)) {
       if (p.done) break;
     }
 

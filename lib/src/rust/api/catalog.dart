@@ -9,9 +9,11 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 Stream<ScanProgress> scanLibrary(
-        {required String dbPath, required List<String> roots}) =>
-    RustLib.instance.api
-        .crateApiCatalogScanLibrary(dbPath: dbPath, roots: roots);
+        {required String dbPath,
+        required List<String> roots,
+        required bool newOnly}) =>
+    RustLib.instance.api.crateApiCatalogScanLibrary(
+        dbPath: dbPath, roots: roots, newOnly: newOnly);
 
 Future<void> rereadTrackTags(
         {required String dbPath, required PlatformInt64 trackId}) =>

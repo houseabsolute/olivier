@@ -12,13 +12,19 @@ use crate::frb_generated::StreamSink;
 pub fn scan_library(
     db_path: String,
     roots: Vec<String>,
+    new_only: bool,
     sink: StreamSink<ScanProgress>,
 ) -> anyhow::Result<()> {
     let mut conn = db::open(&db_path)?;
     let log = DecisionLog::for_db(&db_path);
-    scan::scan_roots(&mut conn, &roots, &log, |p| {
+    let on_progress = |p| {
         let _ = sink.add(p);
-    })
+    };
+    if new_only {
+        scan::scan_roots_new_only(&mut conn, &roots, &log, on_progress)
+    } else {
+        scan::scan_roots(&mut conn, &roots, &log, on_progress)
+    }
 }
 
 pub fn reread_track_tags(db_path: String, track_id: i64) -> anyhow::Result<()> {

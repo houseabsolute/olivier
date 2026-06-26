@@ -208,7 +208,9 @@ abstract class RustLibApi extends BaseApi {
       {required String dbPath, required QueueSnapshot snapshot});
 
   Stream<ScanProgress> crateApiCatalogScanLibrary(
-      {required String dbPath, required List<String> roots});
+      {required String dbPath,
+      required List<String> roots,
+      required bool newOnly});
 
   Future<SearchResults> crateApiCatalogSearchCatalog(
       {required String dbPath, required String q, required int limit});
@@ -1203,13 +1205,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   Stream<ScanProgress> crateApiCatalogScanLibrary(
-      {required String dbPath, required List<String> roots}) {
+      {required String dbPath,
+      required List<String> roots,
+      required bool newOnly}) {
     final sink = RustStreamSink<ScanProgress>();
     unawaited(handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(dbPath, serializer);
         sse_encode_list_String(roots, serializer);
+        sse_encode_bool(newOnly, serializer);
         sse_encode_StreamSink_scan_progress_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 36, port: port_);
@@ -1219,7 +1224,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta: kCrateApiCatalogScanLibraryConstMeta,
-      argValues: [dbPath, roots, sink],
+      argValues: [dbPath, roots, newOnly, sink],
       apiImpl: this,
     )));
     return sink.stream;
@@ -1227,7 +1232,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiCatalogScanLibraryConstMeta => const TaskConstMeta(
         debugName: "scan_library",
-        argNames: ["dbPath", "roots", "sink"],
+        argNames: ["dbPath", "roots", "newOnly", "sink"],
       );
 
   @override

@@ -160,7 +160,8 @@ class ScanController extends Notifier<ScanState> {
         // changed-count mark starts at 0.
         final refreshGate = ScanRefreshGate();
         try {
-          await for (final p in scanLibrary(dbPath: db, roots: [root])) {
+          await for (final p
+              in scanLibrary(dbPath: db, roots: [root], newOnly: false)) {
             if (_disposed) return;
             state = state.copyWith(
               filesSeen: p.filesSeen.toInt(),

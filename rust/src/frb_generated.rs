@@ -1374,6 +1374,7 @@ fn wire__crate__api__catalog__scan_library_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_db_path = <String>::sse_decode(&mut deserializer);
             let api_roots = <Vec<String>>::sse_decode(&mut deserializer);
+            let api_new_only = <bool>::sse_decode(&mut deserializer);
             let api_sink = <StreamSink<
                 crate::catalog::scan::ScanProgress,
                 flutter_rust_bridge::for_generated::SseCodec,
@@ -1382,8 +1383,12 @@ fn wire__crate__api__catalog__scan_library_impl(
             move |context| {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
-                        let output_ok =
-                            crate::api::catalog::scan_library(api_db_path, api_roots, api_sink)?;
+                        let output_ok = crate::api::catalog::scan_library(
+                            api_db_path,
+                            api_roots,
+                            api_new_only,
+                            api_sink,
+                        )?;
                         Ok(output_ok)
                     })(),
                 )
