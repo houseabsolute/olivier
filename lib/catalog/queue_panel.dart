@@ -68,6 +68,7 @@ Future<void> shuffleEntireLibrary(BuildContext context, WidgetRef ref) async {
 // columns are fixed-width so the header labels line up with the data cells
 // below them; the title/artist/album columns flex to share the rest.
 const double _queueDragColWidth = 24;
+const double _queueNumberColWidth = 28;
 const double _queueColGap = 8;
 const double _queueRemoveColWidth = 40;
 const int _queueTitleFlex = 3;
@@ -92,6 +93,7 @@ const double _queueHeaderCompactWidth = 520;
 /// (and its leading gap) is omitted when [showMeta] is false.
 Widget _queueRowLayout({
   required Widget lead,
+  required Widget number,
   required Widget title,
   required Widget artist,
   required Widget album,
@@ -102,6 +104,8 @@ Widget _queueRowLayout({
   return Row(
     children: [
       SizedBox(width: _queueDragColWidth, child: lead),
+      const SizedBox(width: _queueColGap),
+      SizedBox(width: _queueNumberColWidth, child: number),
       const SizedBox(width: _queueColGap),
       Expanded(flex: _queueTitleFlex, child: title),
       const SizedBox(width: _queueColGap),
@@ -135,6 +139,7 @@ class _QueueColumnHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: _queueRowLayout(
         lead: const SizedBox.shrink(),
+        number: const SizedBox.shrink(),
         title: Text('Title', style: style),
         artist: Text('Artist', style: style),
         album: Text('Album', style: style),
@@ -160,6 +165,14 @@ class QueuePanel extends ConsumerStatefulWidget {
 }
 
 class _QueuePanelState extends ConsumerState<QueuePanel> {
+  final ScrollController _queueScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _queueScrollController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final expanded = ref.watch(queueExpandedProvider);
@@ -306,85 +319,95 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
             _QueueColumnHeader(showMeta: showMeta),
             const Divider(height: 1),
             Expanded(
-              child: ReorderableListView.builder(
-                // Each row supplies its own drag handle in the lead column, so
-                // suppress the SDK's default handle — on desktop it overlays a
-                // second handle on top of the × button and steals its taps.
-                buildDefaultDragHandles: false,
-                itemCount: view.tracks.length,
-                // onReorderItem delivers the post-removal destination index
-                // directly (unlike the deprecated onReorder which required
-                // normalizeReorder).
-                onReorderItem: (oldIndex, newIndex) {
-                  controller.reorder(oldIndex, newIndex);
-                },
-                itemBuilder: (context, i) {
-                  final t = view.tracks[i];
-                  final selected = i == view.currentIndex;
-                  final muted = Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant);
-                  return RowContextMenu(
-                    key: ValueKey('${t.path}#$i'),
-                    entity: QueueEntityRef.track(t.trackId ?? 0),
-                    onInfo: (_) => showInfoDialog(
-                      context,
-                      title: 'Track',
-                      fields: queueTrackInfoFields(t),
-                    ),
-                    child: Material(
-                      color: selected
-                          ? scheme.tertiaryContainer
-                          : Colors.transparent,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        child: _queueRowLayout(
-                          lead: ReorderableDragStartListener(
-                            index: i,
-                            child: const Icon(Icons.drag_handle),
-                          ),
-                          title: BilingualText(
-                            original: t.title,
-                            translit: t.titleTranslit,
-                            translate: t.titleTranslate,
-                            leads: leads,
-                          ),
-                          artist: BilingualText(
-                            original:
-                                t.albumArtistOriginal ?? t.albumArtist ?? '',
-                            translit: t.albumArtistReading,
-                            translate: null,
-                            leads: leads,
-                            primaryStyle: muted,
-                          ),
-                          album: Text(
-                            t.album,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: muted,
-                          ),
-                          meta: TrackMeta(
-                            lengthMs: t.lengthMs,
-                            addedAt: t.addedAt,
-                            lastPlayed: t.lastPlayed,
-                          ),
-                          showMeta: showMeta,
-                          trailing: IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                                minWidth: 40, minHeight: 40),
-                            iconSize: 20,
-                            icon: const Icon(Icons.close),
-                            tooltip: 'Remove from queue',
-                            onPressed: () => controller.removeAt(i),
+              child: Scrollbar(
+                controller: _queueScrollController,
+                thumbVisibility: true,
+                child: ReorderableListView.builder(
+                  scrollController: _queueScrollController,
+                  // Each row supplies its own drag handle in the lead column, so
+                  // suppress the SDK's default handle — on desktop it overlays a
+                  // second handle on top of the × button and steals its taps.
+                  buildDefaultDragHandles: false,
+                  itemCount: view.tracks.length,
+                  // onReorderItem delivers the post-removal destination index
+                  // directly (unlike the deprecated onReorder which required
+                  // normalizeReorder).
+                  onReorderItem: (oldIndex, newIndex) {
+                    controller.reorder(oldIndex, newIndex);
+                  },
+                  itemBuilder: (context, i) {
+                    final t = view.tracks[i];
+                    final selected = i == view.currentIndex;
+                    final muted = Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant);
+                    return RowContextMenu(
+                      key: ValueKey('${t.path}#$i'),
+                      entity: QueueEntityRef.track(t.trackId ?? 0),
+                      onInfo: (_) => showInfoDialog(
+                        context,
+                        title: 'Track',
+                        fields: queueTrackInfoFields(t),
+                      ),
+                      child: Material(
+                        color: selected
+                            ? scheme.tertiaryContainer
+                            : Colors.transparent,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          child: _queueRowLayout(
+                            lead: ReorderableDragStartListener(
+                              index: i,
+                              child: const Icon(Icons.drag_handle),
+                            ),
+                            number: Text(
+                              '${i + 1}',
+                              textAlign: TextAlign.end,
+                              style: muted,
+                            ),
+                            title: BilingualText(
+                              original: t.title,
+                              translit: t.titleTranslit,
+                              translate: t.titleTranslate,
+                              leads: leads,
+                            ),
+                            artist: BilingualText(
+                              original:
+                                  t.albumArtistOriginal ?? t.albumArtist ?? '',
+                              translit: t.albumArtistReading,
+                              translate: null,
+                              leads: leads,
+                              primaryStyle: muted,
+                            ),
+                            album: Text(
+                              t.album,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: muted,
+                            ),
+                            meta: TrackMeta(
+                              lengthMs: t.lengthMs,
+                              addedAt: t.addedAt,
+                              lastPlayed: t.lastPlayed,
+                            ),
+                            showMeta: showMeta,
+                            trailing: IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                  minWidth: 40, minHeight: 40),
+                              iconSize: 20,
+                              icon: const Icon(Icons.close),
+                              tooltip: 'Remove from queue',
+                              onPressed: () => controller.removeAt(i),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           ],
