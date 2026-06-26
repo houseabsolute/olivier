@@ -158,6 +158,25 @@ void main() {
     expect(player.seeks.where((s) => s.index == 0), isNotEmpty);
   });
 
+  test('after clear, appending starts at the new top (not a stale position)',
+      () async {
+    // Reproduces the bug: play partway, flush the queue, add new tracks.
+    await controller.setQueue(['/a.flac', '/b.flac', '/c.flac']);
+    await controller.playAt(2); // current is /c.flac (player index 2)
+    await controller.clear(); // setAudioSources([]) -> player index null
+    expect(controller.currentCanonicalIndex, isNull);
+
+    await controller.append(['/new1.flac', '/new2.flac']);
+
+    // The append forces the player onto index 0, so a later play() starts at the
+    // top of the freshly-added queue instead of resuming a stale position.
+    // (Assert the player's real index, not currentCanonicalIndex, which
+    // coalesces a null index to 0 and would pass even without the fix.)
+    expect(player.currentIndex, 0);
+    expect(player.seeks.last.index, 0);
+    expect(controller.orderedPaths, ['/new1.flac', '/new2.flac']);
+  });
+
   test('append to a non-empty queue does not move the current track', () async {
     await controller.append(['/x.flac']); // empty -> current 0
     final seeksAfterFirst = player.seeks.length;

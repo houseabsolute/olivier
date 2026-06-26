@@ -63,6 +63,13 @@ void main() {
     await _expand(tester);
 
     expect(tester.takeException(), isNull);
-    expect(find.byType(Scrollbar), findsWidgets);
+    // Target our explicit always-visible Scrollbar, not an incidental
+    // platform/material one — `findsWidgets` would pass either way.
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is Scrollbar && w.thumbVisibility == true,
+      ),
+      findsOneWidget,
+    );
   });
 }

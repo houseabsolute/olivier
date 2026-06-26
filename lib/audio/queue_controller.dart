@@ -170,11 +170,11 @@ class QueueController implements ShuffleAllTarget {
 
   /// Empty the whole queue and stop driving the player.
   ///
-  /// Clearing the player's sources is the single source of truth: it drives
-  /// `currentIndexStream` to null, which causes the existing
-  /// `PlaybackController._subscribeIndex` guard (`if (i == null …) return`) to
-  /// stop emitting a stale media item — so now-playing also clears without any
-  /// extra teardown here.
+  /// The `revision` bump below drives `PlaybackController._syncNowPlayingFromQueue`,
+  /// whose empty-queue branch emits `mediaItem.add(null)` — that is what resets
+  /// the now-playing bar. (The player's `currentIndexStream` is NOT relied on for
+  /// this: its listener returns early on a null index without clearing, because
+  /// the stream reports null transiently for unrelated reasons.)
   Future<void> clear() async {
     _orderedPaths = [];
     _playOrder = [];
