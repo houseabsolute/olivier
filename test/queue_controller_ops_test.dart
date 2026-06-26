@@ -78,8 +78,9 @@ void main() {
 
     await controller.playAt(2);
 
-    // Not shuffled: canonical index 2 == player index 2.
-    expect(player.seeks.single.index, 2);
+    // Not shuffled: canonical index 2 == player index 2. (append to the empty
+    // queue first seeks to index 0, so assert playAt's seek is the last one.)
+    expect(player.seeks.last.index, 2);
     expect(player.played, isTrue);
   });
 
@@ -147,5 +148,21 @@ void main() {
     // Plays from the TOP of that list (canonical index 0), and is playing.
     expect(controller.currentCanonicalIndex, 0);
     expect(player.played, isTrue);
+  });
+
+  test('append to an empty queue makes the first added track current',
+      () async {
+    await controller.append(['/x.flac', '/y.flac']);
+    expect(controller.currentCanonicalIndex, 0);
+    // Establishes the current via a seek to player index 0.
+    expect(player.seeks.where((s) => s.index == 0), isNotEmpty);
+  });
+
+  test('append to a non-empty queue does not move the current track', () async {
+    await controller.append(['/x.flac']); // empty -> current 0
+    final seeksAfterFirst = player.seeks.length;
+    await controller.append(['/y.flac']); // non-empty -> no re-seek
+    expect(controller.currentCanonicalIndex, 0); // still /x.flac
+    expect(player.seeks.length, seeksAfterFirst); // no extra seek
   });
 }

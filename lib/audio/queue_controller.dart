@@ -80,10 +80,17 @@ class QueueController implements ShuffleAllTarget {
   /// shuffled, new paths join the tail of both (they were not part of the
   /// earlier shuffle, which is acceptable — a reshuffle is a deliberate reset).
   Future<void> append(List<String> paths) async {
+    final wasEmpty = _orderedPaths.isEmpty;
     for (final path in paths) {
       _orderedPaths.add(path);
       _playOrder.add(path);
       await _player.addAudioSource(AudioSource.file(path));
+    }
+    // Appending to a previously-empty queue: make the first added track the
+    // current one so play() starts at the top (not a stale pre-clear position)
+    // and the panel highlights the first row.
+    if (wasEmpty && _orderedPaths.isNotEmpty) {
+      await _player.seek(Duration.zero, index: 0);
     }
     await _persist();
     revision.value++;
