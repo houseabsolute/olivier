@@ -6,6 +6,7 @@ import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/src/rust/api/activity.dart';
 import 'package:olivier/src/rust/api/catalog.dart';
 import 'package:olivier/src/rust/api/settings.dart' as rust_settings;
+import 'package:olivier/src/rust/catalog/scan.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 
@@ -216,6 +217,24 @@ typedef LibraryPathsFn = Future<List<String>> Function();
 final libraryPathsFnProvider = Provider<LibraryPathsFn>((ref) {
   final db = ref.watch(dbPathProvider);
   return () => trackPathsForLibrary(dbPath: db);
+});
+
+// Streaming library scan seam (so ScanController is testable without the FFI).
+typedef ScanLibraryFn = Stream<ScanProgress> Function(
+    List<String> roots, bool newOnly);
+
+final scanLibraryFnProvider = Provider<ScanLibraryFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (roots, newOnly) =>
+      scanLibrary(dbPath: db, roots: roots, newOnly: newOnly);
+});
+
+// Root listing seam (so a test can seed roots via loadRoots() without the FFI).
+typedef ListRootsFn = Future<List<String>> Function();
+
+final listRootsFnProvider = Provider<ListRootsFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return () => listRoots(dbPath: db);
 });
 
 // --- Global search ---

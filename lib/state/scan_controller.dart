@@ -68,7 +68,7 @@ class ScanState {
 /// with the path-scoped deletion sweep in the Rust scanner — means adding a
 /// folder never deletes files belonging to a different folder.
 class ScanController extends Notifier<ScanState> {
-  final List<String> _queue = [];
+  final List<({String root, bool newOnly})> _queue = [];
   bool _draining = false;
   bool _disposed = false;
 
@@ -83,8 +83,7 @@ class ScanController extends Notifier<ScanState> {
   /// Load persisted roots into state. Call once at startup. Merges with any
   /// roots already present so an addFolder() racing ahead isn't dropped.
   Future<void> loadRoots() async {
-    final db = ref.read(dbPathProvider);
-    final persisted = await listRoots(dbPath: db);
+    final persisted = await ref.read(listRootsFnProvider)();
     if (_disposed) return;
     final merged = {...persisted, ...state.roots}.toList()..sort();
     state = state.copyWith(roots: merged);
@@ -99,13 +98,21 @@ class ScanController extends Notifier<ScanState> {
     if (!state.roots.contains(dir)) {
       state = state.copyWith(roots: [...state.roots, dir]..sort());
     }
-    _enqueue(dir);
+    _enqueue(dir, newOnly: false);
   }
 
   /// Re-scan every known root.
   void rescanAll() {
     for (final r in state.roots) {
-      _enqueue(r);
+      _enqueue(r, newOnly: false);
+    }
+  }
+
+  /// Scan every known root for files NOT already in the catalog, skipping
+  /// known files entirely (no per-file stat/DB, no deletion sweep).
+  void findNewFiles() {
+    for (final r in state.roots) {
+      _enqueue(r, newOnly: true);
     }
   }
 
@@ -115,7 +122,7 @@ class ScanController extends Notifier<ScanState> {
   /// Settings-page concern and not yet exposed in the UI.)
   Future<void> removeFolder(String dir) async {
     final db = ref.read(dbPathProvider);
-    _queue.removeWhere((r) => r == dir);
+    _queue.removeWhere((j) => j.root == dir);
     await removeRoot(dbPath: db, path: dir);
     if (_disposed) return;
     state = state.copyWith(
@@ -131,8 +138,8 @@ class ScanController extends Notifier<ScanState> {
     );
   }
 
-  void _enqueue(String dir) {
-    _queue.add(dir);
+  void _enqueue(String dir, {required bool newOnly}) {
+    _queue.add((root: dir, newOnly: newOnly));
     state = state.copyWith(queued: _queue.length);
     unawaited(_drain());
   }
@@ -140,10 +147,10 @@ class ScanController extends Notifier<ScanState> {
   Future<void> _drain() async {
     if (_draining) return;
     _draining = true;
-    final db = ref.read(dbPathProvider);
     try {
       while (_queue.isNotEmpty) {
-        final root = _queue.removeAt(0);
+        final job = _queue.removeAt(0);
+        final root = job.root;
         // Skip a root the user removed while it sat in the queue.
         if (!state.roots.contains(root)) {
           state = state.copyWith(queued: _queue.length);
@@ -161,7 +168,7 @@ class ScanController extends Notifier<ScanState> {
         final refreshGate = ScanRefreshGate();
         try {
           await for (final p
-              in scanLibrary(dbPath: db, roots: [root], newOnly: false)) {
+              in ref.read(scanLibraryFnProvider)([root], job.newOnly)) {
             if (_disposed) return;
             state = state.copyWith(
               filesSeen: p.filesSeen.toInt(),
