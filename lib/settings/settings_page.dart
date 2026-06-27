@@ -230,7 +230,7 @@ class SettingsPage extends ConsumerWidget {
   }
 
   Future<void> _addFolder(WidgetRef ref) async {
-    final dir = await FilePicker.platform.getDirectoryPath();
+    final dir = await FilePicker.getDirectoryPath();
     if (dir == null) return;
     await ref.read(scanControllerProvider.notifier).addFolder(dir);
   }
