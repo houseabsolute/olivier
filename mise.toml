@@ -6,7 +6,7 @@
 # cargo-installed CLI tools the build needs.
 
 [tools]
-flutter = "3.44.2"
+flutter = "3.44.4"
 # ninja is required by Flutter's Linux desktop (CMake) build. The system has no
 # ninja-build installed (snap Flutter used to bundle its own); pin it here.
 ninja = "1.13.2"
