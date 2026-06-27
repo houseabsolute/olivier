@@ -1,4 +1,6 @@
 /build/
+/dist/
+/staging/
 /android/app/debug
 /android/app/profile
 /android/app/release

@@ -1,5 +1,7 @@
 exclude = [
     "build/**",
+    "dist/**",
+    "staging/**",
     "target/**",
     "rust/target/**",
     ".dart_tool/**",
