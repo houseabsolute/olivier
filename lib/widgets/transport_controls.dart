@@ -58,6 +58,58 @@ TransportButtons resolveTransport(TransportState s) => TransportButtons(
       showPauseIcon: s.playing,
     );
 
+/// Previous / play-pause / next buttons rendered from a [TransportButtons]. A
+/// disabled button passes `onPressed: null` so Material greys it out. Pure (no
+/// player) so it is widget-testable.
+class TransportControlsView extends StatelessWidget {
+  const TransportControlsView({
+    super.key,
+    required this.buttons,
+    required this.onPrev,
+    required this.onPlayPause,
+    required this.onNext,
+  });
+
+  final TransportButtons buttons;
+  final VoidCallback onPrev;
+  final VoidCallback onPlayPause;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.skip_previous),
+          tooltip: 'Restart track',
+          onPressed: buttons.prevEnabled ? onPrev : null,
+        ),
+        if (buttons.showSpinner)
+          const Padding(
+            padding: EdgeInsets.all(8),
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else
+          IconButton(
+            icon: Icon(buttons.showPauseIcon ? Icons.pause : Icons.play_arrow),
+            tooltip: buttons.showPauseIcon ? 'Pause' : 'Play',
+            onPressed: buttons.playEnabled ? onPlayPause : null,
+          ),
+        IconButton(
+          icon: const Icon(Icons.skip_next),
+          tooltip: 'Next',
+          onPressed: buttons.nextEnabled ? onNext : null,
+        ),
+      ],
+    );
+  }
+}
+
 /// Previous / play-pause / next, driven by the audio handler's player state.
 /// Extracted from the now-playing bar so it can live in the top app bar.
 class TransportControls extends StatelessWidget {
