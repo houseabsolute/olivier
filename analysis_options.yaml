@@ -9,6 +9,15 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # `flutter analyze` (run whole-project by precious's flutter-analyze lint)
+  # would otherwise descend into the vendored cargokit Dart tool under rust_builder/,
+  # whose own package deps aren't resolved in a fresh checkout (CI) and so fail
+  # to analyze. precious already excludes rust_builder/** for its other commands;
+  # exclude it from the analyzer too.
+  exclude:
+    - rust_builder/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`
