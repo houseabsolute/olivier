@@ -61,13 +61,16 @@ void main() {
     expect(saved.last!.paths, ['/b.flac', '/c.flac', '/a.flac']);
   });
 
-  test('clear empties the queue, the player, and persists', () async {
+  test('clear empties the queue, stops the player, and persists', () async {
     await controller.append(['/a.flac', '/b.flac']);
 
     await controller.clear();
 
     expect(controller.orderedPaths, isEmpty);
     expect(controller.playOrder, isEmpty);
+    // clear() must stop() the native player — setAudioSources([]) alone is a
+    // no-op on the backend and would leave it playing the old sources.
+    expect(player.stopCalled, isTrue);
     expect(player.sources, isEmpty);
     expect(saved.last!.paths, isEmpty);
   });
@@ -78,8 +81,9 @@ void main() {
 
     await controller.playAt(2);
 
-    // Not shuffled: canonical index 2 == player index 2. (append to the empty
-    // queue first seeks to index 0, so assert playAt's seek is the last one.)
+    // Not shuffled: canonical index 2 == player index 2. (append-to-empty
+    // rebuilds the player sources rather than seeking, so playAt's is the only
+    // seek.)
     expect(player.seeks.last.index, 2);
     expect(player.played, isTrue);
   });
@@ -154,27 +158,31 @@ void main() {
       () async {
     await controller.append(['/x.flac', '/y.flac']);
     expect(controller.currentCanonicalIndex, 0);
-    // Establishes the current via a seek to player index 0.
-    expect(player.seeks.where((s) => s.index == 0), isNotEmpty);
+    // Rebuilds the player sources from scratch, seeded at index 0.
+    expect(player.sources, ['/x.flac', '/y.flac']);
+    expect(player.currentIndex, 0);
   });
 
-  test('after clear, appending starts at the new top (not a stale position)',
-      () async {
-    // Reproduces the bug: play partway, flush the queue, add new tracks.
-    await controller.setQueue(['/a.flac', '/b.flac', '/c.flac']);
-    await controller.playAt(2); // current is /c.flac (player index 2)
-    await controller.clear(); // setAudioSources([]) -> player index null
-    expect(controller.currentCanonicalIndex, isNull);
+  test(
+      'after shuffle-all + clear, appending an album replaces the player '
+      'playlist (no stale sources)', () async {
+    // The reported bug: shuffle the whole library, clear, then add an album.
+    // The display showed the album but the player kept walking the shuffled
+    // library because clear()'s setAudioSources([]) never cleared the native
+    // playlist and append() incrementally stacked onto it.
+    await controller
+        .replaceLibraryShuffled(['/lib1.flac', '/lib2.flac', '/lib3.flac']);
+    expect(player.sources.length, 3); // player holds the shuffled library
 
-    await controller.append(['/new1.flac', '/new2.flac']);
+    await controller.clear();
+    await controller.append(['/album1.flac', '/album2.flac']);
 
-    // The append forces the player onto index 0, so a later play() starts at the
-    // top of the freshly-added queue instead of resuming a stale position.
-    // (Assert the player's real index, not currentCanonicalIndex, which
-    // coalesces a null index to 0 and would pass even without the fix.)
+    // The player's ACTUAL sources must be exactly the album — not the album
+    // stacked on the stale shuffled library (which next/prev would walk).
+    expect(player.sources, ['/album1.flac', '/album2.flac']);
+    expect(controller.playOrder, ['/album1.flac', '/album2.flac']);
+    expect(controller.orderedPaths, ['/album1.flac', '/album2.flac']);
     expect(player.currentIndex, 0);
-    expect(player.seeks.last.index, 0);
-    expect(controller.orderedPaths, ['/new1.flac', '/new2.flac']);
   });
 
   test('append to a non-empty queue does not move the current track', () async {

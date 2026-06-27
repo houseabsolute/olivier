@@ -16,6 +16,13 @@ abstract class QueuePlayer {
   });
   Future<void> seek(Duration position, {int? index});
   Future<void> play();
+
+  /// Halt playback and deactivate the native player. Needed by `clear()`:
+  /// just_audio's `setAudioSources([])` does NOT message the backend (its
+  /// `load()` early-returns on an empty playlist), so it leaves the native
+  /// media_kit player holding — and playing — the previous sources. `stop()`
+  /// deactivates the platform so a later play()/rebuild starts clean.
+  Future<void> stop();
   int? get currentIndex;
   Duration get position;
   Stream<int?> get currentIndexStream;
@@ -60,6 +67,9 @@ class JustAudioQueuePlayer implements QueuePlayer {
 
   @override
   Future<void> play() => player.play();
+
+  @override
+  Future<void> stop() => player.stop();
 
   @override
   int? get currentIndex => player.currentIndex;

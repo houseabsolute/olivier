@@ -21,6 +21,9 @@ class FakeQueuePlayer implements QueuePlayer {
 
   bool played = false;
 
+  /// True once [stop] has been called (and not since superseded by a rebuild).
+  bool stopCalled = false;
+
   int? _currentIndex = 0;
   final _indexCtrl = StreamController<int?>.broadcast();
 
@@ -66,10 +69,16 @@ class FakeQueuePlayer implements QueuePlayer {
     int? initialIndex,
     Duration initialPosition = Duration.zero,
   }) async {
+    // Faithfully models just_audio 0.10.5: an EMPTY list is a no-op on the
+    // native backend (load() early-returns on an empty playlist, sending no
+    // message), so the previous sources and current index are left intact. A
+    // non-empty list replaces the playlist and seeds the current index.
+    if (list.isEmpty) return;
+    stopCalled = false;
     sources
       ..clear()
       ..addAll(list.map(_path));
-    setCurrentIndex(list.isEmpty ? null : (initialIndex ?? 0));
+    setCurrentIndex(initialIndex ?? 0);
   }
 
   @override
@@ -81,6 +90,17 @@ class FakeQueuePlayer implements QueuePlayer {
   @override
   Future<void> play() async {
     played = true;
+  }
+
+  @override
+  Future<void> stop() async {
+    // Models just_audio deactivating the native platform: playback halts and
+    // the native sequence is torn down (a later non-empty setAudioSources/play
+    // rebuilds it from the Dart playlist).
+    stopCalled = true;
+    played = false;
+    sources.clear();
+    setCurrentIndex(null);
   }
 
   @override

@@ -80,17 +80,23 @@ class QueueController implements ShuffleAllTarget {
   /// shuffled, new paths join the tail of both (they were not part of the
   /// earlier shuffle, which is acceptable — a reshuffle is a deliberate reset).
   Future<void> append(List<String> paths) async {
-    final wasEmpty = _orderedPaths.isEmpty;
-    for (final path in paths) {
-      _orderedPaths.add(path);
-      _playOrder.add(path);
-      await _player.addAudioSource(AudioSource.file(path));
-    }
-    // Appending to a previously-empty queue: make the first added track the
-    // current one so play() starts at the top (not a stale pre-clear position)
-    // and the panel highlights the first row.
-    if (wasEmpty && _orderedPaths.isNotEmpty) {
-      await _player.seek(Duration.zero, index: 0);
+    if (_orderedPaths.isEmpty) {
+      // Appending into an empty queue: rebuild the player's sources from scratch
+      // rather than incrementally adding onto whatever a previous `clear()` left
+      // behind. just_audio's `setAudioSources([])` does NOT clear the native
+      // playlist, so an incremental `addAudioSource` here would stack the new
+      // tracks onto the stale sources (and index-0 seeks / next-prev would walk
+      // them). A non-empty `setAudioSources` (via _rebuild) always reaches
+      // `load()` and replaces the native playlist, starting cleanly at the top.
+      _orderedPaths = List.of(paths);
+      _shuffled = false;
+      await _rebuild(0);
+    } else {
+      for (final path in paths) {
+        _orderedPaths.add(path);
+        _playOrder.add(path);
+        await _player.addAudioSource(AudioSource.file(path));
+      }
     }
     await _persist();
     revision.value++;
@@ -170,6 +176,14 @@ class QueueController implements ShuffleAllTarget {
 
   /// Empty the whole queue and stop driving the player.
   ///
+  /// `stop()` is essential, not decorative: just_audio's `setAudioSources([])`
+  /// is a no-op on the native backend (its `load()` early-returns on an empty
+  /// playlist without messaging the platform), so on its own it would leave the
+  /// media_kit player holding — and still playing — the previous sources. So we
+  /// `stop()` to deactivate the native player, and ALSO `setAudioSources([])` to
+  /// empty just_audio's Dart-side playlist for consistency. A later `append`
+  /// rebuilds from scratch (see [append]).
+  ///
   /// The `revision` bump below drives `PlaybackController._syncNowPlayingFromQueue`,
   /// whose empty-queue branch emits `mediaItem.add(null)` — that is what resets
   /// the now-playing bar. (The player's `currentIndexStream` is NOT relied on for
@@ -178,6 +192,8 @@ class QueueController implements ShuffleAllTarget {
   Future<void> clear() async {
     _orderedPaths = [];
     _playOrder = [];
+    _shuffled = false;
+    await _player.stop();
     await _player.setAudioSources([]);
     await _persist();
     revision.value++;
