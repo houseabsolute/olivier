@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:olivier/audio/audio_handler.dart';
+import 'package:rxdart/rxdart.dart';
 
 /// The transport buttons' input state, derived from the player. A pure value
 /// type so [resolveTransport] (and its tests) need no real player.
@@ -110,8 +111,9 @@ class TransportControlsView extends StatelessWidget {
   }
 }
 
-/// Previous / play-pause / next, driven by the audio handler's player state.
-/// Extracted from the now-playing bar so it can live in the top app bar.
+/// Previous / play-pause / next, driven by the audio handler's player. Thin glue
+/// that maps the player's streams to a [TransportState] and renders a
+/// [TransportControlsView]; all decision logic lives in [resolveTransport].
 class TransportControls extends StatelessWidget {
   const TransportControls({super.key, required this.audioHandler});
 
@@ -120,47 +122,37 @@ class TransportControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final player = audioHandler.player;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.skip_previous),
-          tooltip: 'Previous',
-          onPressed: () => audioHandler.skipToPrevious(),
-        ),
-        StreamBuilder<PlayerState>(
-          stream: player.playerStateStream,
-          builder: (context, snap) {
-            final state = snap.data;
-            final playing = state?.playing ?? false;
-            final processingState =
-                state?.processingState ?? ProcessingState.idle;
-            final isLoading = processingState == ProcessingState.loading ||
-                processingState == ProcessingState.buffering;
-            if (isLoading) {
-              return const Padding(
-                padding: EdgeInsets.all(8),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              );
-            }
-            return IconButton(
-              icon: Icon(playing ? Icons.pause : Icons.play_arrow),
-              tooltip: playing ? 'Pause' : 'Play',
-              onPressed: () =>
-                  playing ? audioHandler.pause() : audioHandler.play(),
+    return StreamBuilder<TransportState>(
+      stream: Rx.combineLatest2<SequenceState, PlayerState, TransportState>(
+        player.sequenceStateStream,
+        player.playerStateStream,
+        (seq, ps) {
+          final processing = ps.processingState;
+          return TransportState(
+            hasCurrent: player.currentIndex != null,
+            hasNext: player.hasNext,
+            playing: ps.playing,
+            isLoading: processing == ProcessingState.loading ||
+                processing == ProcessingState.buffering,
+          );
+        },
+      ),
+      builder: (context, snap) {
+        final state = snap.data ??
+            const TransportState(
+              hasCurrent: false,
+              hasNext: false,
+              playing: false,
+              isLoading: false,
             );
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.skip_next),
-          tooltip: 'Next',
-          onPressed: () => audioHandler.skipToNext(),
-        ),
-      ],
+        return TransportControlsView(
+          buttons: resolveTransport(state),
+          onPrev: () => audioHandler.seek(Duration.zero),
+          onPlayPause: () =>
+              state.playing ? audioHandler.pause() : audioHandler.play(),
+          onNext: () => audioHandler.skipToNext(),
+        );
+      },
     );
   }
 }
