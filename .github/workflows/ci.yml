@@ -7,13 +7,13 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # precious runs clippy + rustfmt, so the Rust toolchain is needed here.
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
       # mise-action installs precious + flutter/dart + prettier/taplo/typos/shellcheck/shfmt/omegasort.
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v4
       # precious's flutter-analyze needs resolved packages.
       - run: mise exec -- flutter pub get
       - run: mise exec -- precious lint --all
@@ -24,17 +24,17 @@ jobs:
       run:
         working-directory: rust
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --all
 
   flutter:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # rust-toolchain is required by `flutter build linux`: cargokit invokes `cargo`.
       - uses: dtolnay/rust-toolchain@stable
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v4
       - name: System libraries for Flutter Linux desktop
         run: |
           sudo apt-get update
