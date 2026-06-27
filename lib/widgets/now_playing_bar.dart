@@ -5,6 +5,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:olivier/audio/audio_handler.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+import 'package:olivier/widgets/transport_controls.dart';
 import 'package:rxdart/rxdart.dart';
 
 class PositionData {
@@ -84,6 +85,8 @@ class NowPlayingBar extends ConsumerWidget {
                   },
                 ),
               ),
+              const SizedBox(width: 8),
+              TransportControls(audioHandler: audioHandler),
               const SizedBox(width: 8),
               // Seek slider + time labels.
               Expanded(
