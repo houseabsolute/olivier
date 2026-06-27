@@ -1,0 +1,35 @@
+name: olivier
+arch: amd64
+platform: linux
+version: ${VERSION}
+maintainer: Dave Rolsky <autarch@urth.org>
+description: A bilingual-aware music player.
+homepage: https://github.com/houseabsolute/olivier
+license: Apache-2.0
+section: sound
+priority: optional
+contents:
+  - src: ./staging/usr/lib/olivier
+    dst: /usr/lib/olivier
+    type: tree
+  - src: ./staging/usr/share/icons/hicolor
+    dst: /usr/share/icons/hicolor
+    type: tree
+  - src: ./staging/usr/share/applications/org.urth.olivier.desktop
+    dst: /usr/share/applications/org.urth.olivier.desktop
+  - src: ./staging/usr/share/doc/olivier/LICENSE
+    dst: /usr/share/doc/olivier/LICENSE
+  - src: ./staging/usr/share/doc/olivier/README
+    dst: /usr/share/doc/olivier/README
+  - src: /usr/lib/olivier/olivier
+    dst: /usr/bin/olivier
+    type: symlink
+overrides:
+  deb:
+    depends:
+      - libmpv2 | libmpv1
+      - libgtk-3-0 | libgtk-3-0t64
+  rpm:
+    depends:
+      - mpv-libs
+      - gtk3
