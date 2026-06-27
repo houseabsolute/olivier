@@ -1,0 +1,92 @@
+name: Release
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (no leading v), e.g. 0.0.1 or 0.0.1-rc1"
+        required: true
+        default: "0.0.0-dev"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # cargokit invokes cargo during `flutter build linux`.
+      - uses: dtolnay/rust-toolchain@stable
+      # mise provides Flutter, ninja, and nfpm (pinned in mise.toml).
+      - uses: jdx/mise-action@v2
+      - name: System libraries for the Flutter Linux build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake pkg-config libgtk-3-dev liblzma-dev libstdc++-14-dev libmpv-dev rpm
+      - name: Resolve version + prerelease flag
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - run: mise exec -- flutter pub get
+      - name: Build release bundle
+        run: |
+          base="${{ steps.ver.outputs.version }}"
+          base="${base%%-*}"
+          mise exec -- flutter build linux --release \
+            --build-name="$base" --build-number="${{ github.run_number }}"
+      - name: Stage install tree + tarball
+        run: |
+          ./scripts/stage-release.sh build/linux/x64/release/bundle \
+            "${{ steps.ver.outputs.version }}" .
+      - name: Build deb + rpm
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          mise exec -- nfpm pkg -p deb -f packaging/nfpm.yaml -t dist/
+          mise exec -- nfpm pkg -p rpm -f packaging/nfpm.yaml -t dist/
+      - name: Smoke-test the .deb
+        run: |
+          sudo apt-get install -y ./dist/olivier_*.deb
+          test -L /usr/bin/olivier
+          test -x /usr/lib/olivier/olivier
+          # libmpv is dlopened (not a NEEDED entry), so its absence here is fine;
+          # fail only if a *linked* library is missing.
+          if ldd /usr/lib/olivier/olivier | grep -i 'not found'; then
+            echo "missing linked library" >&2
+            exit 1
+          fi
+      - name: Inspect the .rpm (structural)
+        run: |
+          rpm -qp --info dist/olivier-*.rpm
+          rpm -qp --requires dist/olivier-*.rpm
+          rpm -qp --list dist/olivier-*.rpm
+      - name: Upload artifacts (dry runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: olivier-${{ steps.ver.outputs.version }}
+          path: |
+            dist/olivier_*.deb
+            dist/olivier-*.rpm
+            dist/olivier-*-linux-x64.tar.gz
+      - name: Publish GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: ${{ steps.ver.outputs.prerelease }}
+          files: |
+            dist/olivier_*.deb
+            dist/olivier-*.rpm
+            dist/olivier-*-linux-x64.tar.gz
