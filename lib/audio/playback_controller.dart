@@ -75,6 +75,7 @@ class PlaybackController {
     required this.queueController,
     required this.dbPath,
     TracksForPathsFn? tracksForPathsFn,
+    this.onPlaybackIssue,
   }) : _tracksForPaths = tracksForPathsFn ??
             ((paths) => tracksForPaths(dbPath: dbPath, paths: paths)) {
     _subscribeIndex();
@@ -91,6 +92,10 @@ class PlaybackController {
   final QueueController queueController;
   final String dbPath;
 
+  /// Surfaces a user-facing playback issue (e.g. a track that failed to play).
+  /// Null in tests; wired to the app's ErrorReporter in main().
+  final void Function(String message)? onPlaybackIssue;
+
   // FFI seam for resolving catalog metadata by path (injectable for tests).
   final TracksForPathsFn _tracksForPaths;
 
@@ -106,6 +111,10 @@ class PlaybackController {
 
   // Play-tracking state.
   int? _trackedIndex;
+  // Player index of the last track we already ran error recovery for, so the
+  // per-frame repeat of a decode error only triggers one skip. Reset on track
+  // change (see _subscribePlayTracking).
+  int? _lastErrorIndex;
   bool _recordedForCurrentTrack = false;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<PlayerState>? _playerStateSub;
@@ -247,6 +256,8 @@ class PlaybackController {
       if (i != _trackedIndex) {
         _trackedIndex = i;
         _recordedForCurrentTrack = false;
+        // New current track — allow one error recovery for it.
+        _lastErrorIndex = null;
       }
     });
 
@@ -308,20 +319,41 @@ class PlaybackController {
     );
   }
 
-  /// Log playback errors (e.g. a queued file that was deleted or whose drive is
-  /// unmounted) instead of letting them surface as an unhandled exception, so a
-  /// bad track is skipped/logged and the app keeps running.
+  /// Playback errors (e.g. a corrupt/undecodable file, or a queued file deleted
+  /// or on an unmounted drive) surface on `errorStream` as `PlayerException`s.
+  /// Log them, tell the user, and recover so playback never silently wedges.
   void _subscribeErrors() {
-    // MPV / source-open failures (e.g. a queued file deleted mid-session, or a
-    // drive that unmounts) surface on errorStream as PlayerExceptions, not as
-    // stream errors on the event stream — log them so they don't go unhandled.
     _errorSub = audioHandler.player.errorStream.listen((e) {
       developer.log(
         'playback error: ${e.message}',
         name: 'olivier.player',
         error: e,
       );
+      _recoverFromError(e);
     });
+  }
+
+  /// A track failed to play. Surface the error and move on: skip to the next
+  /// track, or stop if this is the last one. mpv re-emits the decode error per
+  /// bad frame, so `_lastErrorIndex` limits us to one recovery per track.
+  void _recoverFromError(PlayerException e) {
+    final player = audioHandler.player;
+    final idx = player.currentIndex;
+    if (idx != null && idx == _lastErrorIndex) return;
+    _lastErrorIndex = idx;
+
+    final title = audioHandler.mediaItem.value?.title ?? 'this track';
+    final outcome = resolvePlaybackError(
+      title: title,
+      detail: e.message,
+      hasNext: player.hasNext,
+    );
+    onPlaybackIssue?.call(outcome.message);
+    if (outcome.action == PlaybackErrorAction.skipToNext) {
+      audioHandler.skipToNext();
+    } else {
+      audioHandler.stop();
+    }
   }
 
   void dispose() {
