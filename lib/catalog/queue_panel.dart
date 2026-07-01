@@ -22,6 +22,30 @@ class QueueExpanded extends Notifier<bool> {
 final queueExpandedProvider =
     NotifierProvider<QueueExpanded, bool>(QueueExpanded.new);
 
+/// Whether the expanded queue shows already-played tracks (those before the
+/// current one). Off by default so the current track stays pinned at the top.
+/// Session-only (resets on relaunch), like [queueExpandedProvider].
+class ShowPlayed extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void toggle() => state = !state;
+}
+
+final showPlayedProvider = NotifierProvider<ShowPlayed, bool>(ShowPlayed.new);
+
+/// Canonical index of the first row the expanded queue should show. Hiding
+/// played tracks (the default) starts at the current track so it's pinned at the
+/// top; showing played tracks — or nothing playing — starts at 0. Clamped to
+/// [0, trackCount] so a stale/out-of-range currentIndex can't over-run the list.
+int queueVisibleStart({
+  required bool showPlayed,
+  required int? currentIndex,
+  required int trackCount,
+}) {
+  if (showPlayed || currentIndex == null) return 0;
+  return currentIndex.clamp(0, trackCount);
+}
+
 /// Provider that exposes the [ShuffleAllTarget] the "Shuffle entire library"
 /// control calls. Defaults to the canonical queue controller; tests override
 /// with a fake.
