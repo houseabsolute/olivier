@@ -93,6 +93,7 @@ Future<void> main() async {
       audioHandler: audioHandler,
       queueController: queueController,
       dbPath: dbPath,
+      onPlaybackIssue: (msg) => reporter.report(msg),
     );
 
     // Restore persisted queue from the last session if present.

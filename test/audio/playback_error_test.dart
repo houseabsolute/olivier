@@ -14,12 +14,14 @@ void main() {
     });
 
     test('no next track: action stop', () {
-      final o = resolvePlaybackError(title: 'Song', detail: 'boom', hasNext: false);
+      final o =
+          resolvePlaybackError(title: 'Song', detail: 'boom', hasNext: false);
       expect(o.action, PlaybackErrorAction.stop);
     });
 
     test('null detail: no trailing colon', () {
-      final o = resolvePlaybackError(title: 'Song', detail: null, hasNext: true);
+      final o =
+          resolvePlaybackError(title: 'Song', detail: null, hasNext: true);
       expect(o.message, 'Couldn\'t play "Song"');
     });
 
@@ -29,7 +31,8 @@ void main() {
     });
 
     test('title used verbatim; stop when no next', () {
-      final o = resolvePlaybackError(title: 'this track', detail: null, hasNext: false);
+      final o = resolvePlaybackError(
+          title: 'this track', detail: null, hasNext: false);
       expect(o.message, 'Couldn\'t play "this track"');
       expect(o.action, PlaybackErrorAction.stop);
     });
