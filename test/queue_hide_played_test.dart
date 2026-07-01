@@ -120,6 +120,8 @@ void main() {
       expect(find.text('T0'), findsOneWidget);
       expect(find.text('T1'), findsOneWidget);
       expect(find.text('1'), findsOneWidget);
+      // The toggle now reflects the on state (its tooltip flips).
+      expect(find.byTooltip('Hide played tracks'), findsOneWidget);
     });
   });
 }

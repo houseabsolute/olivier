@@ -134,6 +134,14 @@ toggle flips or the current track advances.
   when `_resolve()` repopulates (same class of transient the existing `nowPlaying` bounds-guard
   handles).
 
+## Known trade-off (header layout)
+
+Adding the toggle makes five icon buttons in the header, which overflows it by one button-width at
+mid panel widths (~540px) when expanded. Resolved by flexing the "Queue · N tracks" count text when
+`expanded || compact` (it was already flexed when `compact`), so the count ellipsizes rather than
+overflowing. The count is redundant while expanded (the full list + real order numbers are visible
+below), so this is an acceptable cost.
+
 ## Testing
 
 - **`test/queue_hide_played_test.dart`**:
