@@ -259,9 +259,13 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                 const SizedBox(width: 8),
                 // Plain (full width) when there's room, so the count never
                 // truncates while empty space sits in the up-next / Spacer cell.
-                // Only the compact layout flexes it so it can ellipsize instead
-                // of overflowing when the panel is genuinely narrow.
-                if (compact) Flexible(child: countText) else countText,
+                // The compact layout flexes it to ellipsize instead of overflowing
+                // when narrow; expanded also flexes because the extra history
+                // toggle button otherwise overflows the header at mid widths.
+                if (compact || expanded)
+                  Flexible(child: countText)
+                else
+                  countText,
                 if (upNext != null)
                   Expanded(
                     child: Padding(
@@ -299,6 +303,22 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                   tooltip: 'Shuffle entire library',
                   onPressed: () => shuffleEntireLibrary(context, ref),
                 ),
+                // Show / hide already-played tracks (expanded view only).
+                if (expanded)
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final showPlayed = ref.watch(showPlayedProvider);
+                      return IconButton(
+                        tooltip: showPlayed
+                            ? 'Hide played tracks'
+                            : 'Show played tracks',
+                        isSelected: showPlayed,
+                        icon: const Icon(Icons.history),
+                        onPressed: () =>
+                            ref.read(showPlayedProvider.notifier).toggle(),
+                      );
+                    },
+                  ),
                 // Empty — clears the entire queue. Disabled when already empty.
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
@@ -346,6 +366,12 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
     final leads = ref.watch(languageLeadsProvider);
     final controller = ref.read(queueControllerProvider);
     final scheme = Theme.of(context).colorScheme;
+    final showPlayed = ref.watch(showPlayedProvider);
+    final start = queueVisibleStart(
+      showPlayed: showPlayed,
+      currentIndex: view.currentIndex,
+      trackCount: view.tracks.length,
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -368,14 +394,15 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                   // suppress the SDK's default handle — on desktop it overlays a
                   // second handle on top of the × button and steals its taps.
                   buildDefaultDragHandles: false,
-                  itemCount: view.tracks.length,
+                  itemCount: view.tracks.length - start,
                   // onReorderItem delivers the post-removal destination index
                   // directly (unlike the deprecated onReorder which required
                   // normalizeReorder).
                   onReorderItem: (oldIndex, newIndex) {
-                    controller.reorder(oldIndex, newIndex);
+                    controller.reorder(start + oldIndex, start + newIndex);
                   },
-                  itemBuilder: (context, i) {
+                  itemBuilder: (context, j) {
+                    final i = start + j; // canonical index in the full queue
                     final t = view.tracks[i];
                     final selected = i == view.currentIndex;
                     final muted = Theme.of(context)
@@ -399,7 +426,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                               horizontal: 8, vertical: 4),
                           child: _queueRowLayout(
                             lead: ReorderableDragStartListener(
-                              index: i,
+                              index: j,
                               child: const Icon(Icons.drag_handle),
                             ),
                             number: Text(
