@@ -44,6 +44,31 @@ List<MediaItem> mediaItemsForQueueTracks(List<QueueTrack> qts) {
   ];
 }
 
+/// What to do with the player after a track fails to play.
+enum PlaybackErrorAction { skipToNext, stop }
+
+/// The user-facing notice + recovery action for a failed track.
+class PlaybackErrorOutcome {
+  const PlaybackErrorOutcome({required this.message, required this.action});
+  final String message;
+  final PlaybackErrorAction action;
+}
+
+/// Builds the notice + recovery action for a track that failed to play. Pure
+/// (no player, no Flutter) so it is unit-testable. [detail] is the message from
+/// the player's `PlayerException` (mpv's error text), which may be null/empty.
+PlaybackErrorOutcome resolvePlaybackError({
+  required String title,
+  required String? detail,
+  required bool hasNext,
+}) {
+  final base = 'Couldn\'t play "$title"';
+  return PlaybackErrorOutcome(
+    message: (detail == null || detail.isEmpty) ? base : '$base: $detail',
+    action: hasNext ? PlaybackErrorAction.skipToNext : PlaybackErrorAction.stop,
+  );
+}
+
 class PlaybackController {
   PlaybackController({
     required this.audioHandler,
