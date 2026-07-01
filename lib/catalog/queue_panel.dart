@@ -68,7 +68,9 @@ Future<void> shuffleEntireLibrary(BuildContext context, WidgetRef ref) async {
 // columns are fixed-width so the header labels line up with the data cells
 // below them; the title/artist/album columns flex to share the rest.
 const double _queueDragColWidth = 24;
-const double _queueNumberColWidth = 28;
+// Wide enough for a 5-digit order number (a shuffle-entire-library queue can
+// run into the ten-thousands) without wrapping the tight number cell.
+const double _queueNumberColWidth = 48;
 const double _queueColGap = 8;
 const double _queueRemoveColWidth = 40;
 const int _queueTitleFlex = 3;
@@ -380,6 +382,8 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                               '${i + 1}',
                               textAlign: TextAlign.end,
                               style: muted,
+                              maxLines: 1,
+                              overflow: TextOverflow.clip,
                             ),
                             title: BilingualText(
                               original: t.title,

@@ -67,5 +67,9 @@ void main() {
     expect(find.text('1'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
+
+    // The number is capped to a single line so a wide (4–5 digit) order number
+    // in a huge shuffled queue clips instead of wrapping the fixed-height row.
+    expect(tester.widget<Text>(find.text('1')).maxLines, 1);
   });
 }
