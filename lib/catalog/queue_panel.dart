@@ -75,6 +75,16 @@ const int _queueTitleFlex = 3;
 const int _queueArtistFlex = 2;
 const int _queueAlbumFlex = 2;
 
+/// Fixed per-row height for the expanded queue list, fed to the
+/// `ReorderableListView.builder`'s `itemExtent` so Flutter can compute scroll
+/// offsets in O(1). Without it, flinging/dragging to the bottom of a huge queue
+/// (e.g. "Shuffle entire library" enqueues thousands of tracks) forces every row
+/// to be laid out to resolve the scroll extent — an O(n) burst that hangs the UI
+/// thread until it finishes. Reserves a 2-line bilingual row like the browse
+/// columns' `_trackRowBase` (42) plus this row's `vertical: 4` padding (8px);
+/// `bilingualRowExtent` scales it for the OS text size. See track_column.dart.
+const double _queueRowBase = 50;
+
 /// Below this panel width the fixed ~228px Length/Added/Played block leaves too
 /// little room for the title/artist/album columns and the row would overflow,
 /// so the meta columns drop out (in both the header and the rows) instead.
@@ -324,6 +334,10 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                 thumbVisibility: true,
                 child: ReorderableListView.builder(
                   scrollController: _queueScrollController,
+                  // Fixed row height so scroll offsets are O(1) — otherwise a
+                  // huge (shuffle-all) queue hangs the UI when scrolled to the
+                  // bottom. Matches the browse columns' bilingualRowExtent use.
+                  itemExtent: bilingualRowExtent(context, _queueRowBase),
                   // Each row supplies its own drag handle in the lead column, so
                   // suppress the SDK's default handle — on desktop it overlays a
                   // second handle on top of the × button and steals its taps.
