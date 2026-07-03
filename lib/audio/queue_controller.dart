@@ -252,6 +252,18 @@ class QueueController implements ShuffleAllTarget {
     await _saveQueue(snapshot);
   }
 
+  /// Persist the live playhead (current index + position) now. Called on
+  /// track-change, pause, and app quit so the saved position stays fresh
+  /// between structural mutations. Guarded so a transient or unresolvable
+  /// player index can never overwrite a good snapshot with index 0 — unlike the
+  /// structural mutators, which call [_persist] directly and legitimately
+  /// persist index 0 (e.g. a fresh setQueue starting at the top).
+  Future<void> savePlayhead() async {
+    if (_orderedPaths.isEmpty) return; // nothing to save
+    if (currentCanonicalIndex == null) return; // transient/unresolvable — skip
+    await _persist();
+  }
+
   /// Restore a previously saved snapshot without re-persisting. Files that no
   /// longer exist on disk (e.g. a drive that isn't mounted, or a file deleted
   /// since last run) are dropped and logged so the player never tries to open
