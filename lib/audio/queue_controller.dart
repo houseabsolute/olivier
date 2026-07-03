@@ -258,6 +258,10 @@ class QueueController implements ShuffleAllTarget {
   /// player index can never overwrite a good snapshot with index 0 — unlike the
   /// structural mutators, which call [_persist] directly and legitimately
   /// persist index 0 (e.g. a fresh setQueue starting at the top).
+  ///
+  /// Callers fire this unawaited. Each save persists the WHOLE current state
+  /// (not a delta), so if two rapid saves commit out of order the worst case is
+  /// a few-ms-stale `positionMs` — never a corrupt or inconsistent snapshot.
   Future<void> savePlayhead() async {
     if (_orderedPaths.isEmpty) return; // nothing to save
     if (currentCanonicalIndex == null) return; // transient/unresolvable — skip

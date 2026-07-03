@@ -118,6 +118,8 @@ class PlaybackController {
   // change (see _subscribePlayTracking).
   int? _lastErrorIndex;
   bool _recordedForCurrentTrack = false;
+  StreamSubscription<int?>? _indexSub;
+  StreamSubscription<int?>? _trackSub;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<bool>? _playingSub;
@@ -191,7 +193,7 @@ class PlaybackController {
   // -------------------------------------------------------------------------
 
   void _subscribeIndex() {
-    audioHandler.player.currentIndexStream.listen((i) {
+    _indexSub = audioHandler.player.currentIndexStream.listen((i) {
       // NOTE: clearing now-playing when the queue empties is handled by the
       // queue-revision path (_syncNowPlayingFromQueue's empty branch), NOT here:
       // this stream is the player's own index, which reports null transiently
@@ -256,7 +258,7 @@ class PlaybackController {
   void _subscribePlayTracking() {
     // Watch for track changes to reset the per-track recorded flag and keep the
     // persisted playhead's track fresh as playback advances.
-    audioHandler.player.currentIndexStream.listen(onTrackChanged);
+    _trackSub = audioHandler.player.currentIndexStream.listen(onTrackChanged);
 
     // Persist the playhead whenever playback pauses (captures the exact offset).
     _playingSub =
@@ -279,22 +281,26 @@ class PlaybackController {
   /// for a real (non-null) index, persist the playhead so the saved track stays
   /// current as playback advances. The index stream emits null transiently, so
   /// the null-gate is what prevents clobbering a good snapshot with index 0.
+  ///
+  /// Returns a future for test determinism; the stream subscription fires it
+  /// unawaited, so in production the save runs fire-and-forget.
   @visibleForTesting
-  void onTrackChanged(int? i) {
+  Future<void> onTrackChanged(int? i) async {
     if (i != _trackedIndex) {
       _trackedIndex = i;
       _recordedForCurrentTrack = false;
       // New current track — allow one error recovery for it.
       _lastErrorIndex = null;
-      if (i != null) queueController.savePlayhead();
+      if (i != null) await queueController.savePlayhead();
     }
   }
 
   /// Persists the playhead when playback stops driving (pause or end), so the
-  /// exact offset is saved. No-op on the play edge.
+  /// exact offset is saved. No-op on the play edge. Returns a future for test
+  /// determinism; fired unawaited by the stream subscription in production.
   @visibleForTesting
-  void onPlayingChanged(bool playing) {
-    if (!playing) queueController.savePlayhead();
+  Future<void> onPlayingChanged(bool playing) async {
+    if (!playing) await queueController.savePlayhead();
   }
 
   void _checkAndRecord({bool forceRecord = false}) {
@@ -381,6 +387,8 @@ class PlaybackController {
 
   void dispose() {
     queueController.revision.removeListener(_onQueueRevision);
+    _indexSub?.cancel();
+    _trackSub?.cancel();
     _positionSub?.cancel();
     _playerStateSub?.cancel();
     _playingSub?.cancel();

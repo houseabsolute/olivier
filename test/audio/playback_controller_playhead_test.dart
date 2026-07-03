@@ -43,28 +43,28 @@ void main() {
 
   tearDown(() => playback.dispose());
 
-  test('pausing persists the playhead', () {
-    playback.onPlayingChanged(false);
+  test('pausing persists the playhead', () async {
+    await playback.onPlayingChanged(false);
     expect(saved, isNotNull);
     expect(saved!.currentIndex, 1);
     expect(saved!.positionMs.toInt(), 10000);
   });
 
-  test('starting playback does NOT persist', () {
-    playback.onPlayingChanged(true);
+  test('starting playback does NOT persist', () async {
+    await playback.onPlayingChanged(true);
     expect(saved, isNull);
   });
 
-  test('advancing to a new track persists the playhead', () {
-    playback.onTrackChanged(1);
+  test('advancing to a new track persists the playhead', () async {
+    await playback.onTrackChanged(1);
     expect(saved, isNotNull);
     expect(saved!.currentIndex, 1);
   });
 
-  test('a transient null index does NOT persist (anti-clobber)', () {
-    playback.onTrackChanged(1); // establish a tracked index first
+  test('a transient null index does NOT persist (anti-clobber)', () async {
+    await playback.onTrackChanged(1); // establish a tracked index first
     saved = null;
-    playback.onTrackChanged(null); // transient null must not overwrite
+    await playback.onTrackChanged(null); // transient null must not overwrite
     expect(saved, isNull);
   });
 }
