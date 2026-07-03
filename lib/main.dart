@@ -112,6 +112,7 @@ Future<void> main() async {
         ],
         child: Consumer(
           builder: (context, ref, _) => OlivierApp(
+            onQuit: () => quitWithFlush(queueController),
             onVolumeUp: () =>
                 ref.read(volumeProvider.notifier).nudge(volumeStep),
             onVolumeDown: () =>
@@ -197,6 +198,15 @@ Future<void> _migrateLegacyDb(String newDbPath) async {
 /// Per-keypress steps for the transport/volume keyboard shortcuts.
 const volumeStep = 0.05;
 const seekStep = Duration(seconds: 10);
+
+/// Persist the playhead, then quit. Exposed so the flush-before-exit ordering
+/// is testable; the default [exit] pops the navigator (the app's Ctrl+Q action).
+@visibleForTesting
+Future<void> quitWithFlush(QueueController queue,
+    {void Function()? exit}) async {
+  await queue.savePlayhead();
+  (exit ?? () => SystemNavigator.pop())();
+}
 
 class OlivierApp extends StatelessWidget {
   const OlivierApp({
