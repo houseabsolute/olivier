@@ -120,6 +120,7 @@ class PlaybackController {
   bool _recordedForCurrentTrack = false;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<PlayerState>? _playerStateSub;
+  StreamSubscription<bool>? _playingSub;
   StreamSubscription<PlayerException>? _errorSub;
 
   // -------------------------------------------------------------------------
@@ -253,15 +254,13 @@ class PlaybackController {
   // -------------------------------------------------------------------------
 
   void _subscribePlayTracking() {
-    // Watch for track changes to reset the per-track recorded flag.
-    audioHandler.player.currentIndexStream.listen((i) {
-      if (i != _trackedIndex) {
-        _trackedIndex = i;
-        _recordedForCurrentTrack = false;
-        // New current track — allow one error recovery for it.
-        _lastErrorIndex = null;
-      }
-    });
+    // Watch for track changes to reset the per-track recorded flag and keep the
+    // persisted playhead's track fresh as playback advances.
+    audioHandler.player.currentIndexStream.listen(onTrackChanged);
+
+    // Persist the playhead whenever playback pauses (captures the exact offset).
+    _playingSub =
+        audioHandler.player.playingStream.distinct().listen(onPlayingChanged);
 
     // Watch position to check the 50% / 4-minute threshold.
     _positionSub = audioHandler.player.positionStream.listen((_) {
@@ -274,6 +273,28 @@ class PlaybackController {
         _checkAndRecord(forceRecord: true);
       }
     });
+  }
+
+  /// Handles a player index change: reset per-track play-tracking state and,
+  /// for a real (non-null) index, persist the playhead so the saved track stays
+  /// current as playback advances. The index stream emits null transiently, so
+  /// the null-gate is what prevents clobbering a good snapshot with index 0.
+  @visibleForTesting
+  void onTrackChanged(int? i) {
+    if (i != _trackedIndex) {
+      _trackedIndex = i;
+      _recordedForCurrentTrack = false;
+      // New current track — allow one error recovery for it.
+      _lastErrorIndex = null;
+      if (i != null) queueController.savePlayhead();
+    }
+  }
+
+  /// Persists the playhead when playback stops driving (pause or end), so the
+  /// exact offset is saved. No-op on the play edge.
+  @visibleForTesting
+  void onPlayingChanged(bool playing) {
+    if (!playing) queueController.savePlayhead();
   }
 
   void _checkAndRecord({bool forceRecord = false}) {
@@ -362,6 +383,7 @@ class PlaybackController {
     queueController.revision.removeListener(_onQueueRevision);
     _positionSub?.cancel();
     _playerStateSub?.cancel();
+    _playingSub?.cancel();
     _errorSub?.cancel();
   }
 }
