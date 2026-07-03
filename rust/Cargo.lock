@@ -1246,7 +1246,7 @@ dependencies = [
 
 [[package]]
 name = "rust_lib_olivier"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
