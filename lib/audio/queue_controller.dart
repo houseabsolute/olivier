@@ -290,9 +290,10 @@ class QueueController implements ShuffleAllTarget {
 
     _orderedPaths = kept;
     _shuffled = snap.shuffle;
-    // Seek back to the saved offset for the current track on restore.
-    // (Throttled mid-track position write-back is deferred to Phase 3 — for
-    // now position is only captured at structural changes, so it's typically 0.)
+    // Seek back to the saved offset for the current track on restore. The
+    // offset is kept fresh by savePlayhead() (fired on pause, track-change, and
+    // Ctrl+Q quit), so a mid-track session resumes where it left off, cued
+    // paused (this rebuild does not call play()).
     await _rebuild(
       currentIndex.clamp(0, kept.length - 1),
       initialPosition: Duration(milliseconds: snap.positionMs.toInt()),
