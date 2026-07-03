@@ -25,6 +25,16 @@ class FakeQueuePlayer implements QueuePlayer {
   bool stopCalled = false;
 
   int? _currentIndex = 0;
+
+  /// Test hook: the position the fake reports (default zero). Set this to
+  /// simulate a mid-track offset for savePlayhead() to read.
+  Duration positionValue = Duration.zero;
+
+  /// The initial index/position the last non-empty setAudioSources was seeded
+  /// with, so restore round-trip tests can assert what the player was handed.
+  int? lastInitialIndex;
+  Duration? lastInitialPosition;
+
   final _indexCtrl = StreamController<int?>.broadcast();
 
   String _path(AudioSource s) => (s as UriAudioSource).uri.toFilePath();
@@ -75,6 +85,8 @@ class FakeQueuePlayer implements QueuePlayer {
     // non-empty list replaces the playlist and seeds the current index.
     if (list.isEmpty) return;
     stopCalled = false;
+    lastInitialIndex = initialIndex;
+    lastInitialPosition = initialPosition;
     sources
       ..clear()
       ..addAll(list.map(_path));
@@ -104,5 +116,5 @@ class FakeQueuePlayer implements QueuePlayer {
   }
 
   @override
-  Duration get position => Duration.zero;
+  Duration get position => positionValue;
 }
