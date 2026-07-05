@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:olivier/audio/queue_entity.dart';
 
 /// Wraps [child] so a right-click (secondary tap) opens a context menu. The
-/// optional [onAddToQueue]/[onInfo]/[onReadTags]/[onRefetch]/[onSetReading]/[onRemove] entries appear
+/// optional [onAddToQueue]/[onInfo]/[onReadTags]/[onRefetch]/[onSetReading]/[onRemoveFromQueue]/[onRemove] entries appear
 /// only when their callback is non-null, so each column shows the actions
 /// appropriate to its entity.
 class RowContextMenu extends StatelessWidget {
@@ -15,6 +15,7 @@ class RowContextMenu extends StatelessWidget {
     this.onReadTags,
     this.onRefetch,
     this.onSetReading,
+    this.onRemoveFromQueue,
     this.onRemove,
     required this.child,
   });
@@ -26,6 +27,7 @@ class RowContextMenu extends StatelessWidget {
   final ValueChanged<QueueEntityRef>? onReadTags;
   final ValueChanged<QueueEntityRef>? onRefetch;
   final ValueChanged<QueueEntityRef>? onSetReading;
+  final ValueChanged<QueueEntityRef>? onRemoveFromQueue;
   final ValueChanged<QueueEntityRef>? onRemove;
   final Widget child;
 
@@ -56,6 +58,9 @@ class RowContextMenu extends StatelessWidget {
         if (onSetReading != null)
           const PopupMenuItem<String>(
               value: 'reading', child: Text('Set reading…')),
+        if (onRemoveFromQueue != null)
+          const PopupMenuItem<String>(
+              value: 'removeFromQueue', child: Text('Remove from queue')),
         if (onRemove != null)
           const PopupMenuItem<String>(
               value: 'remove', child: Text('Remove from library')),
@@ -74,6 +79,8 @@ class RowContextMenu extends StatelessWidget {
         onRefetch?.call(entity);
       case 'reading':
         onSetReading?.call(entity);
+      case 'removeFromQueue':
+        onRemoveFromQueue?.call(entity);
       case 'remove':
         onRemove?.call(entity);
     }

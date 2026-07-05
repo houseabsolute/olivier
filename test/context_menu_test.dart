@@ -33,6 +33,7 @@ void main() {
     expect(find.text('Info'), findsOneWidget);
     expect(find.text('Re-read tags'), findsNothing); // no onReadTags given
     expect(find.text('Re-fetch from MusicBrainz'), findsNothing);
+    expect(find.text('Remove from queue'), findsNothing); // no onRemoveFromQueue given
 
     await tester.tap(find.text('Info'));
     await tester.pumpAndSettle();
@@ -90,6 +91,36 @@ void main() {
 
     expect(find.text('Remove from library'), findsOneWidget);
     await tester.tap(find.text('Remove from library'));
+    await tester.pumpAndSettle();
+    expect(removed, entity);
+  });
+
+  testWidgets('shows Remove from queue and invokes onRemoveFromQueue',
+      (tester) async {
+    QueueEntityRef? removed;
+    const entity = QueueEntityRef.track(7);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: RowContextMenu(
+          entity: entity,
+          onRemoveFromQueue: (e) => removed = e,
+          child: const SizedBox(width: 200, height: 40, child: Text('row')),
+        ),
+      ),
+    ));
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('row')),
+      buttons: kSecondaryButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove from queue'), findsOneWidget);
+    // The library action is NOT shown just because the queue action is.
+    expect(find.text('Remove from library'), findsNothing);
+    await tester.tap(find.text('Remove from queue'));
     await tester.pumpAndSettle();
     expect(removed, entity);
   });
