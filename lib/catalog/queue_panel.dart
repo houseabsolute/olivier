@@ -417,6 +417,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                         title: 'Track',
                         fields: queueTrackInfoFields(t),
                       ),
+                      onRemoveFromQueue: (_) => controller.removeAt(i),
                       child: Material(
                         color: selected
                             ? scheme.tertiaryContainer

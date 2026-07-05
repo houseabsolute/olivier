@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -63,5 +64,52 @@ void main() {
 
     // Each visible queue row must be wrapped in a RowContextMenu
     expect(find.byType(RowContextMenu), findsWidgets);
+  });
+
+  testWidgets(
+      'right-click → Remove from queue removes that track from the queue',
+      (tester) async {
+    final player = FakeQueuePlayer();
+    final qc = QueueController.withPlayer(
+      player,
+      dbPath: ':memory:',
+      saveQueue: (_) async {},
+    );
+    await qc.append(['/m/a.flac', '/m/b.flac']);
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        getSettingFnProvider.overrideWithValue((_) async => null),
+        queueControllerProvider.overrideWithValue(qc),
+        queueProvider.overrideWith(
+          () => _FakeQueue(QueueView(
+            tracks: [_track('/m/a.flac', 'A'), _track('/m/b.flac', 'B')],
+            currentIndex: 0,
+            shuffled: false,
+          )),
+        ),
+      ],
+      child: const MaterialApp(home: Scaffold(body: QueuePanel())),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Expand queue'));
+    await tester.pump();
+    await tester.pump();
+
+    // Right-click the SECOND row (canonical index 1 = '/m/b.flac'), so the
+    // assertion also proves the correct index is passed to removeAt.
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(RowContextMenu).at(1)),
+      buttons: kSecondaryButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Remove from queue'));
+    await tester.pumpAndSettle();
+
+    expect(qc.orderedPaths, ['/m/a.flac']);
   });
 }
