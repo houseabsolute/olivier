@@ -40,8 +40,15 @@ void main() {
   setUp(() {
     handler = OlivierAudioHandler();
     player = FakeQueuePlayer();
-    queue = QueueController.withPlayer(player,
-        dbPath: '/unused/test.db', saveQueue: (_) async {});
+    queue = QueueController.withPlayer(
+      player,
+      dbPath: '/unused/test.db',
+      saveQueue: (_) async {},
+      // Deterministic (reversing) shuffle: the 'rebuild uses playOrder' test
+      // asserts the shuffled order differs from canonical, which flakes on the
+      // ~1/24 chance a real unseeded shuffle of 4 items returns the identity.
+      shuffle: (paths) => paths.reversed.toList(),
+    );
     playback = PlaybackController(
       audioHandler: handler,
       queueController: queue,

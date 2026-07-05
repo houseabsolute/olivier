@@ -11,6 +11,14 @@ import 'package:olivier/src/rust/db.dart';
 /// inject a fake so they don't need to load the Rust cdylib.
 typedef SaveQueueFn = Future<void> Function(QueueSnapshot snapshot);
 
+/// Produces the shuffled play order from the canonical paths. Defaults to a
+/// real random shuffle ([_defaultShuffle]); tests inject a deterministic
+/// permutation so shuffle-order assertions can't flake on the ~1/24 chance an
+/// unseeded shuffle of a small list returns the identity ordering.
+typedef ShuffleFn = List<String> Function(List<String> paths);
+
+List<String> _defaultShuffle(List<String> paths) => List.of(paths)..shuffle();
+
 /// The single method "Shuffle entire library" needs from the queue controller.
 /// Narrowed to an interface so the action is unit-testable with a fake.
 abstract interface class ShuffleAllTarget {
@@ -21,21 +29,24 @@ abstract interface class ShuffleAllTarget {
 /// shuffle (engine shuffle is ignored by the media_kit backend on Linux).
 class QueueController implements ShuffleAllTarget {
   QueueController(AudioPlayer player,
-      {required this.dbPath, SaveQueueFn? saveQueue})
+      {required this.dbPath, SaveQueueFn? saveQueue, ShuffleFn? shuffle})
       : _player = JustAudioQueuePlayer(player),
         _saveQueue = saveQueue ??
-            ((snap) => rust_queue.saveQueue(dbPath: dbPath, snapshot: snap));
+            ((snap) => rust_queue.saveQueue(dbPath: dbPath, snapshot: snap)),
+        _shuffle = shuffle ?? _defaultShuffle;
 
   /// Test seam: inject a [QueuePlayer] (fake) directly.
   @visibleForTesting
   QueueController.withPlayer(this._player,
-      {required this.dbPath, SaveQueueFn? saveQueue})
+      {required this.dbPath, SaveQueueFn? saveQueue, ShuffleFn? shuffle})
       : _saveQueue = saveQueue ??
-            ((snap) => rust_queue.saveQueue(dbPath: dbPath, snapshot: snap));
+            ((snap) => rust_queue.saveQueue(dbPath: dbPath, snapshot: snap)),
+        _shuffle = shuffle ?? _defaultShuffle;
 
   final QueuePlayer _player;
   final String dbPath;
   final SaveQueueFn _saveQueue;
+  final ShuffleFn _shuffle;
 
   /// Bumped after every mutation so the queue view can rebuild.
   final ValueNotifier<int> revision = ValueNotifier(0);
@@ -206,7 +217,7 @@ class QueueController implements ShuffleAllTarget {
     // Shuffle the tracks into the queue's own (canonical/displayed) order and
     // play from the top — so the panel shows the shuffled order and playback
     // starts at track 1, not a random point. (No separate _shuffled play-order.)
-    final shuffled = List.of(paths)..shuffle();
+    final shuffled = _shuffle(paths);
     await setQueue(shuffled);
     await playAt(0);
   }
@@ -221,8 +232,7 @@ class QueueController implements ShuffleAllTarget {
     int canonicalIndex, {
     Duration initialPosition = Duration.zero,
   }) async {
-    final order =
-        _shuffled ? (List.of(_orderedPaths)..shuffle()) : _orderedPaths;
+    final order = _shuffled ? _shuffle(_orderedPaths) : _orderedPaths;
     _playOrder = List.of(order);
     int? initialIndex;
     if (order.isNotEmpty) {
