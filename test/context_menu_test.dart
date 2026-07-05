@@ -33,7 +33,8 @@ void main() {
     expect(find.text('Info'), findsOneWidget);
     expect(find.text('Re-read tags'), findsNothing); // no onReadTags given
     expect(find.text('Re-fetch from MusicBrainz'), findsNothing);
-    expect(find.text('Remove from queue'), findsNothing); // no onRemoveFromQueue given
+    expect(find.text('Remove from queue'),
+        findsNothing); // no onRemoveFromQueue given
 
     await tester.tap(find.text('Info'));
     await tester.pumpAndSettle();
