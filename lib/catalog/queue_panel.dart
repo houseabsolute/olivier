@@ -409,6 +409,9 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                         .textTheme
                         .bodySmall
                         ?.copyWith(color: scheme.onSurfaceVariant);
+                    final year = t.originalYear ?? t.reissueYear ?? '';
+                    final albumLabel =
+                        year.isEmpty ? t.album : '${t.album} ($year)';
                     return RowContextMenu(
                       key: ValueKey('${t.path}#$i'),
                       entity: QueueEntityRef.track(t.trackId ?? 0),
@@ -452,7 +455,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                               primaryStyle: muted,
                             ),
                             album: Text(
-                              t.album,
+                              albumLabel,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: muted,
