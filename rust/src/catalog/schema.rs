@@ -112,4 +112,6 @@ pub struct QueueTrack {
     pub title_translate: Option<String>,
     pub recording_mbid: Option<String>,
     pub album_artist_mbid: Option<String>,
+    pub original_year: Option<String>,
+    pub reissue_year: Option<String>,
 }

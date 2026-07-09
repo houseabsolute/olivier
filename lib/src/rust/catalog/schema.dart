@@ -166,6 +166,8 @@ class QueueTrack {
   final String? titleTranslate;
   final String? recordingMbid;
   final String? albumArtistMbid;
+  final String? originalYear;
+  final String? reissueYear;
 
   const QueueTrack({
     required this.path,
@@ -183,6 +185,8 @@ class QueueTrack {
     this.titleTranslate,
     this.recordingMbid,
     this.albumArtistMbid,
+    this.originalYear,
+    this.reissueYear,
   });
 
   @override
@@ -201,7 +205,9 @@ class QueueTrack {
       titleTranslit.hashCode ^
       titleTranslate.hashCode ^
       recordingMbid.hashCode ^
-      albumArtistMbid.hashCode;
+      albumArtistMbid.hashCode ^
+      originalYear.hashCode ^
+      reissueYear.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -222,7 +228,9 @@ class QueueTrack {
           titleTranslit == other.titleTranslit &&
           titleTranslate == other.titleTranslate &&
           recordingMbid == other.recordingMbid &&
-          albumArtistMbid == other.albumArtistMbid;
+          albumArtistMbid == other.albumArtistMbid &&
+          originalYear == other.originalYear &&
+          reissueYear == other.reissueYear;
 }
 
 /// Grouped results for a global search query.

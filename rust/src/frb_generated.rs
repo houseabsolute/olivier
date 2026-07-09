@@ -2185,6 +2185,8 @@ impl SseDecode for crate::catalog::schema::QueueTrack {
         let mut var_titleTranslate = <Option<String>>::sse_decode(deserializer);
         let mut var_recordingMbid = <Option<String>>::sse_decode(deserializer);
         let mut var_albumArtistMbid = <Option<String>>::sse_decode(deserializer);
+        let mut var_originalYear = <Option<String>>::sse_decode(deserializer);
+        let mut var_reissueYear = <Option<String>>::sse_decode(deserializer);
         return crate::catalog::schema::QueueTrack {
             path: var_path,
             track_id: var_trackId,
@@ -2201,6 +2203,8 @@ impl SseDecode for crate::catalog::schema::QueueTrack {
             title_translate: var_titleTranslate,
             recording_mbid: var_recordingMbid,
             album_artist_mbid: var_albumArtistMbid,
+            original_year: var_originalYear,
+            reissue_year: var_reissueYear,
         };
     }
 }
@@ -2666,6 +2670,8 @@ impl flutter_rust_bridge::IntoDart for crate::catalog::schema::QueueTrack {
             self.title_translate.into_into_dart().into_dart(),
             self.recording_mbid.into_into_dart().into_dart(),
             self.album_artist_mbid.into_into_dart().into_dart(),
+            self.original_year.into_into_dart().into_dart(),
+            self.reissue_year.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3120,6 +3126,8 @@ impl SseEncode for crate::catalog::schema::QueueTrack {
         <Option<String>>::sse_encode(self.title_translate, serializer);
         <Option<String>>::sse_encode(self.recording_mbid, serializer);
         <Option<String>>::sse_encode(self.album_artist_mbid, serializer);
+        <Option<String>>::sse_encode(self.original_year, serializer);
+        <Option<String>>::sse_encode(self.reissue_year, serializer);
     }
 }
 
