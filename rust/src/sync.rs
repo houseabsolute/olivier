@@ -231,6 +231,136 @@ fn sync_dir(dir: &Path) {
     }
 }
 
+/// Setting key recording which snapshot a catalog was imported from, stored
+/// *inside* the imported catalog so the marker travels with it — a separate
+/// marker file could be deleted or restored out of step with the database.
+const IMPORTED_AT_KEY: &str = "sync_imported_at";
+
+#[derive(Debug)]
+pub struct SnapshotImport {
+    /// Whether the catalog was replaced.
+    pub imported: bool,
+    /// Why not, when it wasn't. Empty on success.
+    pub reason: String,
+    pub files: usize,
+    pub covers_copied: usize,
+}
+
+fn skipped(reason: &str) -> SnapshotImport {
+    SnapshotImport {
+        imported: false,
+        reason: reason.to_string(),
+        files: 0,
+        covers_copied: 0,
+    }
+}
+
+/// Adopt a snapshot from `src_dir` as the catalog at `db_path`.
+///
+/// The phone is a read-only player: it never scans, so its catalog is whatever
+/// the desktop last published. This replaces the whole database rather than
+/// merging, which is why device-local rows are stripped at export time — see
+/// [`export_snapshot`].
+///
+/// Returns without importing (rather than failing) for the ordinary cases: no
+/// snapshot present, or the same one already imported. A snapshot that is
+/// present but unusable *is* an error, so it can be surfaced.
+pub fn import_snapshot(
+    src_dir: &str,
+    db_path: &str,
+    cache_dir: Option<&str>,
+) -> anyhow::Result<SnapshotImport> {
+    let (snapshot, sidecar) = snapshot_paths(src_dir);
+    // The sidecar is the export's commit marker; without it the export either
+    // never finished or never happened.
+    let Ok(meta_raw) = std::fs::read_to_string(&sidecar) else {
+        return Ok(skipped("no snapshot in the sync folder"));
+    };
+    let meta: serde_json::Value = serde_json::from_str(&meta_raw)?;
+    let exported_at = meta["exported_at"].as_str().unwrap_or_default().to_string();
+    if exported_at.is_empty() {
+        anyhow::bail!("snapshot metadata has no exported_at");
+    }
+    let schema_version = meta["schema_version"].as_i64().unwrap_or(-1);
+    if schema_version > crate::db::current_schema_version() {
+        return Ok(skipped(&format!(
+            "snapshot is newer than this app (schema {schema_version} > {})",
+            crate::db::current_schema_version()
+        )));
+    }
+    if !snapshot.is_file() {
+        anyhow::bail!("{} is missing beside its metadata", SNAPSHOT_NAME);
+    }
+    if already_imported(db_path, &exported_at)? {
+        return Ok(skipped("already imported"));
+    }
+
+    // Stage beside the destination — same filesystem, so the swap is a rename —
+    // and validate before anything touches the live catalog.
+    let dest = Path::new(db_path);
+    let parent = dest
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("db path has no parent: {db_path}"))?;
+    std::fs::create_dir_all(parent)?;
+    let staged = TempFile(parent.join(format!(".olivier-import.{}.tmp", std::process::id())));
+    std::fs::copy(&snapshot, &staged.0)?;
+    let files = validate_and_stamp(&staged.0, &exported_at)?;
+
+    std::fs::rename(staged.disarm(), dest)?;
+    // The replaced catalog's sidecars describe a database that no longer
+    // exists; leaving them risks SQLite reading a stale journal.
+    for suffix in ["-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{db_path}{suffix}"));
+    }
+
+    let covers_copied = match cache_dir {
+        Some(cache) => copy_covers(&Path::new(src_dir).join("covers"), Path::new(cache))?,
+        None => 0,
+    };
+    sync_dir(parent);
+
+    Ok(SnapshotImport {
+        imported: true,
+        reason: String::new(),
+        files,
+        covers_copied,
+    })
+}
+
+/// Whether `db_path` already holds this exact snapshot. A catalog that doesn't
+/// exist, can't be opened, or predates the marker counts as "not imported".
+fn already_imported(db_path: &str, exported_at: &str) -> anyhow::Result<bool> {
+    if !Path::new(db_path).is_file() {
+        return Ok(false);
+    }
+    let Ok(conn) = Connection::open(db_path) else {
+        return Ok(false);
+    };
+    let stamped: Option<String> = conn
+        .query_row(
+            "SELECT value FROM setting WHERE key = ?1",
+            rusqlite::params![IMPORTED_AT_KEY],
+            |r| r.get(0),
+        )
+        .ok();
+    Ok(stamped.as_deref() == Some(exported_at))
+}
+
+/// Confirm the staged copy really is a catalog, and stamp it with the snapshot
+/// it came from. Returns its file count.
+fn validate_and_stamp(staged: &Path, exported_at: &str) -> anyhow::Result<usize> {
+    let conn = Connection::open(staged)?;
+    let files: i64 = conn
+        .query_row("SELECT count(*) FROM file", [], |r| r.get(0))
+        .map_err(|e| anyhow::anyhow!("snapshot is not a usable catalog: {e}"))?;
+    conn.execute(
+        "INSERT INTO setting(key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![IMPORTED_AT_KEY, exported_at],
+    )?;
+    Ok(files as usize)
+}
+
 /// Where a snapshot and its sidecar live inside `dir`.
 pub fn snapshot_paths(dir: &str) -> (PathBuf, PathBuf) {
     let d = Path::new(dir);

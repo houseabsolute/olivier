@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,7 @@ import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/scan_controller.dart';
 import 'package:olivier/state/sync_export_controller.dart';
+import 'package:olivier/state/sync_import_controller.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -18,6 +21,7 @@ class SettingsPage extends ConsumerWidget {
     final enrich = ref.watch(enrichControllerProvider);
     final leads = ref.watch(languageLeadsProvider);
     final sync = ref.watch(syncExportControllerProvider);
+    final import = ref.watch(syncImportControllerProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -212,6 +216,71 @@ class SettingsPage extends ConsumerWidget {
             onSelectionChanged: (sel) =>
                 ref.read(languageLeadsProvider.notifier).set(sel.first),
           ),
+          if (Platform.isAndroid) ...[
+            const SizedBox(height: 24),
+            Text('Synced library',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(
+              'This device plays a library synced from the desktop. The '
+              'catalog is imported from the snapshot Syncthing delivers; '
+              'scanning and metadata lookup happen on the desktop.',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 8),
+            if (!import.hasStoragePermission)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.error_outline,
+                        size: 18, color: Theme.of(context).colorScheme.error),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'All-files access is needed: the catalog snapshot is a '
+                        '.db file, which the audio-only permission cannot read.',
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            FilledButton.icon(
+              icon: const Icon(Icons.sync),
+              label: Text(import.running ? 'Importing…' : 'Import from sync'),
+              onPressed: import.running
+                  ? null
+                  : () => ref
+                      .read(syncImportControllerProvider.notifier)
+                      .importIfNewer(interactive: true),
+            ),
+            if (import.running)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: LinearProgressIndicator(),
+              ),
+            if (import.lastResult != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  import.lastResult!,
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+              ),
+            if (import.lastError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Import error: ${import.lastError}',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+          ],
           const SizedBox(height: 24),
           Text('Phone sync', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),

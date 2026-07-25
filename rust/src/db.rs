@@ -137,6 +137,13 @@ const MIGRATION_SLICE: &[M<'_>] = &[
 ];
 const MIGRATIONS: Migrations<'_> = Migrations::from_slice(MIGRATION_SLICE);
 
+/// The `user_version` a catalog created by this build carries — one per
+/// migration. A snapshot claiming a higher version came from a newer app and
+/// can't be imported.
+pub fn current_schema_version() -> i64 {
+    MIGRATION_SLICE.len() as i64
+}
+
 pub fn open(path: &str) -> anyhow::Result<Connection> {
     let mut conn = Connection::open(path)?;
     if path != ":memory:" {

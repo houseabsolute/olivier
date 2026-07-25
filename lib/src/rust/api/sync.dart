@@ -6,6 +6,13 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+/// Adopt a snapshot from `src_dir` as the catalog at `db_path`, if there is a
+/// newer one there. See [`crate::sync::import_snapshot`].
+Future<ImportResult> importSyncSnapshot(
+        {required String srcDir, required String dbPath, String? cacheDir}) =>
+    RustLib.instance.api.crateApiSyncImportSyncSnapshot(
+        srcDir: srcDir, dbPath: dbPath, cacheDir: cacheDir);
+
 /// Write a phone-ready snapshot of the catalog into `dest_dir` (a folder
 /// Syncthing replicates to the device). See [`crate::sync::export_snapshot`].
 Future<SnapshotResult> exportSyncSnapshot(
@@ -18,6 +25,38 @@ Future<SnapshotResult> exportSyncSnapshot(
         destDir: destDir,
         cacheDir: cacheDir,
         mappings: mappings);
+
+/// What an import did, for the startup log and the Settings summary.
+class ImportResult {
+  final bool imported;
+  final String reason;
+  final PlatformInt64 files;
+  final PlatformInt64 coversCopied;
+
+  const ImportResult({
+    required this.imported,
+    required this.reason,
+    required this.files,
+    required this.coversCopied,
+  });
+
+  @override
+  int get hashCode =>
+      imported.hashCode ^
+      reason.hashCode ^
+      files.hashCode ^
+      coversCopied.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ImportResult &&
+          runtimeType == other.runtimeType &&
+          imported == other.imported &&
+          reason == other.reason &&
+          files == other.files &&
+          coversCopied == other.coversCopied;
+}
 
 /// One library root paired with where its files live on the phone.
 class RootMapping {
