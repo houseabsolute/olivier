@@ -1,7 +1,8 @@
 # Olivier on Android — Read-Only Player for a Syncthing-Synced Library — Design
 
 **Date:** 2026-07-25
-**Status:** Draft — phase 0 unproven
+**Status:** Draft. Phases landed out of order — phase 1 is implemented (it stands on its own as a
+desktop fix), but phase 0, which gates the port itself, is still unproven.
 
 ## Goal
 
@@ -74,7 +75,10 @@ unusable and the catalog empty; that is expected and fine.
 in favour of a Dart SQLite package (which forks the query layer) or vendoring a replacement for
 whichever crate refuses. Re-scope at that point rather than pushing through.
 
-## Phase 1 — `rebase_root` in Rust
+## Phase 1 — `rebase_root` in Rust — **done** (Rust layer only)
+
+The FFI/Dart entry point is deliberately deferred to phase 2, which is its first caller; exposing it
+now would mean committing regenerated bridge code with no consumer.
 
 A new operation that rewrites one root prefix to another across all four tables in a single
 transaction. Independently useful on the desktop: moving a library folder currently orphans the
@@ -87,15 +91,21 @@ pub fn rebase_root(conn: &Connection, old_root: &str, new_root: &str) -> anyhow:
 ```
 
 - Trim trailing slashes on both arguments, matching `add_root`'s normalization (`roots.rs:5-8`).
-- Error if `old_root` is not a registered root, or if `new_root` is already one (a merge would
-  violate `file.path`'s UNIQUE constraint).
+- Error if `old_root` is not a registered root; if `new_root` is not a non-empty absolute path (`""`
+  and `"/"` both trim to the empty string, whose `"{root}/"` prefix would match the entire catalog);
+  or if `new_root` collides with or *nests inside* another registered root — a merge would violate
+  `file.path`'s UNIQUE constraint, and overlapping roots confuse `remove_root`'s pruning rule.
+- Callers must be at autocommit level: the function issues a bare `BEGIN`, so phase 2 cannot wrap its
+  per-root calls in one outer transaction. Sequence them instead, or refactor to take a `&Transaction`.
 - In one transaction, for `file`, `queue_item`, and `playlist_item`:
   `UPDATE … SET path = :new || substr(path, length(:old) + 1) WHERE substr(path, 1, N) = :old || '/'`
   then update the `root` row itself.
-- `playlist_item.path` is `REFERENCES file(path) ON DELETE CASCADE` — verify whether the schema
-  enables `PRAGMA foreign_keys` and whether `ON UPDATE` behaviour requires updating `file` first, or
-  deferring constraints. **This needs checking before implementation**; an unguarded update order
-  could cascade-delete playlist entries.
+- `playlist_item.path` is `REFERENCES file(path) ON DELETE CASCADE`. **Resolved during
+  implementation:** foreign keys *are* enforced — rusqlite enables them by default, independently of
+  anything `db::open` sets. There is no `ON UPDATE` clause, so it defaults to NO ACTION and *both*
+  update orders violate the constraint mid-transaction (rewrite `file` first and referencing rows
+  dangle; rewrite `playlist_item` first and it points at rows that don't exist yet). The fix is
+  `PRAGMA defer_foreign_keys` inside the transaction, which SQLite resets at commit or rollback.
 - Return the number of `file` rows rewritten.
 
 Tests (`rust/tests/rebase_root_test.rs`): rewrites files, queue items and playlist items together;
