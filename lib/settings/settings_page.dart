@@ -2,9 +2,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/settings/import_log_page.dart';
+import 'package:olivier/src/rust/api/sync.dart';
 import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/scan_controller.dart';
+import 'package:olivier/state/sync_export_controller.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -15,6 +17,7 @@ class SettingsPage extends ConsumerWidget {
     final scan = ref.watch(scanControllerProvider);
     final enrich = ref.watch(enrichControllerProvider);
     final leads = ref.watch(languageLeadsProvider);
+    final sync = ref.watch(syncExportControllerProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -210,6 +213,131 @@ class SettingsPage extends ConsumerWidget {
                 ref.read(languageLeadsProvider.notifier).set(sel.first),
           ),
           const SizedBox(height: 24),
+          Text('Phone sync', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(
+            'Write a copy of your library catalog for a phone that already has '
+            'the music files. Put it in a folder Syncthing replicates to the '
+            'device; the phone imports it and plays from its own copy.',
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Destination folder'),
+            subtitle: Text(
+              sync.destDir ?? 'Not set',
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+            trailing: OutlinedButton(
+              onPressed: () => _chooseSyncDest(ref),
+              child: const Text('Choose'),
+            ),
+          ),
+          // One explicit destination per folder. Showing the actual rewrite
+          // matters: a wrong path exports cleanly and produces a catalog of
+          // dead links on the phone, with nothing to report the mistake.
+          for (final m
+              in ref.read(syncExportControllerProvider.notifier).mappingsFor(
+                    scan.roots,
+                  ))
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                m.desktop,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              subtitle: Text(
+                'on the phone:  ${m.phone}',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              trailing: OutlinedButton(
+                onPressed: () => _editPhoneRoot(context, ref, m),
+                child: const Text('Edit'),
+              ),
+            ),
+          if (_syncProblem(ref, scan.roots) case final problem?)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.error_outline,
+                      size: 18, color: Theme.of(context).colorScheme.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      problem,
+                      style:
+                          TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            icon: const Icon(Icons.phone_android_outlined),
+            label: Text(sync.exporting ? 'Exporting…' : 'Export for phone'),
+            onPressed: ref
+                        .read(syncExportControllerProvider.notifier)
+                        .canExport(scan.roots) &&
+                    !scan.scanning &&
+                    _syncProblem(ref, scan.roots) == null
+                ? () => ref
+                    .read(syncExportControllerProvider.notifier)
+                    .export(scan.roots)
+                : null,
+          ),
+          if (scan.scanning)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Finish scanning first — a snapshot taken mid-scan would be '
+                'missing tracks.',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ),
+          if (sync.exporting)
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: LinearProgressIndicator(),
+            ),
+          if (sync.lastResult != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Exported ${sync.lastResult}',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ),
+          if (sync.lastError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.error_outline,
+                      size: 18, color: Theme.of(context).colorScheme.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Export error: ${sync.lastError}',
+                      style:
+                          TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 24),
           Text('Diagnostics', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           ListTile(
@@ -227,6 +355,74 @@ class SettingsPage extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _chooseSyncDest(WidgetRef ref) async {
+    final dir = await FilePicker.getDirectoryPath();
+    if (dir == null) return;
+    await ref.read(syncExportControllerProvider.notifier).setDestDir(dir);
+  }
+
+  /// The problem the current mapping would hit, surfaced before export rather
+  /// than as a Rust error string afterwards.
+  String? _syncProblem(WidgetRef ref, List<String> roots) {
+    if (roots.isEmpty) return null;
+    return mappingProblem(
+      ref.read(syncExportControllerProvider.notifier).mappingsFor(roots),
+    );
+  }
+
+  Future<void> _editPhoneRoot(
+    BuildContext context,
+    WidgetRef ref,
+    RootMapping mapping,
+  ) async {
+    final controller = TextEditingController(text: mapping.phone);
+    try {
+      final value = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Location on the phone'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                mapping.desktop,
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  helperText:
+                      'The absolute path this folder syncs to on the device.',
+                ),
+                onSubmitted: (v) => Navigator.of(ctx).pop(v),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(controller.text),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      final trimmed = value?.trim();
+      if (trimmed == null || trimmed.isEmpty) return;
+      await ref
+          .read(syncExportControllerProvider.notifier)
+          .setPhoneRoot(mapping.desktop, trimmed);
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _addFolder(WidgetRef ref) async {

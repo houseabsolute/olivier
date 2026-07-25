@@ -14,6 +14,7 @@ import 'api/playlists.dart';
 import 'api/queue.dart';
 import 'api/settings.dart';
 import 'api/simple.dart';
+import 'api/sync.dart';
 import 'api/tags.dart';
 import 'catalog/playlists.dart';
 import 'catalog/scan.dart';
@@ -100,6 +101,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<QueueTrack> dco_decode_list_queue_track(dynamic raw);
 
   @protected
+  List<RootMapping> dco_decode_list_root_mapping(dynamic raw);
+
+  @protected
   List<SearchTrack> dco_decode_list_search_track(dynamic raw);
 
   @protected
@@ -130,6 +134,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   QueueTrack dco_decode_queue_track(dynamic raw);
 
   @protected
+  RootMapping dco_decode_root_mapping(dynamic raw);
+
+  @protected
   ScanProgress dco_decode_scan_progress(dynamic raw);
 
   @protected
@@ -137,6 +144,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchTrack dco_decode_search_track(dynamic raw);
+
+  @protected
+  SnapshotResult dco_decode_snapshot_result(dynamic raw);
 
   @protected
   TitleOverride dco_decode_title_override(dynamic raw);
@@ -226,6 +236,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<QueueTrack> sse_decode_list_queue_track(SseDeserializer deserializer);
 
   @protected
+  List<RootMapping> sse_decode_list_root_mapping(SseDeserializer deserializer);
+
+  @protected
   List<SearchTrack> sse_decode_list_search_track(SseDeserializer deserializer);
 
   @protected
@@ -257,6 +270,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   QueueTrack sse_decode_queue_track(SseDeserializer deserializer);
 
   @protected
+  RootMapping sse_decode_root_mapping(SseDeserializer deserializer);
+
+  @protected
   ScanProgress sse_decode_scan_progress(SseDeserializer deserializer);
 
   @protected
@@ -264,6 +280,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchTrack sse_decode_search_track(SseDeserializer deserializer);
+
+  @protected
+  SnapshotResult sse_decode_snapshot_result(SseDeserializer deserializer);
 
   @protected
   TitleOverride sse_decode_title_override(SseDeserializer deserializer);
@@ -362,6 +381,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<QueueTrack> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_root_mapping(
+      List<RootMapping> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_search_track(
       List<SearchTrack> self, SseSerializer serializer);
 
@@ -395,6 +418,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_queue_track(QueueTrack self, SseSerializer serializer);
 
   @protected
+  void sse_encode_root_mapping(RootMapping self, SseSerializer serializer);
+
+  @protected
   void sse_encode_scan_progress(ScanProgress self, SseSerializer serializer);
 
   @protected
@@ -402,6 +428,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_search_track(SearchTrack self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_snapshot_result(
+      SnapshotResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_title_override(TitleOverride self, SseSerializer serializer);

@@ -6,4 +6,5 @@ pub mod playlists;
 pub mod queue;
 pub mod settings;
 pub mod simple;
+pub mod sync;
 pub mod tags;
