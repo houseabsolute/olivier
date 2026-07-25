@@ -1,8 +1,10 @@
 # Olivier on Android — Read-Only Player for a Syncthing-Synced Library — Design
 
 **Date:** 2026-07-25
-**Status:** Draft. Phase 0 (cross-compile gate) **passed** and phase 1 is implemented. Phases 2–5
-remain. Phase 0's outcome removes the main risk that could have killed the whole approach.
+**Status:** Phases 0–4 done and verified on hardware: the desktop exports a rebased snapshot,
+Syncthing carries it, the phone imports it, browses it, and plays from it. Phase 5 (phone UI) is
+partly done — the responsive drill-down layout landed (see the responsive-browse-layout spec) — but
+playback cannot yet be started by touch. See the gap noted under phase 3.
 
 ## Goal
 
@@ -169,7 +171,32 @@ The MBID-keyed cover cache (`olivier-caa-{mbid}.jpg`, `rust/src/cover.rs:34-38`)
 and should be synced too — copy it into the same folder so the phone starts warm instead of
 re-fetching every cover over mobile data.
 
-## Phase 3 — Snapshot import on the phone
+## Phase 3 — Snapshot import on the phone — **done, verified end to end**
+
+Verified on a Pixel 8a with the real 10,830-track library: exported into `~/mnt/music`, carried over
+by Syncthing (66 MB), imported on launch, browsed, and played. `state=PLAYING`, position advancing,
+`error=null`.
+
+**The permission analysis in phase 4 below was wrong.** `READ_MEDIA_AUDIO` grants access to *audio
+files only* — it cannot read the snapshot, which is a `.db`. This needs `MANAGE_EXTERNAL_STORAGE`
+(all-files access), which covers both. Acceptable here because the app is sideloaded and never goes
+near the Play Store, where that permission is restricted.
+
+Two things worked better than expected:
+
+- **Cover art renders on the device** even though the `covers/` folder had not finished syncing —
+  lofty extracts embedded art from the audio files directly, which also proves the app has genuine
+  path-based read access to the music.
+- **audio_service works**: a media session registers, audio focus is granted, and an `AudioTrack`
+  opens with `USAGE_MEDIA`.
+
+**Gap found, not yet fixed: nothing can be played by touch.** Track and album rows expose their
+actions through a right-click context menu (`RowContextMenu`), and long-press is already consumed by
+`LongPressDraggable` for drag-to-queue. On a phone there is no right-click, so the only way to start
+playback is the queue screen's shuffle-entire-library button. A tap-to-play affordance — or a
+long-press menu that doesn't collide with the drag — is the first thing phase 5 needs.
+
+## Phase 3 (original plan) — Snapshot import on the phone
 
 On launch, before `RustLib` opens the catalog:
 
@@ -189,7 +216,15 @@ Import must be robust to a half-synced file: Syncthing writes to a temp name and
 torn read is unlikely, but the import should still validate the copy opens as SQLite and carries the
 expected schema version before swapping it in.
 
-## Phase 4 — Platform gating
+## Phase 4 — Platform gating — partly done
+
+Done: the `MANAGE_EXTERNAL_STORAGE` permission (not `READ_MEDIA_AUDIO` — see phase 3), the
+`permission_handler` dependency, and a Settings section on Android for the import.
+
+Still to do: scanning, enrichment and tag editing are not yet hidden on Android. They are reachable
+and will fail or misbehave against a synced catalog.
+
+## Phase 4 (original plan) — Platform gating
 
 Scanning, enrichment and tag editing must be **absent** on Android, not merely failing at runtime.
 Call sites to gate: `lib/state/scan_controller.dart`, `lib/state/enrich_controller.dart`,
