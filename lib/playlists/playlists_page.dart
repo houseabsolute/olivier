@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/src/rust/catalog/playlists.dart';
 import 'package:olivier/state/playlists.dart';
+import 'package:olivier/state/browse_level.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 
@@ -19,6 +20,15 @@ class PlaylistsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    return LayoutBuilder(
+      builder: (context, constraints) =>
+          constraints.maxWidth < kNarrowBrowseWidth
+              ? _narrow(context, ref)
+              : _wide(context, ref),
+    );
+  }
+
+  Widget _wide(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Playlists'),
@@ -37,6 +47,50 @@ class PlaylistsPage extends ConsumerWidget {
           VerticalDivider(width: 1),
           Expanded(child: _PlaylistDetail()),
         ],
+      ),
+    );
+  }
+
+  /// One pane at a time, like the browse cascade: the list, then the playlist
+  /// you picked. Which one is showing is derived from the selection rather than
+  /// tracked separately, so nothing can disagree about where we are.
+  Widget _narrow(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(selectedPlaylistProvider);
+    final lists = ref.watch(playlistsProvider).value ?? const <Playlist>[];
+    String? name;
+    for (final p in lists) {
+      if (p.id == selected) name = p.name;
+    }
+
+    return PopScope(
+      // Back returns to the list before leaving the page.
+      canPop: selected == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) ref.read(selectedPlaylistProvider.notifier).select(null);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: selected == null
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'All playlists',
+                  onPressed: () =>
+                      ref.read(selectedPlaylistProvider.notifier).select(null),
+                ),
+          title: Text(selected == null ? 'Playlists' : (name ?? 'Playlist')),
+          actions: [
+            if (selected == null)
+              IconButton(
+                icon: const Icon(Icons.add),
+                tooltip: 'New playlist',
+                onPressed: () => _newPlaylist(context, ref),
+              ),
+          ],
+        ),
+        body: selected == null
+            ? const _PlaylistSidebar()
+            : const _PlaylistDetail(narrow: true),
       ),
     );
   }
@@ -122,7 +176,11 @@ class _PlaylistSidebar extends ConsumerWidget {
 }
 
 class _PlaylistDetail extends ConsumerWidget {
-  const _PlaylistDetail();
+  const _PlaylistDetail({this.narrow = false});
+
+  /// The playlist's name is in the app bar and the actions need to wrap: there
+  /// is no room for the desktop header's single row at phone widths.
+  final bool narrow;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -151,16 +209,21 @@ class _PlaylistDetail extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.all(12),
-              child: Row(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(
-                    child: Text(
-                      playlist?.name ?? '',
-                      style: Theme.of(context).textTheme.titleLarge,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  if (!narrow)
+                    SizedBox(
+                      width: 200,
+                      child: Text(
+                        playlist?.name ?? '',
+                        style: Theme.of(context).textTheme.titleLarge,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
                   FilledButton(
                     onPressed: paths.isEmpty
                         ? null
