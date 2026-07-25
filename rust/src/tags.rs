@@ -1,6 +1,4 @@
 use std::borrow::Cow;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::path::Path;
 
 use lofty::config::ParseOptions;
@@ -286,15 +284,31 @@ pub fn read_tags(path: &Path) -> anyhow::Result<TrackTags> {
     Ok(out)
 }
 
+/// FNV-1a over the path's bytes: a cache key that is identical on every build.
+///
+/// `DefaultHasher` was used here, but its algorithm is explicitly not stable
+/// across Rust releases, so a toolchain upgrade renamed every cached cover.
+/// The re-extraction that follows is cheap, but the orphaned files are never
+/// cleaned up — the cache would leak its entire contents on each upgrade,
+/// permanently. A dozen lines of FNV avoids that and adds no dependency.
+pub fn path_cache_hash(path: &str) -> u64 {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+    let mut hash = OFFSET;
+    for byte in path.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(PRIME);
+    }
+    hash
+}
+
 /// Extract the first embedded cover picture from `path` and write it to a
 /// stable cache file under `cache_dir`.  Returns the path of the cached file,
 /// or `None` if the audio file contains no embedded pictures.
 ///
-/// The cache key is a per-build hex hash of the source file path, so repeated
-/// calls for the same file are cheap (a quick `Path::exists` check and
-/// return).  `DefaultHasher` is not guaranteed stable across Rust toolchain
-/// versions, but a cache miss after an upgrade is harmless — the file is just
-/// re-extracted (any stale cache file is simply left behind).
+/// The cache key is a hex hash of the source file path, so repeated calls for
+/// the same file are cheap (a quick `Path::exists` check and return). See
+/// [`path_cache_hash`] for why the hash is hand-rolled.
 pub fn extract_cover_to(path: &str, cache_dir: &str) -> anyhow::Result<Option<String>> {
     // ------------------------------------------------------------------
     // 1. Open the file and read all tags (pictures included).
@@ -337,11 +351,11 @@ pub fn extract_cover_to(path: &str, cache_dir: &str) -> anyhow::Result<Option<St
     // ------------------------------------------------------------------
     // 3. Build a stable cache path.
     // ------------------------------------------------------------------
-    let mut hasher = DefaultHasher::new();
-    path.hash(&mut hasher);
-    let hash = hasher.finish();
-
-    let cache_path = Path::new(cache_dir).join(format!("olivier-cover-{:016x}.{}", hash, ext));
+    let cache_path = Path::new(cache_dir).join(format!(
+        "olivier-cover-{:016x}.{}",
+        path_cache_hash(path),
+        ext
+    ));
 
     // ------------------------------------------------------------------
     // 4. Return cached file if it already exists (cache hit).

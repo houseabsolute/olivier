@@ -173,3 +173,22 @@ fn extract_cover_returns_none_for_file_without_art() {
 
     assert!(result.is_none(), "sample.flac should not have embedded art");
 }
+
+/// Pins the cover-cache key. If this constant ever has to change, every cached
+/// cover on every machine is orphaned — and nothing cleans them up. That is
+/// exactly what `DefaultHasher` did silently on each Rust upgrade.
+#[test]
+fn cover_cache_key_is_stable_across_builds() {
+    use rust_lib_olivier::tags::path_cache_hash;
+
+    assert_eq!(
+        format!("{:016x}", path_cache_hash("/home/me/Music/a/one.flac")),
+        "d5d57dbff9090e51"
+    );
+    // Different paths differ; the same path is identical every time.
+    assert_ne!(
+        path_cache_hash("/home/me/Music/a/one.flac"),
+        path_cache_hash("/home/me/Music/a/two.flac")
+    );
+    assert_eq!(path_cache_hash(""), 0xcbf2_9ce4_8422_2325);
+}
