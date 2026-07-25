@@ -1,8 +1,8 @@
 # Olivier on Android — Read-Only Player for a Syncthing-Synced Library — Design
 
 **Date:** 2026-07-25
-**Status:** Draft. Phases landed out of order — phase 1 is implemented (it stands on its own as a
-desktop fix), but phase 0, which gates the port itself, is still unproven.
+**Status:** Draft. Phase 0 (cross-compile gate) **passed** and phase 1 is implemented. Phases 2–5
+remain. Phase 0's outcome removes the main risk that could have killed the whole approach.
 
 ## Goal
 
@@ -52,7 +52,35 @@ not a re-scan.
 The desktop path (`/home/autarch/Music/…`) and the phone path (`/storage/emulated/0/Music/…`) differ,
 so the snapshot must be rewritten. This is the enabling primitive for the entire port.
 
-## Phase 0 — Prove the Rust crate cross-compiles (gate)
+## Phase 0 — Prove the Rust crate cross-compiles (gate) — **done, passed**
+
+**Result: the Rust side was never the problem.** Every crate — `lofty`, `ignore`, `rusqlite`
+(bundled), `reqwest`/rustls/ring, `jiff`, `tokio` — cross-compiled for `aarch64-linux-android`,
+`i686-linux-android` and `x86_64-linux-android` with **no source changes**. cargokit drove it
+automatically. `librust_lib_olivier.so` (19.7 MB, arm64-v8a) ships in `app-debug.apk`.
+
+The real obstacle was the **stale `android/` scaffold**, which had never been touched since the
+project was generated:
+
+- Groovy *and* Kotlin Gradle files coexisted at every level (`android/build.gradle` +
+  `build.gradle.kts`, `settings.gradle` + `.kts`, `app/build.gradle` + `.kts`). Gradle prefers the
+  Groovy ones, which were the legacy template — AGP 4.1.0, Kotlin 1.3.50, compileSdk 30, Gradle 6.7 —
+  while the `.kts` set was current. Fixed by deleting the Groovy trio.
+- The Gradle wrapper was pinned to 6.7. Flutter 3.44.4 expects 9.1.0; we run 8.12 (see below).
+- `AndroidManifest.xml` predated Android 12 and lacked `android:exported` on `MainActivity`.
+- A stale `GeneratedPluginRegistrant.java` was checked into `android/app/src/main/java/`; Flutter
+  regenerates it, so the checked-in copy was deleted.
+
+**AGP is pinned to 8.9.1, not the template's 9.0.1**, because two dependencies disagree under AGP 9:
+`audio_service` 0.18.18 applies `kotlin-android` unconditionally, which AGP 9 rejects unless
+`android.builtInKotlin=false`; `file_picker` 11.0.2 detects AGP 9 and *skips* applying KGP, expecting
+built-in Kotlin to compile it, which needs `builtInKotlin=true`. There is no setting satisfying both.
+On AGP 8 each plugin applies its own KGP and both work. Revisit when `audio_service` migrates.
+
+Not yet verified: that the app actually *launches* on a device, or that `RustLib.init()` succeeds at
+runtime. Compiling and linking is not running.
+
+Original plan follows.
 
 Nothing else is worth doing until an `aarch64-linux-android` build of `rust_lib_olivier` links.
 
@@ -69,11 +97,8 @@ Work: install the Android SDK + NDK, add the `aarch64-linux-android` Rust target
 the phase fails: `lofty`, `ignore`, `reqwest`/rustls/ring, `rusqlite` bundled, `jiff`, `tokio`.
 
 **Exit criterion:** the app launches on the device and `RustLib.init()` returns. The UI will be
-unusable and the catalog empty; that is expected and fine.
-
-**If this fails**, the fallback is a much larger project — either dropping the Rust layer on Android
-in favour of a Dart SQLite package (which forks the query layer) or vendoring a replacement for
-whichever crate refuses. Re-scope at that point rather than pushing through.
+unusable and the catalog empty; that is expected and fine. *(Partially met: the APK builds and
+contains the library. Launching on hardware is still untested.)*
 
 ## Phase 1 — `rebase_root` in Rust — **done** (Rust layer only)
 

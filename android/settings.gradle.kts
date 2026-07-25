@@ -19,8 +19,15 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "9.0.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    // Pinned to AGP 8.x, not the template's 9.x, because two dependencies
+    // disagree under AGP 9: audio_service 0.18.18 applies kotlin-android
+    // unconditionally (AGP 9 rejects that unless android.builtInKotlin=false),
+    // while file_picker 11.0.2 detects AGP 9 and skips applying KGP, expecting
+    // built-in Kotlin to compile it (which needs builtInKotlin=true). On AGP 8
+    // both plugins apply their own KGP and agree. Revisit when audio_service
+    // migrates to built-in Kotlin.
+    id("com.android.application") version "8.9.1" apply false
+    id("org.jetbrains.kotlin.android") version "2.1.0" apply false
 }
 
 include(":app")

@@ -1,6 +1,8 @@
 /build/
 /dist/
 /staging/
+/android/.gradle/
+/android/build/
 /android/app/debug
 /android/app/profile
 /android/app/release
