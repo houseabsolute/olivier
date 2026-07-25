@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/queue_view.dart';
 import 'package:olivier/widgets/search_results_panel.dart';
 
 SearchResults _results() => SearchResults(
@@ -125,6 +126,31 @@ void main() {
     final position =
         tester.state<ScrollableState>(find.byType(Scrollable)).position;
     expect(position.pixels, greaterThan(0.0));
+  });
+
+  testWidgets('tapping a hit collapses the expanded queue', (tester) async {
+    final container = ProviderContainer(overrides: [
+      dbPathProvider.overrideWithValue(':memory:'),
+      getSettingFnProvider.overrideWithValue((key) async => null),
+      searchCatalogFnProvider.overrideWithValue((q, limit) async => _results()),
+    ]);
+    addTearDown(container.dispose);
+    container.read(searchQueryProvider.notifier).set('ringo');
+    container.read(queueExpandedProvider.notifier).toggle();
+    expect(container.read(queueExpandedProvider), isTrue);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        home: Scaffold(body: Stack(children: [SearchResultsPanel()])),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Marunouchi Sadistic'));
+    await tester.pump();
+
+    expect(container.read(queueExpandedProvider), isFalse);
   });
 
   testWidgets('hidden when query is blank', (tester) async {

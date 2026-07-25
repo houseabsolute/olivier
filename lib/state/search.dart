@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/queue_view.dart';
 
 /// A single flattened search hit, used for keyboard navigation + selection.
 sealed class SearchHit {
@@ -33,8 +34,10 @@ List<SearchHit> flattenHits(SearchResults r) => [
 /// Navigate the browse cascade to [hit] (reveal + highlight), then clear the
 /// query so the overlay closes. Order matters: selecting an artist clears the
 /// album selection and selecting an album clears the track selection, so the
-/// track is selected last.
+/// track is selected last. The expanded queue is collapsed first — it would
+/// otherwise hide the browse panes this navigates to.
 void selectHit(WidgetRef ref, SearchHit hit) {
+  ref.read(queueExpandedProvider.notifier).collapse();
   switch (hit) {
     case ArtistHit(:final artist):
       ref.read(selectedArtistProvider.notifier).select(artist.mbid);

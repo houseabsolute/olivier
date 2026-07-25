@@ -10,6 +10,7 @@ import 'package:olivier/playlists/playlists_page.dart';
 import 'package:olivier/settings/settings_page.dart';
 import 'package:olivier/state/layout_settings.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/queue_view.dart';
 import 'package:olivier/state/scan_controller.dart';
 import 'package:olivier/widgets/now_playing_bar.dart';
 import 'package:olivier/widgets/resizable_split.dart';

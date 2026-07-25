@@ -7,6 +7,7 @@ import 'package:olivier/catalog/queue_panel.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
+import 'package:olivier/state/queue_view.dart';
 
 import 'support/fake_queue_player.dart';
 
