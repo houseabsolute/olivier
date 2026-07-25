@@ -9,6 +9,7 @@ import 'package:olivier/state/queue_view.dart';
 import 'package:olivier/widgets/album_cover.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 import 'package:olivier/widgets/context_menu.dart';
+import 'package:olivier/widgets/queue_swipe_target.dart';
 import 'package:olivier/widgets/info_dialog.dart';
 import 'package:olivier/widgets/track_meta.dart';
 
@@ -309,11 +310,19 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
       ),
     );
 
+    // The header is also a swipe handle. The now-playing bar is one too, but it
+    // sits against the bottom of the screen where Android's gesture-navigation
+    // zone swallows downward drags before Flutter sees them — the header has
+    // room, so this is the reliable way to swipe the queue closed.
+    final swipeableHeader = QueueSwipeTarget(child: header);
     final panel = expanded
         ? Column(
-            children: [header, Expanded(child: _expandedList(context, view))],
+            children: [
+              swipeableHeader,
+              Expanded(child: _expandedList(context, view)),
+            ],
           )
-        : header;
+        : swipeableHeader;
 
     return QueuePanelDropTarget(
       onEntityDropped: (entity) async {

@@ -5,6 +5,7 @@ import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/catalog/browser_page.dart';
+import 'package:olivier/catalog/queue_panel.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/browse_level.dart';
 import 'package:olivier/state/providers.dart';
@@ -233,6 +234,51 @@ void main() {
 
     // The expanded queue replaces the browse cascade.
     expect(find.byType(ResizableSplit), findsNothing);
+  });
+
+  testWidgets('swiping down on the queue header closes it', (tester) async {
+    // The now-playing bar is the other handle, but it sits in Android's bottom
+    // gesture zone where downward drags get truncated; the header has room.
+    await _pumpNarrow(tester);
+    await tester.drag(find.text('stub-now-playing'), const Offset(0, -100));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, 'Queue'), findsOneWidget);
+
+    await tester.drag(find.textContaining('Queue ·'), const Offset(0, 60));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ringo Sheena'), findsOneWidget);
+  });
+
+  testWidgets('the queue slides in rather than appearing', (tester) async {
+    await _pumpNarrow(tester);
+
+    await tester.drag(find.text('stub-now-playing'), const Offset(0, -100));
+    await tester.pump();
+    // Part-way through, the queue is on screen but still travelling.
+    await tester.pump(kQueueRevealDuration ~/ 2);
+    // .first is the innermost ancestor — the switcher's own transition.
+    final slide = tester
+        .widgetList<SlideTransition>(
+          find.ancestor(
+            of: find.byType(QueuePanel),
+            matching: find.byType(SlideTransition),
+          ),
+        )
+        .first;
+    expect(slide.position.value.dy, greaterThan(0),
+        reason: 'still below its resting place mid-animation');
+
+    await tester.pumpAndSettle();
+    final settled = tester
+        .widgetList<SlideTransition>(
+          find.ancestor(
+            of: find.byType(QueuePanel),
+            matching: find.byType(SlideTransition),
+          ),
+        )
+        .first;
+    expect(settled.position.value.dy, 0);
   });
 
   group('breakpoint', () {

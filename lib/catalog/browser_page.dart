@@ -21,6 +21,12 @@ import 'package:olivier/widgets/resizable_split.dart';
 import 'package:olivier/widgets/search_results_panel.dart';
 import 'package:olivier/widgets/top_controls.dart';
 
+/// How long the queue takes to slide in or out. Short enough to feel like a
+/// direct response to the swipe rather than a transition to sit through.
+const Duration kQueueRevealDuration = Duration(milliseconds: 180);
+
+const _queueKey = ValueKey('queue');
+
 /// The first pane's fraction of a persisted `(f0, f1)` flex pair.
 double _ratioOf((double, double) flex) => flex.$1 / (flex.$1 + flex.$2);
 
@@ -148,6 +154,12 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
       ),
       body: Stack(
         children: [
+          // Not animated here, deliberately: the cascade and the expanded
+          // queue have incompatible flex structures (Expanded vs intrinsic),
+          // and every way of tweening between them either unbounds the
+          // Column's constraints or fights the user's own drag-to-size on the
+          // resizable split. The narrow layout, where the queue is a separate
+          // full-screen view, animates instead.
           Column(
             children: [
               if (!queueExpanded)
@@ -270,14 +282,30 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
         ),
         body: Stack(
           children: [
-            if (queueExpanded)
-              const QueuePanel()
-            else
-              switch (level) {
-                BrowseLevel.artists => const ArtistColumn(narrow: true),
-                BrowseLevel.albums => const AlbumColumn(narrow: true),
-                BrowseLevel.tracks => const TrackColumn(narrow: true),
-              },
+            AnimatedSwitcher(
+              duration: kQueueRevealDuration,
+              // The queue slides up over the library and back down; the library
+              // just cross-fades, so only one thing appears to move.
+              transitionBuilder: (child, animation) => child.key == _queueKey
+                  ? SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 1),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    )
+                  : FadeTransition(opacity: animation, child: child),
+              child: queueExpanded
+                  ? const QueuePanel(key: _queueKey)
+                  : KeyedSubtree(
+                      key: ValueKey(level),
+                      child: switch (level) {
+                        BrowseLevel.artists => const ArtistColumn(narrow: true),
+                        BrowseLevel.albums => const AlbumColumn(narrow: true),
+                        BrowseLevel.tracks => const TrackColumn(narrow: true),
+                      },
+                    ),
+            ),
             const SearchResultsPanel(),
           ],
         ),
