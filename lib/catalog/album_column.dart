@@ -7,6 +7,7 @@ import 'package:olivier/catalog/catalog_mutation.dart';
 import 'package:olivier/playlists/add_to_playlist_dialog.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/enrich_controller.dart';
+import 'package:olivier/state/capabilities.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/album_cover.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
@@ -84,6 +85,8 @@ class _AlbumListState extends ConsumerState<_AlbumList> {
   Widget build(BuildContext context) {
     final selected = ref.watch(selectedAlbumProvider);
     final leads = ref.watch(languageLeadsProvider);
+    // A synced-catalog device must not edit what the desktop owns.
+    final canModify = ref.watch(canModifyCatalogProvider);
     if (widget.albums.isEmpty) {
       return const Center(child: Text('Select an artist'));
     }
@@ -115,52 +118,61 @@ class _AlbumListState extends ConsumerState<_AlbumList> {
                 title: 'Album',
                 fields: albumInfoFields(album),
                 header: AlbumCover(releaseMbid: album.releaseMbid, size: 220)),
-            onRefetch: (_) {
-              final c = ref.read(enrichControllerProvider.notifier);
-              ScaffoldMessenger.of(context)
-                ..clearSnackBars()
-                ..showSnackBar(const SnackBar(
-                    content: Text('Re-fetching from MusicBrainz…')));
-              c.enrichAlbum(album.releaseMbid);
-            },
-            onReadTags: (_) => runCatalogMutation(
-              context,
-              ref,
-              action: () =>
-                  ref.read(rereadAlbumTagsFnProvider)(album.releaseMbid),
-              clearSelection: () =>
-                  ref.read(selectedAlbumProvider.notifier).clear(),
-              successMessage: 'Tags re-read',
-              failureMessage: 'Failed to re-read tags',
-            ),
-            onSetReading: (_) async {
-              final current = await ref
-                  .read(releaseTitleOverrideFnProvider)(album.releaseMbid);
-              if (!context.mounted) return;
-              await showTitleOverrideDialog(
-                context,
-                label: album.title,
-                current: current,
-                onSubmit: (t, tr) =>
-                    ref.read(setReleaseTitleOverrideFnProvider)(
-                        album.releaseMbid, t, tr),
-                onSaved: () {
-                  ref.read(queueControllerProvider).refreshMetadata();
-                  ref.invalidate(albumsProvider);
-                  ref.invalidate(tracksProvider);
-                },
-              );
-            },
-            onRemove: (_) => runCatalogMutation(
-              context,
-              ref,
-              action: () => ref.read(removeAlbumFnProvider)(album.releaseMbid),
-              clearSelection: () =>
-                  ref.read(selectedAlbumProvider.notifier).clear(),
-              successMessage: 'Removed "${album.title}"',
-              failureMessage: 'Failed to remove "${album.title}"',
-              reconcileQueue: true,
-            ),
+            onRefetch: !canModify
+                ? null
+                : (_) {
+                    final c = ref.read(enrichControllerProvider.notifier);
+                    ScaffoldMessenger.of(context)
+                      ..clearSnackBars()
+                      ..showSnackBar(const SnackBar(
+                          content: Text('Re-fetching from MusicBrainz…')));
+                    c.enrichAlbum(album.releaseMbid);
+                  },
+            onReadTags: !canModify
+                ? null
+                : (_) => runCatalogMutation(
+                      context,
+                      ref,
+                      action: () => ref
+                          .read(rereadAlbumTagsFnProvider)(album.releaseMbid),
+                      clearSelection: () =>
+                          ref.read(selectedAlbumProvider.notifier).clear(),
+                      successMessage: 'Tags re-read',
+                      failureMessage: 'Failed to re-read tags',
+                    ),
+            onSetReading: !canModify
+                ? null
+                : (_) async {
+                    final current = await ref.read(
+                        releaseTitleOverrideFnProvider)(album.releaseMbid);
+                    if (!context.mounted) return;
+                    await showTitleOverrideDialog(
+                      context,
+                      label: album.title,
+                      current: current,
+                      onSubmit: (t, tr) =>
+                          ref.read(setReleaseTitleOverrideFnProvider)(
+                              album.releaseMbid, t, tr),
+                      onSaved: () {
+                        ref.read(queueControllerProvider).refreshMetadata();
+                        ref.invalidate(albumsProvider);
+                        ref.invalidate(tracksProvider);
+                      },
+                    );
+                  },
+            onRemove: !canModify
+                ? null
+                : (_) => runCatalogMutation(
+                      context,
+                      ref,
+                      action: () =>
+                          ref.read(removeAlbumFnProvider)(album.releaseMbid),
+                      clearSelection: () =>
+                          ref.read(selectedAlbumProvider.notifier).clear(),
+                      successMessage: 'Removed "${album.title}"',
+                      failureMessage: 'Failed to remove "${album.title}"',
+                      reconcileQueue: true,
+                    ),
             child: InkWell(
               key: ValueKey(album.releaseMbid),
               onTap: () {

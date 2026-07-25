@@ -6,6 +6,7 @@ import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/catalog/catalog_mutation.dart';
 import 'package:olivier/playlists/add_to_playlist_dialog.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
+import 'package:olivier/state/capabilities.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 import 'package:olivier/widgets/browse_drag_source.dart';
@@ -97,6 +98,8 @@ class _TrackListState extends ConsumerState<_TrackList> {
     }
 
     final leads = ref.watch(languageLeadsProvider);
+    // A synced-catalog device must not edit what the desktop owns.
+    final canModify = ref.watch(canModifyCatalogProvider);
     final selectedTrack = ref.watch(selectedTrackProvider);
 
     ref.listen<int?>(
@@ -138,17 +141,20 @@ class _TrackListState extends ConsumerState<_TrackList> {
                         showAddToPlaylistDialog(context, ref, entity),
                     onInfo: (_) => showInfoDialog(context,
                         title: 'Track', fields: trackInfoFields(track)),
-                    onReadTags: (_) => runCatalogMutation(
-                      context,
-                      ref,
-                      action: () =>
-                          ref.read(rereadTrackTagsFnProvider)(track.id),
-                      clearSelection: () =>
-                          ref.read(selectedTrackProvider.notifier).clear(),
-                      successMessage: 'Tags re-read',
-                      failureMessage: 'Failed to re-read tags',
-                    ),
-                    onSetReading: recordingMbid == null
+                    onReadTags: !canModify
+                        ? null
+                        : (_) => runCatalogMutation(
+                              context,
+                              ref,
+                              action: () =>
+                                  ref.read(rereadTrackTagsFnProvider)(track.id),
+                              clearSelection: () => ref
+                                  .read(selectedTrackProvider.notifier)
+                                  .clear(),
+                              successMessage: 'Tags re-read',
+                              failureMessage: 'Failed to re-read tags',
+                            ),
+                    onSetReading: (recordingMbid == null || !canModify)
                         ? null
                         : (_) async {
                             final current = await ref.read(
@@ -169,16 +175,21 @@ class _TrackListState extends ConsumerState<_TrackList> {
                               },
                             );
                           },
-                    onRemove: (_) => runCatalogMutation(
-                      context,
-                      ref,
-                      action: () => ref.read(removeTrackFnProvider)(track.id),
-                      clearSelection: () =>
-                          ref.read(selectedTrackProvider.notifier).clear(),
-                      successMessage: 'Removed "${track.title}"',
-                      failureMessage: 'Failed to remove "${track.title}"',
-                      reconcileQueue: true,
-                    ),
+                    onRemove: !canModify
+                        ? null
+                        : (_) => runCatalogMutation(
+                              context,
+                              ref,
+                              action: () =>
+                                  ref.read(removeTrackFnProvider)(track.id),
+                              clearSelection: () => ref
+                                  .read(selectedTrackProvider.notifier)
+                                  .clear(),
+                              successMessage: 'Removed "${track.title}"',
+                              failureMessage:
+                                  'Failed to remove "${track.title}"',
+                              reconcileQueue: true,
+                            ),
                     child: InkWell(
                       key: ValueKey(track.id),
                       onTap: () => ref

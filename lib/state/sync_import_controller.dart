@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -96,6 +97,9 @@ class SyncImportController extends Notifier<SyncImportState> {
   @override
   SyncImportState build() {
     ref.onDispose(() => _disposed = true);
+    // Check the grant as soon as anything watches this, or Settings would warn
+    // that access is missing on every launch even when it was granted long ago.
+    unawaited(refreshPermission());
     return const SyncImportState();
   }
 

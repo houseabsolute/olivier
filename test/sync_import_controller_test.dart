@@ -110,8 +110,9 @@ void main() {
 
     await c.read(syncImportControllerProvider.notifier).importIfNewer();
 
-    expect(permissionCalls, ['status'],
+    expect(permissionCalls, isNot(contains('request')),
         reason: 'a cold start must not block on a system permission screen');
+    expect(permissionCalls, contains('status'));
   });
 
   test('the Settings button does ask for the permission', () async {
@@ -123,7 +124,7 @@ void main() {
         .read(syncImportControllerProvider.notifier)
         .importIfNewer(interactive: true);
 
-    expect(permissionCalls, ['request']);
+    expect(permissionCalls, contains('request'));
   });
 
   test('without storage access it reports why and does not call the FFI',
@@ -166,6 +167,21 @@ void main() {
     await first;
 
     expect(calls.length, 1);
+  });
+
+  test('the permission is checked as soon as the controller is watched',
+      () async {
+    // Otherwise Settings shows "access is needed" on every launch, even when
+    // it was granted long ago.
+    final permissionCalls = <String>[];
+    final c = _container(permissionCalls: permissionCalls);
+    addTearDown(c.dispose);
+
+    c.read(syncImportControllerProvider);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(permissionCalls, ['status']);
+    expect(c.read(syncImportControllerProvider).hasStoragePermission, isTrue);
   });
 
   test('refreshPermission reflects the current grant', () async {
