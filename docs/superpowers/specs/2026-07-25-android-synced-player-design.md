@@ -77,8 +77,20 @@ project was generated:
 built-in Kotlin to compile it, which needs `builtInKotlin=true`. There is no setting satisfying both.
 On AGP 8 each plugin applies its own KGP and both work. Revisit when `audio_service` migrates.
 
-Not yet verified: that the app actually *launches* on a device, or that `RustLib.init()` succeeds at
-runtime. Compiling and linking is not running.
+**Verified on a Pixel 8a**, not just built: the app launches, `RustLib.init()` succeeds
+(`rusqlite_migration` reports the catalog at schema version 9), a media session registers, and the
+full desktop UI paints. Two bugs had to be fixed to get there, both of which also affect the desktop
+or would have blocked any Android work:
+
+- `ResizableSplit` called `clamp(minFirst, avail)`, and `double.clamp` throws when its lower limit
+  exceeds the upper. Any viewport narrower than `minFirst` — a phone, or a sufficiently narrow
+  desktop window — threw during layout and left the app on a blank frame.
+- `MainActivity` extended `FlutterActivity`. audio_service resolves the running `FlutterEngine`
+  through the manifest's activity and requires `AudioServiceActivity`; without it the plugin threw on
+  the platform side, `AudioService.init()` never returned, and `main()` blocked before `runApp()`.
+  This one is invisible from Dart — no exception, no error, just zero frames rendered forever.
+
+Still unverified: playback itself, and background/lock-screen behaviour.
 
 Original plan follows.
 
