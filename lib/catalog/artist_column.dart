@@ -9,6 +9,7 @@ import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/artist_reading_dialog.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+import 'package:olivier/widgets/browse_drag_source.dart';
 import 'package:olivier/widgets/context_menu.dart';
 
 Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
@@ -21,7 +22,11 @@ Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
 }
 
 class ArtistColumn extends ConsumerWidget {
-  const ArtistColumn({super.key});
+  const ArtistColumn({super.key, this.narrow = false});
+
+  /// One-level-at-a-time layout: no queue panel on screen, so rows drop
+  /// drag-to-queue and use long press for their context menu instead.
+  final bool narrow;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -29,13 +34,14 @@ class ArtistColumn extends ConsumerWidget {
     return artistsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(child: Text('Error: $err')),
-      data: (artists) => _ArtistList(artists: artists),
+      data: (artists) => _ArtistList(narrow: narrow, artists: artists),
     );
   }
 }
 
 class _ArtistList extends ConsumerStatefulWidget {
-  const _ArtistList({required this.artists});
+  const _ArtistList({required this.artists, required this.narrow});
+  final bool narrow;
 
   final List<Artist> artists;
 
@@ -91,16 +97,12 @@ class _ArtistListState extends ConsumerState<_ArtistList> {
         final artist = widget.artists[index];
         final isSelected = selected == artist.mbid;
         final entity = QueueEntityRef.artist(artist.mbid);
-        return LongPressDraggable<QueueEntityRef>(
-          data: entity,
-          feedback: Material(
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(artist.nameOriginal ?? artist.name),
-            ),
-          ),
+        return BrowseDragSource(
+          enabled: !widget.narrow,
+          entity: entity,
+          label: artist.nameOriginal ?? artist.name,
           child: RowContextMenu(
+            longPressToOpen: widget.narrow,
             entity: entity,
             onAddToQueue: (e) => _enqueue(ref, e),
             onAddToPlaylist: (entity) =>

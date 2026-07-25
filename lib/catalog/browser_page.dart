@@ -272,9 +272,9 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
               const QueuePanel()
             else
               switch (level) {
-                BrowseLevel.artists => const ArtistColumn(),
-                BrowseLevel.albums => const AlbumColumn(),
-                BrowseLevel.tracks => const TrackColumn(),
+                BrowseLevel.artists => const ArtistColumn(narrow: true),
+                BrowseLevel.albums => const AlbumColumn(narrow: true),
+                BrowseLevel.tracks => const TrackColumn(narrow: true),
               },
             const SearchResultsPanel(),
           ],

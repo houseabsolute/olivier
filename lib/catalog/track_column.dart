@@ -8,6 +8,7 @@ import 'package:olivier/playlists/add_to_playlist_dialog.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+import 'package:olivier/widgets/browse_drag_source.dart';
 import 'package:olivier/widgets/context_menu.dart';
 import 'package:olivier/widgets/info_dialog.dart';
 import 'package:olivier/widgets/title_override_dialog.dart';
@@ -33,7 +34,11 @@ Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
 }
 
 class TrackColumn extends ConsumerWidget {
-  const TrackColumn({super.key});
+  const TrackColumn({super.key, this.narrow = false});
+
+  /// One-level-at-a-time layout: no queue panel on screen, so rows drop
+  /// drag-to-queue and use long press for their context menu instead.
+  final bool narrow;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -41,13 +46,14 @@ class TrackColumn extends ConsumerWidget {
     return tracksAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(child: Text('Error: $err')),
-      data: (tracks) => _TrackList(tracks: tracks),
+      data: (tracks) => _TrackList(narrow: narrow, tracks: tracks),
     );
   }
 }
 
 class _TrackList extends ConsumerStatefulWidget {
-  const _TrackList({required this.tracks});
+  const _TrackList({required this.tracks, required this.narrow});
+  final bool narrow;
 
   final List<Track> tracks;
 
@@ -120,16 +126,12 @@ class _TrackListState extends ConsumerState<_TrackList> {
                 final isSelected = selectedTrack == trackId;
                 final entity = QueueEntityRef.track(trackId);
                 final recordingMbid = track.recordingMbid;
-                return LongPressDraggable<QueueEntityRef>(
-                  data: entity,
-                  feedback: Material(
-                    elevation: 4,
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Text(track.title),
-                    ),
-                  ),
+                return BrowseDragSource(
+                  enabled: !widget.narrow,
+                  entity: entity,
+                  label: track.title,
                   child: RowContextMenu(
+                    longPressToOpen: widget.narrow,
                     entity: entity,
                     onAddToQueue: (e) => _enqueue(ref, e),
                     onAddToPlaylist: (entity) =>

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:olivier/audio/queue_entity.dart';
 
-/// Wraps [child] so a right-click (secondary tap) opens a context menu. The
+/// Wraps [child] so a right-click (secondary tap) opens a context menu, and
+/// optionally a long press too — see [longPressToOpen]. The
 /// optional [onAddToQueue]/[onInfo]/[onReadTags]/[onRefetch]/[onSetReading]/[onRemoveFromQueue]/[onRemove] entries appear
 /// only when their callback is non-null, so each column shows the actions
 /// appropriate to its entity.
@@ -17,6 +18,7 @@ class RowContextMenu extends StatelessWidget {
     this.onSetReading,
     this.onRemoveFromQueue,
     this.onRemove,
+    this.longPressToOpen = false,
     required this.child,
   });
 
@@ -29,6 +31,13 @@ class RowContextMenu extends StatelessWidget {
   final ValueChanged<QueueEntityRef>? onSetReading;
   final ValueChanged<QueueEntityRef>? onRemoveFromQueue;
   final ValueChanged<QueueEntityRef>? onRemove;
+
+  /// Also open on long press. Off by default because the browse rows use long
+  /// press for drag-to-queue; only layouts without a drop target on screen —
+  /// the narrow one, where the queue is a separate screen — turn it on, and
+  /// those drop the draggable so the two never compete for the gesture.
+  final bool longPressToOpen;
+
   final Widget child;
 
   Future<void> _show(BuildContext context, Offset globalPosition) async {
@@ -91,6 +100,8 @@ class RowContextMenu extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onSecondaryTapDown: (d) => _show(context, d.globalPosition),
+      onLongPressStart:
+          longPressToOpen ? (d) => _show(context, d.globalPosition) : null,
       child: child,
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olivier/audio/playback_controller.dart';
+import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/catalog/browser_page.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
@@ -181,6 +182,32 @@ void main() {
     container.read(selectedAlbumProvider.notifier).select('r1');
     await tester.pumpAndSettle();
     expect(find.text('stub-now-playing'), findsOneWidget);
+  });
+
+  testWidgets('long press opens the row menu instead of starting a drag',
+      (tester) async {
+    await _pumpNarrow(tester);
+
+    // The queue is a separate screen here, so there is nothing to drop onto —
+    // the gesture belongs to the menu.
+    expect(find.byType(LongPressDraggable<QueueEntityRef>), findsNothing,
+        reason: 'no drop target on screen, so no drag source');
+
+    await tester.longPress(find.text('Ringo Sheena'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add to queue'), findsOneWidget);
+  });
+
+  testWidgets('the wide layout keeps drag-to-queue', (tester) async {
+    await _pumpNarrow(tester, size: const Size(1000, 800));
+
+    expect(find.byType(LongPressDraggable<QueueEntityRef>), findsWidgets);
+
+    await tester.longPress(find.text('Ringo Sheena'));
+    await tester.pumpAndSettle();
+    expect(find.text('Add to queue'), findsNothing,
+        reason: 'long press is the drag there, not the menu');
   });
 
   group('breakpoint', () {

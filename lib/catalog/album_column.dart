@@ -10,6 +10,7 @@ import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/album_cover.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+import 'package:olivier/widgets/browse_drag_source.dart';
 import 'package:olivier/widgets/context_menu.dart';
 import 'package:olivier/widgets/info_dialog.dart';
 import 'package:olivier/widgets/title_override_dialog.dart';
@@ -24,7 +25,11 @@ Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
 }
 
 class AlbumColumn extends ConsumerWidget {
-  const AlbumColumn({super.key});
+  const AlbumColumn({super.key, this.narrow = false});
+
+  /// One-level-at-a-time layout: no queue panel on screen, so rows drop
+  /// drag-to-queue and use long press for their context menu instead.
+  final bool narrow;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,13 +37,14 @@ class AlbumColumn extends ConsumerWidget {
     return albumsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(child: Text('Error: $err')),
-      data: (albums) => _AlbumList(albums: albums),
+      data: (albums) => _AlbumList(narrow: narrow, albums: albums),
     );
   }
 }
 
 class _AlbumList extends ConsumerStatefulWidget {
-  const _AlbumList({required this.albums});
+  const _AlbumList({required this.albums, required this.narrow});
+  final bool narrow;
 
   final List<Album> albums;
 
@@ -95,16 +101,12 @@ class _AlbumListState extends ConsumerState<_AlbumList> {
         final isSelected = selected == album.releaseMbid;
         final year = album.originalYear ?? album.reissueYear ?? '';
         final entity = QueueEntityRef.album(album.releaseMbid);
-        return LongPressDraggable<QueueEntityRef>(
-          data: entity,
-          feedback: Material(
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(album.title),
-            ),
-          ),
+        return BrowseDragSource(
+          enabled: !widget.narrow,
+          entity: entity,
+          label: album.title,
           child: RowContextMenu(
+            longPressToOpen: widget.narrow,
             entity: entity,
             onAddToQueue: (e) => _enqueue(ref, e),
             onAddToPlaylist: (entity) =>
