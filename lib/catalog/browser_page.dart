@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:olivier/audio/playback_controller.dart'
+    show selectedAlbumObjectProvider;
 import 'package:olivier/catalog/album_column.dart';
 import 'package:olivier/catalog/artist_column.dart';
 import 'package:olivier/catalog/queue_panel.dart';
@@ -8,6 +10,7 @@ import 'package:olivier/catalog/track_column.dart';
 import 'package:olivier/main.dart' show audioHandler;
 import 'package:olivier/playlists/playlists_page.dart';
 import 'package:olivier/settings/settings_page.dart';
+import 'package:olivier/state/browse_level.dart';
 import 'package:olivier/state/layout_settings.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_view.dart';
@@ -37,6 +40,10 @@ class BrowserPage extends ConsumerStatefulWidget {
 }
 
 class _BrowserPageState extends ConsumerState<BrowserPage> {
+  /// Narrow layout only: the app bar shows the search field instead of the
+  /// level title. There isn't room for both at phone widths.
+  bool _searchOpen = false;
+
   // Fraction (0..1) of the available extent given to the FIRST pane of each
   // split (artist of artist|right; album of album|track), seeded from the
   // persisted flex pairs.
@@ -103,80 +110,211 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
         const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () =>
             ref.read(searchFocusNodeProvider).requestFocus(),
       },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final narrow = constraints.maxWidth < kNarrowBrowseWidth;
+          return narrow
+              ? _narrowScaffold(context, ref, scan, queueExpanded)
+              : _wideScaffold(context, ref, scan, queueExpanded);
+        },
+      ),
+    );
+  }
+
+  /// The three-pane cascade. Unchanged from before the narrow layout existed.
+  Widget _wideScaffold(
+    BuildContext context,
+    WidgetRef ref,
+    ScanState scan,
+    bool queueExpanded,
+  ) {
+    return Scaffold(
+      appBar: AppBar(
+        title: widget.topControls ?? TopControls(audioHandler: audioHandler),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.playlist_play),
+            tooltip: 'Playlists',
+            onPressed: () => _openPlaylists(context, ref),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () => _openSettings(context, ref),
+          ),
+        ],
+        bottom: scan.scanning ? _scanProgressBar(scan) : null,
+      ),
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              if (!queueExpanded)
+                Expanded(
+                  // Artist | right pane (horizontal), with the right pane
+                  // stacking Album over Track (vertical). Custom
+                  // ResizableSplit (opaque drag handle) — see its doc for why
+                  // multi_split_view's translucent divider didn't resize here.
+                  child: ResizableSplit(
+                    axis: Axis.horizontal,
+                    ratio: _artistRatio,
+                    minFirst: 220,
+                    minSecond: 320,
+                    onRatioSettled: (r) {
+                      _artistRatio = r;
+                      _saveRatio(layoutArtistsKey, r);
+                    },
+                    first: const ArtistColumn(),
+                    second: ResizableSplit(
+                      axis: Axis.vertical,
+                      ratio: _albumRatio,
+                      minFirst: 80,
+                      minSecond: 80,
+                      onRatioSettled: (r) {
+                        _albumRatio = r;
+                        _saveRatio(layoutRightPaneKey, r);
+                      },
+                      first: const AlbumColumn(),
+                      second: const TrackColumn(),
+                    ),
+                  ),
+                ),
+              if (queueExpanded)
+                const Expanded(child: QueuePanel())
+              else
+                const QueuePanel(),
+            ],
+          ),
+          const SearchResultsPanel(),
+        ],
+      ),
+      bottomNavigationBar:
+          widget.nowPlaying ?? NowPlayingBar(audioHandler: audioHandler),
+    );
+  }
+
+  /// One level of the cascade at a time, drilled into. The level is derived
+  /// from the selection (see [browseLevelProvider]), so search lands on the
+  /// right screen without knowing this layout exists.
+  Widget _narrowScaffold(
+    BuildContext context,
+    WidgetRef ref,
+    ScanState scan,
+    bool queueExpanded,
+  ) {
+    final level = ref.watch(browseLevelProvider);
+    final atRoot = level == BrowseLevel.artists;
+
+    return PopScope(
+      // Back walks up the cascade; only the artist list exits the app.
+      canPop: atRoot && !queueExpanded,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (queueExpanded) {
+          ref.read(queueExpandedProvider.notifier).collapse();
+        } else {
+          ref.read(browseLevelProvider.notifier).up();
+        }
+      },
       child: Scaffold(
         appBar: AppBar(
-          title: widget.topControls ?? TopControls(audioHandler: audioHandler),
+          leading: (atRoot && !queueExpanded)
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back',
+                  onPressed: () {
+                    if (queueExpanded) {
+                      ref.read(queueExpandedProvider.notifier).collapse();
+                    } else {
+                      ref.read(browseLevelProvider.notifier).up();
+                    }
+                  },
+                ),
+          title: _searchOpen
+              ? (widget.topControls ?? TopControls(audioHandler: audioHandler))
+              : Text(_narrowTitle(ref, level, queueExpanded),
+                  overflow: TextOverflow.ellipsis),
           actions: [
             IconButton(
-              icon: const Icon(Icons.playlist_play),
-              tooltip: 'Playlists',
+              icon: Icon(_searchOpen ? Icons.search_off : Icons.search),
+              tooltip: _searchOpen ? 'Close search' : 'Search',
               onPressed: () {
-                ref.read(searchQueryProvider.notifier).clear();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const PlaylistsPage()),
-                );
+                setState(() => _searchOpen = !_searchOpen);
+                if (_searchOpen) {
+                  ref.read(searchFocusNodeProvider).requestFocus();
+                } else {
+                  ref.read(searchQueryProvider.notifier).clear();
+                }
               },
             ),
             IconButton(
-              icon: const Icon(Icons.settings_outlined),
-              tooltip: 'Settings',
-              onPressed: () {
-                // Dismiss the search overlay before leaving the browse page.
-                ref.read(searchQueryProvider.notifier).clear();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SettingsPage()),
-                );
-              },
+              icon: const Icon(Icons.queue_music),
+              tooltip: queueExpanded ? 'Back to library' : 'Queue',
+              onPressed: () =>
+                  ref.read(queueExpandedProvider.notifier).toggle(),
+            ),
+            PopupMenuButton<String>(
+              onSelected: (v) => v == 'playlists'
+                  ? _openPlaylists(context, ref)
+                  : _openSettings(context, ref),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'playlists', child: Text('Playlists')),
+                PopupMenuItem(value: 'settings', child: Text('Settings')),
+              ],
             ),
           ],
           bottom: scan.scanning ? _scanProgressBar(scan) : null,
         ),
         body: Stack(
           children: [
-            Column(
-              children: [
-                if (!queueExpanded)
-                  Expanded(
-                    // Artist | right pane (horizontal), with the right pane
-                    // stacking Album over Track (vertical). Custom
-                    // ResizableSplit (opaque drag handle) — see its doc for why
-                    // multi_split_view's translucent divider didn't resize here.
-                    child: ResizableSplit(
-                      axis: Axis.horizontal,
-                      ratio: _artistRatio,
-                      minFirst: 220,
-                      minSecond: 320,
-                      onRatioSettled: (r) {
-                        _artistRatio = r;
-                        _saveRatio(layoutArtistsKey, r);
-                      },
-                      first: const ArtistColumn(),
-                      second: ResizableSplit(
-                        axis: Axis.vertical,
-                        ratio: _albumRatio,
-                        minFirst: 80,
-                        minSecond: 80,
-                        onRatioSettled: (r) {
-                          _albumRatio = r;
-                          _saveRatio(layoutRightPaneKey, r);
-                        },
-                        first: const AlbumColumn(),
-                        second: const TrackColumn(),
-                      ),
-                    ),
-                  ),
-                if (queueExpanded)
-                  const Expanded(child: QueuePanel())
-                else
-                  const QueuePanel(),
-              ],
-            ),
+            if (queueExpanded)
+              const QueuePanel()
+            else
+              switch (level) {
+                BrowseLevel.artists => const ArtistColumn(),
+                BrowseLevel.albums => const AlbumColumn(),
+                BrowseLevel.tracks => const TrackColumn(),
+              },
             const SearchResultsPanel(),
           ],
         ),
         bottomNavigationBar:
             widget.nowPlaying ?? NowPlayingBar(audioHandler: audioHandler),
       ),
+    );
+  }
+
+  /// What the narrow app bar says we're looking at.
+  String _narrowTitle(WidgetRef ref, BrowseLevel level, bool queueExpanded) {
+    if (queueExpanded) return 'Queue';
+    switch (level) {
+      case BrowseLevel.artists:
+        return 'Artists';
+      case BrowseLevel.albums:
+        final mbid = ref.watch(selectedArtistProvider);
+        final artists = ref.watch(artistsProvider).value ?? const [];
+        for (final a in artists) {
+          if (a.mbid == mbid) return a.name;
+        }
+        return 'Albums';
+      case BrowseLevel.tracks:
+        return ref.watch(selectedAlbumObjectProvider)?.title ?? 'Tracks';
+    }
+  }
+
+  void _openPlaylists(BuildContext context, WidgetRef ref) {
+    ref.read(searchQueryProvider.notifier).clear();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PlaylistsPage()),
+    );
+  }
+
+  void _openSettings(BuildContext context, WidgetRef ref) {
+    // Dismiss the search overlay before leaving the browse page.
+    ref.read(searchQueryProvider.notifier).clear();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SettingsPage()),
     );
   }
 

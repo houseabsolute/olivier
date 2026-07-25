@@ -37,6 +37,14 @@ class SelectedArtist extends Notifier<String?> {
     // Selecting a new artist clears the album selection.
     ref.read(selectedAlbumProvider.notifier).clear();
   }
+
+  /// Deselect, cascading like [select] does — the narrow layout's "back" from
+  /// the album list. Leaving the album set would make the derived browse level
+  /// disagree with the selection.
+  void clear() {
+    state = null;
+    ref.read(selectedAlbumProvider.notifier).clear();
+  }
 }
 
 final selectedArtistProvider =

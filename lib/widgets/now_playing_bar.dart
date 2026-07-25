@@ -15,6 +15,9 @@ class PositionData {
   final Duration duration;
 }
 
+/// Narrower than this and the elapsed/duration labels are dropped.
+const double _timeLabelMinWidth = 520;
+
 class NowPlayingBar extends ConsumerWidget {
   const NowPlayingBar({super.key, required this.audioHandler});
 
@@ -43,88 +46,97 @@ class NowPlayingBar extends ConsumerWidget {
         height: bilingualRowExtent(context, 80),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: Row(
-            children: [
-              // Title / artist.
-              Expanded(
-                flex: 2,
-                child: StreamBuilder<MediaItem?>(
-                  stream: audioHandler.mediaItem,
-                  builder: (context, snap) {
-                    final item = snap.data;
-                    if (item == null) {
-                      return const Text(
-                        'Nothing playing',
-                        overflow: TextOverflow.ellipsis,
-                      );
-                    }
-                    return Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        BilingualText(
-                          original: item.title,
-                          translit: item.extras?['titleTranslit'] as String?,
-                          translate: item.extras?['titleTranslate'] as String?,
-                          leads: leads,
-                          primaryStyle: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        if (item.artist != null)
-                          BilingualText(
-                            original: item.artist!,
-                            translit: item.extras?['artistReading'] as String?,
-                            translate: null,
-                            leads: leads,
-                            primaryStyle: Theme.of(context).textTheme.bodySmall,
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              TransportControls(audioHandler: audioHandler),
-              const SizedBox(width: 8),
-              // Seek slider + time labels.
-              Expanded(
-                flex: 3,
-                child: StreamBuilder<PositionData>(
-                  stream: _posStream,
-                  builder: (context, snap) {
-                    final pd = snap.data ??
-                        const PositionData(
-                          Duration.zero,
-                          Duration.zero,
-                          Duration.zero,
+          child: LayoutBuilder(builder: (context, constraints) {
+            // On a narrow bar the two time labels squeeze the slider down to
+            // almost nothing; the slider and transport are what matter.
+            final showTimes = constraints.maxWidth >= _timeLabelMinWidth;
+            return Row(
+              children: [
+                // Title / artist.
+                Expanded(
+                  flex: 2,
+                  child: StreamBuilder<MediaItem?>(
+                    stream: audioHandler.mediaItem,
+                    builder: (context, snap) {
+                      final item = snap.data;
+                      if (item == null) {
+                        return const Text(
+                          'Nothing playing',
+                          overflow: TextOverflow.ellipsis,
                         );
-                    final maxMs = pd.duration.inMilliseconds
-                        .toDouble()
-                        .clamp(1.0, double.infinity);
-                    final posMs =
-                        pd.position.inMilliseconds.toDouble().clamp(0.0, maxMs);
-                    return Row(
-                      children: [
-                        Text(_fmt(pd.position)),
-                        Expanded(
-                          child: Slider(
-                            min: 0,
-                            max: maxMs,
-                            value: posMs,
-                            onChanged: (v) =>
-                                _player.seek(Duration(milliseconds: v.toInt())),
+                      }
+                      return Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          BilingualText(
+                            original: item.title,
+                            translit: item.extras?['titleTranslit'] as String?,
+                            translate:
+                                item.extras?['titleTranslate'] as String?,
+                            leads: leads,
+                            primaryStyle: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
-                        ),
-                        Text(_fmt(pd.duration)),
-                      ],
-                    );
-                  },
+                          if (item.artist != null)
+                            BilingualText(
+                              original: item.artist!,
+                              translit:
+                                  item.extras?['artistReading'] as String?,
+                              translate: null,
+                              leads: leads,
+                              primaryStyle:
+                                  Theme.of(context).textTheme.bodySmall,
+                            ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 8),
+                TransportControls(audioHandler: audioHandler),
+                const SizedBox(width: 8),
+                // Seek slider + time labels.
+                Expanded(
+                  flex: 3,
+                  child: StreamBuilder<PositionData>(
+                    stream: _posStream,
+                    builder: (context, snap) {
+                      final pd = snap.data ??
+                          const PositionData(
+                            Duration.zero,
+                            Duration.zero,
+                            Duration.zero,
+                          );
+                      final maxMs = pd.duration.inMilliseconds
+                          .toDouble()
+                          .clamp(1.0, double.infinity);
+                      final posMs = pd.position.inMilliseconds
+                          .toDouble()
+                          .clamp(0.0, maxMs);
+                      return Row(
+                        children: [
+                          if (showTimes) Text(_fmt(pd.position)),
+                          Expanded(
+                            child: Slider(
+                              min: 0,
+                              max: maxMs,
+                              value: posMs,
+                              onChanged: (v) => _player
+                                  .seek(Duration(milliseconds: v.toInt())),
+                            ),
+                          ),
+                          if (showTimes) Text(_fmt(pd.duration)),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          }),
         ),
       ),
     );

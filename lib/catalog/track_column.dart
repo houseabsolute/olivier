@@ -16,6 +16,9 @@ import 'package:olivier/widgets/track_meta.dart';
 const double _trackNumWidth = 32;
 const double _trackNumGap = 8;
 
+/// Narrower than this and the track meta columns are dropped.
+const double _trackMetaMinWidth = 480;
+
 // Track rows are tighter than the artist/album columns (base 48): the two-line
 // bilingual content needs ~36px, so 42 packs the rows closer together.
 const double _trackRowBase = 42;
@@ -95,136 +98,148 @@ class _TrackListState extends ConsumerState<_TrackList> {
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _scrollToSelected(selectedTrack));
 
-    return Column(
-      children: [
-        const _TrackListHeader(),
-        const Divider(height: 1),
-        Expanded(
-          child: ListView.builder(
-            controller: _scroll,
-            itemCount: tracks.length,
-            itemExtent: bilingualRowExtent(context, _trackRowBase),
-            scrollCacheExtent: const ScrollCacheExtent.pixels(600),
-            itemBuilder: (context, index) {
-              final track = tracks[index];
-              final trackId = track.id;
-              final isSelected = selectedTrack == trackId;
-              final entity = QueueEntityRef.track(trackId);
-              final recordingMbid = track.recordingMbid;
-              return LongPressDraggable<QueueEntityRef>(
-                data: entity,
-                feedback: Material(
-                  elevation: 4,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Text(track.title),
+    return LayoutBuilder(builder: (context, constraints) {
+      // Below this the length/added/played block crowds out the title, so it is
+      // dropped from both the header and the rows — the same treatment the
+      // queue panel gives its own meta columns. Keyed on this column's width,
+      // not the window's, so a pane dragged narrow benefits too.
+      final showMeta = constraints.maxWidth >= _trackMetaMinWidth;
+      return Column(
+        children: [
+          _TrackListHeader(showMeta: showMeta),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView.builder(
+              controller: _scroll,
+              itemCount: tracks.length,
+              itemExtent: bilingualRowExtent(context, _trackRowBase),
+              scrollCacheExtent: const ScrollCacheExtent.pixels(600),
+              itemBuilder: (context, index) {
+                final track = tracks[index];
+                final trackId = track.id;
+                final isSelected = selectedTrack == trackId;
+                final entity = QueueEntityRef.track(trackId);
+                final recordingMbid = track.recordingMbid;
+                return LongPressDraggable<QueueEntityRef>(
+                  data: entity,
+                  feedback: Material(
+                    elevation: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(track.title),
+                    ),
                   ),
-                ),
-                child: RowContextMenu(
-                  entity: entity,
-                  onAddToQueue: (e) => _enqueue(ref, e),
-                  onAddToPlaylist: (entity) =>
-                      showAddToPlaylistDialog(context, ref, entity),
-                  onInfo: (_) => showInfoDialog(context,
-                      title: 'Track', fields: trackInfoFields(track)),
-                  onReadTags: (_) => runCatalogMutation(
-                    context,
-                    ref,
-                    action: () => ref.read(rereadTrackTagsFnProvider)(track.id),
-                    clearSelection: () =>
-                        ref.read(selectedTrackProvider.notifier).clear(),
-                    successMessage: 'Tags re-read',
-                    failureMessage: 'Failed to re-read tags',
-                  ),
-                  onSetReading: recordingMbid == null
-                      ? null
-                      : (_) async {
-                          final current = await ref.read(
-                              trackTitleOverrideFnProvider)(recordingMbid);
-                          if (!context.mounted) return;
-                          await showTitleOverrideDialog(
-                            context,
-                            label: track.title,
-                            current: current,
-                            onSubmit: (t, tr) =>
-                                ref.read(setTrackTitleOverrideFnProvider)(
-                                    recordingMbid, t, tr),
-                            onSaved: () {
-                              ref
-                                  .read(queueControllerProvider)
-                                  .refreshMetadata();
-                              ref.invalidate(tracksProvider);
-                            },
-                          );
-                        },
-                  onRemove: (_) => runCatalogMutation(
-                    context,
-                    ref,
-                    action: () => ref.read(removeTrackFnProvider)(track.id),
-                    clearSelection: () =>
-                        ref.read(selectedTrackProvider.notifier).clear(),
-                    successMessage: 'Removed "${track.title}"',
-                    failureMessage: 'Failed to remove "${track.title}"',
-                    reconcileQueue: true,
-                  ),
-                  child: InkWell(
-                    key: ValueKey(track.id),
-                    onTap: () => ref
-                        .read(selectedTrackProvider.notifier)
-                        .select(trackId),
-                    child: Container(
-                      color: isSelected
-                          ? Theme.of(context).colorScheme.primaryContainer
-                          : null,
-                      alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: _trackNumWidth,
-                            child: Text(
-                              '${track.position}',
-                              textAlign: TextAlign.right,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
+                  child: RowContextMenu(
+                    entity: entity,
+                    onAddToQueue: (e) => _enqueue(ref, e),
+                    onAddToPlaylist: (entity) =>
+                        showAddToPlaylistDialog(context, ref, entity),
+                    onInfo: (_) => showInfoDialog(context,
+                        title: 'Track', fields: trackInfoFields(track)),
+                    onReadTags: (_) => runCatalogMutation(
+                      context,
+                      ref,
+                      action: () =>
+                          ref.read(rereadTrackTagsFnProvider)(track.id),
+                      clearSelection: () =>
+                          ref.read(selectedTrackProvider.notifier).clear(),
+                      successMessage: 'Tags re-read',
+                      failureMessage: 'Failed to re-read tags',
+                    ),
+                    onSetReading: recordingMbid == null
+                        ? null
+                        : (_) async {
+                            final current = await ref.read(
+                                trackTitleOverrideFnProvider)(recordingMbid);
+                            if (!context.mounted) return;
+                            await showTitleOverrideDialog(
+                              context,
+                              label: track.title,
+                              current: current,
+                              onSubmit: (t, tr) =>
+                                  ref.read(setTrackTitleOverrideFnProvider)(
+                                      recordingMbid, t, tr),
+                              onSaved: () {
+                                ref
+                                    .read(queueControllerProvider)
+                                    .refreshMetadata();
+                                ref.invalidate(tracksProvider);
+                              },
+                            );
+                          },
+                    onRemove: (_) => runCatalogMutation(
+                      context,
+                      ref,
+                      action: () => ref.read(removeTrackFnProvider)(track.id),
+                      clearSelection: () =>
+                          ref.read(selectedTrackProvider.notifier).clear(),
+                      successMessage: 'Removed "${track.title}"',
+                      failureMessage: 'Failed to remove "${track.title}"',
+                      reconcileQueue: true,
+                    ),
+                    child: InkWell(
+                      key: ValueKey(track.id),
+                      onTap: () => ref
+                          .read(selectedTrackProvider.notifier)
+                          .select(trackId),
+                      child: Container(
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.primaryContainer
+                            : null,
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: _trackNumWidth,
+                              child: Text(
+                                '${track.position}',
+                                textAlign: TextAlign.right,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: _trackNumGap),
-                          Expanded(
-                            child: BilingualText(
-                              original: track.title,
-                              translit: track.titleTranslit,
-                              translate: track.titleTranslate,
-                              leads: leads,
+                            const SizedBox(width: _trackNumGap),
+                            Expanded(
+                              child: BilingualText(
+                                original: track.title,
+                                translit: track.titleTranslit,
+                                translate: track.titleTranslate,
+                                leads: leads,
+                              ),
                             ),
-                          ),
-                          TrackMeta(
-                            lengthMs: track.lengthMs,
-                            addedAt: track.addedAt,
-                            lastPlayed: track.lastPlayed,
-                          ),
-                        ],
+                            if (showMeta)
+                              TrackMeta(
+                                lengthMs: track.lengthMs,
+                                addedAt: track.addedAt,
+                                lastPlayed: track.lastPlayed,
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
-        ),
-      ],
-    );
+        ],
+      );
+    });
   }
 }
 
 class _TrackListHeader extends StatelessWidget {
-  const _TrackListHeader();
+  const _TrackListHeader({required this.showMeta});
+
+  /// Whether there is room for the length/added/played columns.
+  final bool showMeta;
 
   @override
   Widget build(BuildContext context) {
@@ -243,7 +258,7 @@ class _TrackListHeader extends StatelessWidget {
           ),
           const SizedBox(width: _trackNumGap),
           Expanded(child: Text('Title', style: style)),
-          const TrackMetaHeader(),
+          if (showMeta) const TrackMetaHeader(),
         ],
       ),
     );
