@@ -10,6 +10,7 @@ import 'package:olivier/state/scan_controller.dart';
 import 'package:olivier/state/sync_export_controller.dart';
 import 'package:olivier/state/sync_import_controller.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+import 'package:olivier/widgets/text_prompt_dialog.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -455,52 +456,19 @@ class SettingsPage extends ConsumerWidget {
     WidgetRef ref,
     RootMapping mapping,
   ) async {
-    final controller = TextEditingController(text: mapping.phone);
-    try {
-      final value = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Location on the phone'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                mapping.desktop,
-                style: Theme.of(ctx).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  helperText:
-                      'The absolute path this folder syncs to on the device.',
-                ),
-                onSubmitted: (v) => Navigator.of(ctx).pop(v),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(controller.text),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      );
-      final trimmed = value?.trim();
-      if (trimmed == null || trimmed.isEmpty) return;
-      await ref
-          .read(syncExportControllerProvider.notifier)
-          .setPhoneRoot(mapping.desktop, trimmed);
-    } finally {
-      controller.dispose();
-    }
+    final value = await promptForText(
+      context,
+      title: 'Location on the phone',
+      initial: mapping.phone,
+      subtitle: mapping.desktop,
+      helperText: 'The absolute path this folder syncs to on the device.',
+      confirmLabel: 'Save',
+    );
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return;
+    await ref
+        .read(syncExportControllerProvider.notifier)
+        .setPhoneRoot(mapping.desktop, trimmed);
   }
 
   Future<void> _addFolder(WidgetRef ref) async {

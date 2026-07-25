@@ -5,6 +5,7 @@ import 'package:olivier/state/playlists.dart';
 import 'package:olivier/state/browse_level.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+import 'package:olivier/widgets/text_prompt_dialog.dart';
 
 /// Pure reorder helper for ReorderableListView's `onReorderItem` callback,
 /// where [newIndex] is already the post-removal destination (no adjustment).
@@ -20,10 +21,16 @@ class PlaylistsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watched here, not inside the LayoutBuilder: its builder runs during
+    // layout, and a provider watched from there registers its dependency in the
+    // wrong phase — the next state change then asserts
+    // `owner!._debugCurrentBuildTarget != null` when it tries to rebuild.
+    final selected = ref.watch(selectedPlaylistProvider);
+    final lists = ref.watch(playlistsProvider).value ?? const <Playlist>[];
     return LayoutBuilder(
       builder: (context, constraints) =>
           constraints.maxWidth < kNarrowBrowseWidth
-              ? _narrow(context, ref)
+              ? _narrow(context, ref, selected, lists)
               : _wide(context, ref),
     );
   }
@@ -54,9 +61,12 @@ class PlaylistsPage extends ConsumerWidget {
   /// One pane at a time, like the browse cascade: the list, then the playlist
   /// you picked. Which one is showing is derived from the selection rather than
   /// tracked separately, so nothing can disagree about where we are.
-  Widget _narrow(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(selectedPlaylistProvider);
-    final lists = ref.watch(playlistsProvider).value ?? const <Playlist>[];
+  Widget _narrow(
+    BuildContext context,
+    WidgetRef ref,
+    int? selected,
+    List<Playlist> lists,
+  ) {
     String? name;
     for (final p in lists) {
       if (p.id == selected) name = p.name;
@@ -104,33 +114,9 @@ Future<void> _newPlaylist(BuildContext context, WidgetRef ref) async {
 }
 
 Future<String?> _promptName(BuildContext context,
-    {required String title, String initial = ''}) async {
-  final controller = TextEditingController(text: initial);
-  try {
-    return await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Playlist name'),
-          onSubmitted: (v) => Navigator.of(context).pop(v),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.of(context).pop(controller.text),
-              child: const Text('OK')),
-        ],
-      ),
-    );
-  } finally {
-    controller.dispose();
-  }
-}
+        {required String title, String initial = ''}) =>
+    promptForText(context,
+        title: title, initial: initial, hintText: 'Playlist name');
 
 class _PlaylistSidebar extends ConsumerWidget {
   const _PlaylistSidebar();

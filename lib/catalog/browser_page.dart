@@ -109,6 +109,11 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
     });
 
     final queueExpanded = ref.watch(queueExpandedProvider);
+    // Watched here rather than inside the LayoutBuilder below: its builder runs
+    // during layout, so a provider watched from there registers its dependency
+    // in the wrong phase and the next change asserts when it rebuilds.
+    final level = ref.watch(browseLevelProvider);
+    final narrowTitle = _narrowTitle(ref, level, queueExpanded);
 
     return CallbackShortcuts(
       bindings: {
@@ -121,7 +126,8 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
         builder: (context, constraints) {
           final narrow = constraints.maxWidth < kNarrowBrowseWidth;
           return narrow
-              ? _narrowScaffold(context, ref, scan, queueExpanded)
+              ? _narrowScaffold(
+                  context, ref, scan, queueExpanded, level, narrowTitle)
               : _wideScaffold(context, ref, scan, queueExpanded);
         },
       ),
@@ -215,8 +221,9 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
     WidgetRef ref,
     ScanState scan,
     bool queueExpanded,
+    BrowseLevel level,
+    String title,
   ) {
-    final level = ref.watch(browseLevelProvider);
     final atRoot = level == BrowseLevel.artists;
 
     return PopScope(
@@ -247,8 +254,7 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
                 ),
           title: _searchOpen
               ? (widget.topControls ?? TopControls(audioHandler: audioHandler))
-              : Text(_narrowTitle(ref, level, queueExpanded),
-                  overflow: TextOverflow.ellipsis),
+              : Text(title, overflow: TextOverflow.ellipsis),
           actions: [
             IconButton(
               icon: Icon(_searchOpen ? Icons.search_off : Icons.search),

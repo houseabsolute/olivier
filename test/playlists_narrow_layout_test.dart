@@ -103,6 +103,19 @@ void main() {
     expect(find.byIcon(Icons.delete_outline), findsOneWidget);
   });
 
+  testWidgets('narrow: creating a playlist does not throw', (tester) async {
+    // A provider watched from inside the LayoutBuilder registers its dependency
+    // during layout, and the write that follows creation then asserts
+    // `owner!._debugCurrentBuildTarget != null`. Found on a device, not here.
+    await _pump(tester, const Size(400, 800));
+
+    container.read(selectedPlaylistProvider.notifier).select(1);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Song A'), findsOneWidget);
+  });
+
   testWidgets('wide: the sidebar and detail stay side by side', (tester) async {
     await _pump(tester, const Size(1200, 800));
 
