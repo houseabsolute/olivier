@@ -56,12 +56,19 @@ class _ResizableSplitState extends State<ResizableSplit> {
     if (oldWidget.ratio != widget.ratio) _ratio = widget.ratio;
   }
 
+  /// The smallest the first pane may be, never larger than what there is.
+  /// `double.clamp` throws when its lower limit exceeds the upper, so a
+  /// viewport narrower than [ResizableSplit.minFirst] — a phone, or a very
+  /// narrow desktop window — would otherwise throw during layout and leave the
+  /// app on a blank frame rather than merely looking cramped.
+  double _minFirst(double avail) => widget.minFirst.clamp(0.0, avail);
+
   void _drag(double delta, double avail) {
     if (avail <= 0) return;
     setState(() {
-      final maxFirst = (avail - widget.minSecond).clamp(widget.minFirst, avail);
-      final newFirst =
-          (_ratio * avail + delta).clamp(widget.minFirst, maxFirst);
+      final minFirst = _minFirst(avail);
+      final maxFirst = (avail - widget.minSecond).clamp(minFirst, avail);
+      final newFirst = (_ratio * avail + delta).clamp(minFirst, maxFirst);
       _ratio = (newFirst / avail).clamp(0.0, 1.0);
     });
   }
@@ -75,9 +82,9 @@ class _ResizableSplitState extends State<ResizableSplit> {
       builder: (context, constraints) {
         final total = horizontal ? constraints.maxWidth : constraints.maxHeight;
         final avail = (total - _dividerThickness).clamp(0.0, double.infinity);
-        final maxFirst =
-            (avail - widget.minSecond).clamp(widget.minFirst, avail);
-        final firstExtent = (_ratio * avail).clamp(widget.minFirst, maxFirst);
+        final minFirst = _minFirst(avail);
+        final maxFirst = (avail - widget.minSecond).clamp(minFirst, avail);
+        final firstExtent = (_ratio * avail).clamp(minFirst, maxFirst);
 
         final lineColor = _hovering ? scheme.primary : scheme.outlineVariant;
         final divider = MouseRegion(
