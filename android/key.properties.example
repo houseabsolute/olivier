@@ -1,0 +1,11 @@
+# Copy to android/key.properties (gitignored) after creating a keystore:
+#
+#   keytool -genkey -v -keystore ~/.keys/olivier-release.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias olivier
+#
+# storeFile is resolved relative to the android/ directory, so use an absolute
+# path if the keystore lives outside the project (recommended — never commit it).
+storeFile=/home/you/.keys/olivier-release.jks
+storePassword=
+keyAlias=olivier
+keyPassword=

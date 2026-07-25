@@ -1,3 +1,14 @@
+import java.util.Properties
+
+// Release signing, kept out of the repo: android/key.properties is gitignored
+// alongside the keystore it points at. Absent — a fresh clone, or CI — the
+// release build falls back to the debug key, which still produces an
+// installable APK for sideloading.
+val keystoreProperties = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -25,11 +36,27 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (keystoreProperties.isNotEmpty()) {
+            create("release") {
+                storeFile = keystoreProperties["storeFile"]?.let { file(it) }
+                storePassword = keystoreProperties["storePassword"] as String?
+                keyAlias = keystoreProperties["keyAlias"] as String?
+                keyPassword = keystoreProperties["keyPassword"] as String?
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (keystoreProperties.isNotEmpty()) {
+                signingConfigs.getByName("release")
+            } else {
+                // No keystore configured: sign with the debug key so
+                // `flutter build apk --release` still yields something
+                // installable. Fine for sideloading, not for distribution.
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
