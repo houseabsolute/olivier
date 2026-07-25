@@ -6,4 +6,5 @@ pub mod decision_log;
 pub mod enrich;
 mod frb_generated;
 pub mod settings;
+pub mod sync;
 pub mod tags;
