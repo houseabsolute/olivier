@@ -210,6 +210,31 @@ void main() {
         reason: 'long press is the drag there, not the menu');
   });
 
+  testWidgets('swiping up on the now-playing bar opens the queue',
+      (tester) async {
+    await _pumpNarrow(tester);
+
+    await tester.drag(find.text('stub-now-playing'), const Offset(0, -100));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, 'Queue'), findsOneWidget);
+
+    // And back down again, without needing the app bar's back button.
+    await tester.drag(find.text('stub-now-playing'), const Offset(0, 100));
+    await tester.pumpAndSettle();
+    expect(find.text('Ringo Sheena'), findsOneWidget);
+  });
+
+  testWidgets('the swipe works in the wide layout too', (tester) async {
+    await _pumpNarrow(tester, size: const Size(1000, 800));
+    expect(find.byType(ResizableSplit), findsNWidgets(2));
+
+    await tester.drag(find.text('stub-now-playing'), const Offset(0, -100));
+    await tester.pumpAndSettle();
+
+    // The expanded queue replaces the browse cascade.
+    expect(find.byType(ResizableSplit), findsNothing);
+  });
+
   group('breakpoint', () {
     testWidgets('599 is narrow', (tester) async {
       await _pumpNarrow(tester, size: const Size(599, 800));

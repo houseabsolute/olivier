@@ -16,6 +16,7 @@ import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_view.dart';
 import 'package:olivier/state/scan_controller.dart';
 import 'package:olivier/widgets/now_playing_bar.dart';
+import 'package:olivier/widgets/queue_swipe_target.dart';
 import 'package:olivier/widgets/resizable_split.dart';
 import 'package:olivier/widgets/search_results_panel.dart';
 import 'package:olivier/widgets/top_controls.dart';
@@ -188,8 +189,9 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
           const SearchResultsPanel(),
         ],
       ),
-      bottomNavigationBar:
-          widget.nowPlaying ?? NowPlayingBar(audioHandler: audioHandler),
+      bottomNavigationBar: QueueSwipeTarget(
+        child: widget.nowPlaying ?? NowPlayingBar(audioHandler: audioHandler),
+      ),
     );
   }
 
@@ -279,8 +281,9 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
             const SearchResultsPanel(),
           ],
         ),
-        bottomNavigationBar:
-            widget.nowPlaying ?? NowPlayingBar(audioHandler: audioHandler),
+        bottomNavigationBar: QueueSwipeTarget(
+          child: widget.nowPlaying ?? NowPlayingBar(audioHandler: audioHandler),
+        ),
       ),
     );
   }
