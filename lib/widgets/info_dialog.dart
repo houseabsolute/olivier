@@ -125,6 +125,7 @@ List<(String, String, String?)> trackInfoFields(Track t) {
   _add(out, 'Last played', _fmtEpoch(t.lastPlayed));
   _add(out, 'Added at', _fmtEpoch(t.addedAt));
   _add(out, 'Track id', t.id.toString());
+  _add(out, 'Path', t.path);
   return out;
 }
 

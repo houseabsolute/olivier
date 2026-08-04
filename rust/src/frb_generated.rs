@@ -2437,6 +2437,7 @@ impl SseDecode for crate::catalog::schema::Track {
         let mut var_albumArtistReading = <Option<String>>::sse_decode(deserializer);
         let mut var_recordingMbid = <Option<String>>::sse_decode(deserializer);
         let mut var_albumArtistMbid = <Option<String>>::sse_decode(deserializer);
+        let mut var_path = <Option<String>>::sse_decode(deserializer);
         return crate::catalog::schema::Track {
             id: var_id,
             disc: var_disc,
@@ -2453,6 +2454,7 @@ impl SseDecode for crate::catalog::schema::Track {
             album_artist_reading: var_albumArtistReading,
             recording_mbid: var_recordingMbid,
             album_artist_mbid: var_albumArtistMbid,
+            path: var_path,
         };
     }
 }
@@ -3005,6 +3007,7 @@ impl flutter_rust_bridge::IntoDart for crate::catalog::schema::Track {
             self.album_artist_reading.into_into_dart().into_dart(),
             self.recording_mbid.into_into_dart().into_dart(),
             self.album_artist_mbid.into_into_dart().into_dart(),
+            self.path.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3433,6 +3436,7 @@ impl SseEncode for crate::catalog::schema::Track {
         <Option<String>>::sse_encode(self.album_artist_reading, serializer);
         <Option<String>>::sse_encode(self.recording_mbid, serializer);
         <Option<String>>::sse_encode(self.album_artist_mbid, serializer);
+        <Option<String>>::sse_encode(self.path, serializer);
     }
 }
 

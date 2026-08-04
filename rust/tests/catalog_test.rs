@@ -456,6 +456,11 @@ fn file_paths_for_album_is_one_per_track() {
     assert_eq!(paths.len(), tracks.len(), "queue must be 1:1 with tracks");
     // MIN(path) picks the lexically-first file per track.
     assert_eq!(paths, vec!["/m/a1.flac", "/m/a2.flac"]);
+    // Track.path (shown in the info dialog) uses the same rule.
+    assert_eq!(
+        tracks.iter().map(|t| t.path.clone()).collect::<Vec<_>>(),
+        vec![Some("/m/a1.flac".into()), Some("/m/a2.flac".into())]
+    );
 }
 
 #[test]

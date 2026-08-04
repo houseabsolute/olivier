@@ -363,6 +363,11 @@ class Track {
   final String? recordingMbid;
   final String? albumArtistMbid;
 
+  /// on-disk path of the track's file, picked with the same MIN(path) rule as
+  /// `file_paths_for_album` so the info dialog names the file that plays. None
+  /// only for a track with no file rows, which a post-scan catalog never has.
+  final String? path;
+
   const Track({
     required this.id,
     required this.disc,
@@ -379,6 +384,7 @@ class Track {
     this.albumArtistReading,
     this.recordingMbid,
     this.albumArtistMbid,
+    this.path,
   });
 
   @override
@@ -397,7 +403,8 @@ class Track {
       albumArtistOriginal.hashCode ^
       albumArtistReading.hashCode ^
       recordingMbid.hashCode ^
-      albumArtistMbid.hashCode;
+      albumArtistMbid.hashCode ^
+      path.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -418,5 +425,6 @@ class Track {
           albumArtistOriginal == other.albumArtistOriginal &&
           albumArtistReading == other.albumArtistReading &&
           recordingMbid == other.recordingMbid &&
-          albumArtistMbid == other.albumArtistMbid;
+          albumArtistMbid == other.albumArtistMbid &&
+          path == other.path;
 }

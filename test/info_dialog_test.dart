@@ -27,6 +27,7 @@ void main() {
     expect(labels, isNot(contains('Translation'))); // null omitted
     expect(labels, isNot(contains('Last played'))); // null omitted
     expect(labels, isNot(contains('Added at'))); // 0 omitted
+    expect(labels, isNot(contains('Path'))); // null omitted
     expect(fields.firstWhere((f) => f.$1 == 'Length').$2, '4:18');
     expect(labels, contains('Album artist'));
     expect(labels, isNot(contains('Artist'))); // tag artist dropped
@@ -44,10 +45,13 @@ void main() {
       title: 'Test Song',
       addedAt: 1718800000,
       lastPlayed: 1718900000,
+      path: '/music/Artist/Album/01 Test Song.flac',
     );
     final fields = trackInfoFields(t);
     final labels = fields.map((f) => f.$1).toList();
     expect(labels, contains('Added at'));
+    expect(fields.firstWhere((f) => f.$1 == 'Path').$2,
+        '/music/Artist/Album/01 Test Song.flac');
     expect(labels, contains('Last played'));
     // Track id must still appear after the timestamp rows
     expect(labels, contains('Track id'));

@@ -90,6 +90,10 @@ pub struct Track {
     pub album_artist_reading: Option<String>,
     pub recording_mbid: Option<String>,
     pub album_artist_mbid: Option<String>,
+    /// on-disk path of the track's file, picked with the same MIN(path) rule as
+    /// `file_paths_for_album` so the info dialog names the file that plays. None
+    /// only for a track with no file rows, which a post-scan catalog never has.
+    pub path: Option<String>,
 }
 
 /// A queue entry paired with its catalog metadata, keyed by file path — used to

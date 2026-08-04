@@ -236,7 +236,7 @@ pub fn tracks_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Result
                 ), ''),
                 aa.name, aa.name_original,
                 COALESCE(aa.transliteration_override, aa.transliteration),
-                t.recording_mbid, r.album_artist_mbid
+                t.recording_mbid, r.album_artist_mbid, MIN(f.path)
          FROM track t
          JOIN release r ON r.mbid = t.release_mbid
          LEFT JOIN artist aa ON aa.mbid = r.album_artist_mbid
@@ -264,6 +264,7 @@ pub fn tracks_for_album(conn: &Connection, release_mbid: &str) -> anyhow::Result
             album_artist_reading: r.get(12)?,
             recording_mbid: r.get(13)?,
             album_artist_mbid: r.get(14)?,
+            path: r.get(15)?,
         })
     })?;
     for r in rows {

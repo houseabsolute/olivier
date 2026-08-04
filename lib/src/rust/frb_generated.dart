@@ -1994,8 +1994,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Track dco_decode_track(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 15)
-      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    if (arr.length != 16)
+      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
     return Track(
       id: dco_decode_i_64(arr[0]),
       disc: dco_decode_u_32(arr[1]),
@@ -2012,6 +2012,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       albumArtistReading: dco_decode_opt_String(arr[12]),
       recordingMbid: dco_decode_opt_String(arr[13]),
       albumArtistMbid: dco_decode_opt_String(arr[14]),
+      path: dco_decode_opt_String(arr[15]),
     );
   }
 
@@ -2552,6 +2553,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_albumArtistReading = sse_decode_opt_String(deserializer);
     var var_recordingMbid = sse_decode_opt_String(deserializer);
     var var_albumArtistMbid = sse_decode_opt_String(deserializer);
+    var var_path = sse_decode_opt_String(deserializer);
     return Track(
         id: var_id,
         disc: var_disc,
@@ -2567,7 +2569,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         albumArtistOriginal: var_albumArtistOriginal,
         albumArtistReading: var_albumArtistReading,
         recordingMbid: var_recordingMbid,
-        albumArtistMbid: var_albumArtistMbid);
+        albumArtistMbid: var_albumArtistMbid,
+        path: var_path);
   }
 
   @protected
@@ -3036,6 +3039,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.albumArtistReading, serializer);
     sse_encode_opt_String(self.recordingMbid, serializer);
     sse_encode_opt_String(self.albumArtistMbid, serializer);
+    sse_encode_opt_String(self.path, serializer);
   }
 
   @protected
