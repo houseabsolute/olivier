@@ -11,6 +11,7 @@ class QueueView {
     required this.tracks,
     required this.currentIndex,
     required this.shuffled,
+    this.ended = false,
   });
 
   final List<QueueTrack> tracks;
@@ -19,6 +20,10 @@ class QueueView {
   /// when the queue is empty / nothing is current.
   final int? currentIndex;
   final bool shuffled;
+
+  /// The player has finished the last entry (see `QueueController.ended`). The
+  /// queue still holds its tracks, but nothing is playing or up next.
+  final bool ended;
 
   static const empty =
       QueueView(tracks: <QueueTrack>[], currentIndex: null, shuffled: false);
@@ -102,6 +107,7 @@ class QueueNotifier extends AsyncNotifier<QueueView> {
         tracks: _cachedTracks,
         currentIndex: idx,
         shuffled: controller.shuffled,
+        ended: controller.ended,
       ));
     });
     ref.onDispose(sub.cancel);
@@ -126,6 +132,7 @@ class QueueNotifier extends AsyncNotifier<QueueView> {
       tracks: tracks,
       currentIndex: idx,
       shuffled: controller.shuffled,
+      ended: controller.ended,
     );
   }
 }

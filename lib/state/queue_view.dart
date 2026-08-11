@@ -31,11 +31,18 @@ final showPlayedProvider = NotifierProvider<ShowPlayed, bool>(ShowPlayed.new);
 /// played tracks (the default) starts at the current track so it's pinned at the
 /// top; showing played tracks — or nothing playing — starts at 0. Clamped to
 /// [0, trackCount] so a stale/out-of-range currentIndex can't over-run the list.
+///
+/// [ended] (the player finished the last entry) counts the final track as
+/// played, so hiding played tracks then shows nothing rather than leaving the
+/// track that just finished sitting at the top as if it were still up.
 int queueVisibleStart({
   required bool showPlayed,
   required int? currentIndex,
   required int trackCount,
+  bool ended = false,
 }) {
-  if (showPlayed || currentIndex == null) return 0;
+  if (showPlayed) return 0;
+  if (ended) return trackCount;
+  if (currentIndex == null) return 0;
   return currentIndex.clamp(0, trackCount);
 }

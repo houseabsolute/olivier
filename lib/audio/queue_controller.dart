@@ -62,10 +62,28 @@ class QueueController implements ShuffleAllTarget {
   // now-playing items can be built to line up 1:1 with the player by index.
   List<String> _playOrder = [];
   bool _shuffled = false;
+  bool _ended = false;
+
+  /// True once the player has played past the last entry. The player keeps
+  /// reporting the final source as its current index after it completes, so
+  /// without this flag the queue view would go on showing (and highlighting)
+  /// the finished track as if it were still up. Cleared by every mutation and
+  /// by [playAt], i.e. by anything that gives the player somewhere to be.
+  bool get ended => _ended;
+
+  /// Called by [PlaybackController] when the player reaches
+  /// `ProcessingState.completed` — the end of the whole play order, not of an
+  /// individual track. Idempotent: completion re-emits on later player events.
+  void markEnded() {
+    if (_ended || _orderedPaths.isEmpty) return;
+    _ended = true;
+    revision.value++;
+  }
 
   Future<void> setQueue(List<String> paths, {int initialIndex = 0}) async {
     _orderedPaths = List.of(paths);
     _shuffled = false;
+    _ended = false;
     await _rebuild(initialIndex);
     await _persist();
     revision.value++;
@@ -79,6 +97,7 @@ class QueueController implements ShuffleAllTarget {
     final cur = currentCanonicalIndex ?? 0;
     final pos = _player.position;
     _shuffled = on;
+    _ended = false;
     await _rebuild(cur, initialPosition: pos);
     await _persist();
     revision.value++;
@@ -91,6 +110,9 @@ class QueueController implements ShuffleAllTarget {
   /// shuffled, new paths join the tail of both (they were not part of the
   /// earlier shuffle, which is acceptable — a reshuffle is a deliberate reset).
   Future<void> append(List<String> paths) async {
+    // Appending gives the player somewhere to go again, so the queue is no
+    // longer "finished" even though the player's index hasn't moved yet.
+    _ended = false;
     if (_orderedPaths.isEmpty) {
       // Appending into an empty queue: rebuild the player's sources from scratch
       // rather than incrementally adding onto whatever a previous `clear()` left
@@ -119,6 +141,7 @@ class QueueController implements ShuffleAllTarget {
   /// through _playOrder. Occurrence-aware so duplicate paths are handled.
   Future<void> removeAt(int index) async {
     if (index < 0 || index >= _orderedPaths.length) return;
+    _ended = false;
     final playerIndex = _playerIndexForCanonical(index);
     final path = _orderedPaths.removeAt(index);
     if (playerIndex >= 0 && playerIndex < _playOrder.length) {
@@ -137,6 +160,7 @@ class QueueController implements ShuffleAllTarget {
   /// emptying the queue stops playback. No-op for an empty set.
   Future<void> removePaths(Set<String> paths) async {
     if (paths.isEmpty) return;
+    _ended = false;
     for (var i = _playOrder.length - 1; i >= 0; i--) {
       if (paths.contains(_playOrder[i])) {
         _playOrder.removeAt(i);
@@ -170,6 +194,7 @@ class QueueController implements ShuffleAllTarget {
   /// Move the entry at [from] to [to] within the canonical order.
   Future<void> reorder(int from, int to) async {
     if (from < 0 || from >= _orderedPaths.length) return;
+    _ended = false;
     final path = _orderedPaths.removeAt(from);
     final dest = to.clamp(0, _orderedPaths.length);
     _orderedPaths.insert(dest, path);
@@ -204,6 +229,7 @@ class QueueController implements ShuffleAllTarget {
     _orderedPaths = [];
     _playOrder = [];
     _shuffled = false;
+    _ended = false;
     await _player.stop();
     await _player.setAudioSources([]);
     await _persist();
@@ -300,6 +326,7 @@ class QueueController implements ShuffleAllTarget {
 
     _orderedPaths = kept;
     _shuffled = snap.shuffle;
+    _ended = false;
     // Seek back to the saved offset for the current track on restore. The
     // offset is kept fresh by savePlayhead() (fired on pause, track-change, and
     // Ctrl+Q quit), so a mid-track session resumes where it left off, cued
@@ -357,6 +384,8 @@ class QueueController implements ShuffleAllTarget {
   /// shuffled, occurrence-aware for duplicates).
   Future<void> playAt(int index) async {
     if (index < 0 || index >= _orderedPaths.length) return;
+    _ended = false;
+    revision.value++;
     final playerIndex = _playerIndexForCanonical(index);
     await _player.seek(Duration.zero, index: playerIndex);
     await _player.play();

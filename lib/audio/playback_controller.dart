@@ -273,6 +273,10 @@ class PlaybackController {
     _playerStateSub = audioHandler.player.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
         _checkAndRecord(forceRecord: true);
+        // End of the whole play order (just_audio only completes once the last
+        // source finishes). Tell the queue so the view stops presenting the
+        // finished track as current — the player's index stays put otherwise.
+        queueController.markEnded();
       }
     });
   }
