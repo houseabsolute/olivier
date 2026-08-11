@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart'
     show selectedAlbumObjectProvider;
 import 'package:olivier/catalog/album_column.dart';
+import 'package:olivier/catalog/albums_by_added_page.dart';
 import 'package:olivier/catalog/artist_column.dart';
 import 'package:olivier/catalog/queue_panel.dart';
 import 'package:olivier/catalog/track_column.dart';
@@ -146,6 +147,11 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
         title: widget.topControls ?? TopControls(audioHandler: audioHandler),
         actions: [
           IconButton(
+            icon: const Icon(Icons.new_releases_outlined),
+            tooltip: 'Albums by date added',
+            onPressed: () => _openAlbumsByAdded(context, ref),
+          ),
+          IconButton(
             icon: const Icon(Icons.playlist_play),
             tooltip: 'Playlists',
             onPressed: () => _openPlaylists(context, ref),
@@ -275,11 +281,15 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
                   ref.read(queueExpandedProvider.notifier).toggle(),
             ),
             PopupMenuButton<String>(
-              onSelected: (v) => v == 'playlists'
-                  ? _openPlaylists(context, ref)
-                  : _openSettings(context, ref),
+              onSelected: (v) => switch (v) {
+                'playlists' => _openPlaylists(context, ref),
+                'added' => _openAlbumsByAdded(context, ref),
+                _ => _openSettings(context, ref),
+              },
               itemBuilder: (_) => const [
                 PopupMenuItem(value: 'playlists', child: Text('Playlists')),
+                PopupMenuItem(
+                    value: 'added', child: Text('Albums by date added')),
                 PopupMenuItem(value: 'settings', child: Text('Settings')),
               ],
             ),
@@ -338,6 +348,13 @@ class _BrowserPageState extends ConsumerState<BrowserPage> {
       case BrowseLevel.tracks:
         return ref.watch(selectedAlbumObjectProvider)?.title ?? 'Tracks';
     }
+  }
+
+  void _openAlbumsByAdded(BuildContext context, WidgetRef ref) {
+    ref.read(searchQueryProvider.notifier).clear();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AlbumsByAddedPage()),
+    );
   }
 
   void _openPlaylists(BuildContext context, WidgetRef ref) {

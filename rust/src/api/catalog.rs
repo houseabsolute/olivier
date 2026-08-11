@@ -101,6 +101,11 @@ pub fn list_albums(db_path: String, album_artist_mbid: String) -> anyhow::Result
     query::albums_for_artist(&db::open(&db_path)?, &album_artist_mbid)
 }
 
+/// Every album in the library ordered by date added (see `albums_by_added`).
+pub fn list_albums_by_added(db_path: String, newest_first: bool) -> anyhow::Result<Vec<Album>> {
+    query::albums_by_added(&db::open(&db_path)?, newest_first)
+}
+
 pub fn search_catalog(db_path: String, q: String, limit: u32) -> anyhow::Result<SearchResults> {
     query::search_catalog(&db::open(&db_path)?, &q, limit)
 }

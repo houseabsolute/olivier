@@ -104,6 +104,35 @@ final albumsProvider = FutureProvider<List<Album>>((ref) {
   return listAlbums(dbPath: db, albumArtistMbid: artistMbid);
 });
 
+// --- Albums by date added (library-wide) ---
+
+/// Sort direction of the albums-by-date-added view: newest first by default,
+/// which is what "what did I just add?" asks for. Session-only, like the other
+/// browse view state.
+class AlbumsAddedNewestFirst extends Notifier<bool> {
+  @override
+  bool build() => true;
+
+  void toggle() => state = !state;
+}
+
+final albumsAddedNewestFirstProvider =
+    NotifierProvider<AlbumsAddedNewestFirst, bool>(AlbumsAddedNewestFirst.new);
+
+// Seam so the view is testable without the FFI.
+typedef AlbumsByAddedFn = Future<List<Album>> Function(bool newestFirst);
+
+final albumsByAddedFnProvider = Provider<AlbumsByAddedFn>((ref) {
+  final db = ref.watch(dbPathProvider);
+  return (newestFirst) =>
+      listAlbumsByAdded(dbPath: db, newestFirst: newestFirst);
+});
+
+final albumsByAddedProvider = FutureProvider<List<Album>>((ref) {
+  final newestFirst = ref.watch(albumsAddedNewestFirstProvider);
+  return ref.watch(albumsByAddedFnProvider)(newestFirst);
+});
+
 // --- Tracks for selected album ---
 
 final tracksProvider = FutureProvider<List<Track>>((ref) {

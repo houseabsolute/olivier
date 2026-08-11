@@ -80,6 +80,12 @@ Future<List<Album>> listAlbums(
     RustLib.instance.api.crateApiCatalogListAlbums(
         dbPath: dbPath, albumArtistMbid: albumArtistMbid);
 
+/// Every album in the library ordered by date added (see `albums_by_added`).
+Future<List<Album>> listAlbumsByAdded(
+        {required String dbPath, required bool newestFirst}) =>
+    RustLib.instance.api.crateApiCatalogListAlbumsByAdded(
+        dbPath: dbPath, newestFirst: newestFirst);
+
 Future<SearchResults> searchCatalog(
         {required String dbPath, required String q, required int limit}) =>
     RustLib.instance.api

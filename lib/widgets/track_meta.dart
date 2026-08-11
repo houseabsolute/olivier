@@ -40,7 +40,7 @@ class TrackMeta extends StatelessWidget {
           width: kTrackMetaDateWidth,
           child: Tooltip(
             message: 'Date added',
-            child: Text(_fmtDate(addedAt),
+            child: Text(formatMetaDate(addedAt),
                 textAlign: TextAlign.right, style: style),
           ),
         ),
@@ -49,7 +49,7 @@ class TrackMeta extends StatelessWidget {
           width: kTrackMetaDateWidth,
           child: Tooltip(
             message: 'Last played',
-            child: Text(_fmtDate(lastPlayed ?? 0),
+            child: Text(formatMetaDate(lastPlayed ?? 0),
                 textAlign: TextAlign.right, style: style),
           ),
         ),
@@ -92,8 +92,9 @@ String _fmtLen(BigInt? ms) {
   return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
 }
 
-/// Local `YYYY-MM-DD`; `—` for unknown (unix seconds <= 0).
-String _fmtDate(int secs) {
+/// Local `YYYY-MM-DD`; `—` for unknown (unix seconds <= 0). Shared with the
+/// other places that show a catalog date (e.g. the albums-by-date-added view).
+String formatMetaDate(int secs) {
   if (secs <= 0) return '—';
   final d = DateTime.fromMillisecondsSinceEpoch(secs * 1000);
   String two(int n) => n.toString().padLeft(2, '0');

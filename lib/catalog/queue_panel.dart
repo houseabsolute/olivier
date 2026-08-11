@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/audio/queue_entity.dart';
+import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/state/queue_view.dart';
@@ -62,6 +63,9 @@ const double _queueDragColWidth = 24;
 // Wide enough for a 5-digit order number (a shuffle-entire-library queue can
 // run into the ten-thousands) without wrapping the tight number cell.
 const double _queueNumberColWidth = 48;
+// The track's own number on its album (disc-prefixed on a multi-disc release,
+// e.g. "2-05"), so it fits a two-digit disc and a two-digit position.
+const double _queueTrackNoColWidth = 40;
 const double _queueColGap = 8;
 const double _queueRemoveColWidth = 40;
 const int _queueTitleFlex = 3;
@@ -81,7 +85,7 @@ const double _queueRowBase = 50;
 /// Below this panel width the fixed ~228px Length/Added/Played block leaves too
 /// little room for the title/artist/album columns and the row would overflow,
 /// so the meta columns drop out (in both the header and the rows) instead.
-const double _queueMetaMinWidth = 560;
+const double _queueMetaMinWidth = 608;
 
 /// Below this panel width the collapsed header switches to a compact layout: the
 /// now-playing thumbnail is dropped and the count text flexes so it ellipsizes
@@ -90,6 +94,17 @@ const double _queueMetaMinWidth = 560;
 /// window — no minimum window size is enforced) the row can still overflow.
 const double _queueHeaderCompactWidth = 520;
 
+/// The track's number on its own album, for the queue row's `#` column:
+/// `disc-position` on a multi-disc release (e.g. `2-05`), otherwise just the
+/// position. Empty for an entry whose path has left the catalog (no numbers to
+/// show) — the same case that leaves `trackId` null.
+String queueTrackNumber(QueueTrack t) {
+  final position = t.position;
+  if (position == null) return '';
+  final disc = t.disc ?? 1;
+  return disc > 1 ? '$disc-$position' : '$position';
+}
+
 /// Lays out one expanded-queue row — or the column header — with identical
 /// geometry so the header labels align with the cells beneath them. [lead]
 /// fills the drag-handle column, [trailing] the remove-button column. [meta]
@@ -97,6 +112,7 @@ const double _queueHeaderCompactWidth = 520;
 Widget _queueRowLayout({
   required Widget lead,
   required Widget number,
+  required Widget trackNo,
   required Widget title,
   required Widget artist,
   required Widget album,
@@ -109,6 +125,8 @@ Widget _queueRowLayout({
       SizedBox(width: _queueDragColWidth, child: lead),
       const SizedBox(width: _queueColGap),
       SizedBox(width: _queueNumberColWidth, child: number),
+      const SizedBox(width: _queueColGap),
+      SizedBox(width: _queueTrackNoColWidth, child: trackNo),
       const SizedBox(width: _queueColGap),
       Expanded(flex: _queueTitleFlex, child: title),
       const SizedBox(width: _queueColGap),
@@ -143,6 +161,7 @@ class _QueueColumnHeader extends StatelessWidget {
       child: _queueRowLayout(
         lead: const SizedBox.shrink(),
         number: const SizedBox.shrink(),
+        trackNo: Text('#', textAlign: TextAlign.end, style: style),
         title: Text('Title', style: style),
         artist: Text('Artist', style: style),
         album: Text('Album', style: style),
@@ -190,7 +209,9 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
     // (shorter) tracks — e.g. right after appending an album, before _resolve()
     // repopulates tracks. Indexing without the range check threw a RangeError
     // during build, flashing Flutter's red error screen for a frame.
-    final currentIndex = view.currentIndex;
+    // Nothing is current once the queue has run out (view.ended), so the
+    // header drops the now-playing thumbnail too.
+    final currentIndex = view.ended ? null : view.currentIndex;
     final nowPlaying = (currentIndex != null &&
             currentIndex >= 0 &&
             currentIndex < view.tracks.length)
@@ -346,6 +367,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
       showPlayed: showPlayed,
       currentIndex: view.currentIndex,
       trackCount: view.tracks.length,
+      ended: view.ended,
     );
 
     return LayoutBuilder(
@@ -379,7 +401,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                   itemBuilder: (context, j) {
                     final i = start + j; // canonical index in the full queue
                     final t = view.tracks[i];
-                    final selected = i == view.currentIndex;
+                    final selected = i == view.currentIndex && !view.ended;
                     final muted = Theme.of(context)
                         .textTheme
                         .bodySmall
@@ -410,6 +432,13 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                             ),
                             number: Text(
                               '${i + 1}',
+                              textAlign: TextAlign.end,
+                              style: muted,
+                              maxLines: 1,
+                              overflow: TextOverflow.clip,
+                            ),
+                            trackNo: Text(
+                              queueTrackNumber(t),
                               textAlign: TextAlign.end,
                               style: muted,
                               maxLines: 1,
@@ -467,7 +496,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
   /// The title of the entry that plays after the current one (or the first entry
   /// when nothing is current yet); null when the queue is empty or at its end.
   String? _upNext(QueueView view) {
-    if (view.tracks.isEmpty) return null;
+    if (view.tracks.isEmpty || view.ended) return null;
     final current = view.currentIndex;
     final nextIndex = current == null ? 0 : current + 1;
     if (nextIndex >= view.tracks.length) return null;

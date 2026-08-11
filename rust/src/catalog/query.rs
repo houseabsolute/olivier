@@ -173,12 +173,10 @@ pub fn set_release_title_override(
     Ok(())
 }
 
-/// Albums for one album-artist, ordered by original year then title
-/// (case-insensitive; spec §6.1).
-pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::Result<Vec<Album>> {
-    let mut out = Vec::new();
-    let mut stmt = conn.prepare(
-        "SELECT r.mbid, r.title, a.name,
+/// The projection every album query selects, from `release r JOIN artist a`
+/// left-joined to `release_group rg`. Kept in one place so the per-artist and
+/// library-wide listings return identically-shaped rows for [`album_from_row`].
+const ALBUM_COLUMNS: &str = "r.mbid, r.title, a.name,
                 substr(rg.first_release_date, 1, 4), substr(r.date, 1, 4),
                 NULLIF(COALESCE(
                     (SELECT translit FROM release_title_override WHERE release_mbid = r.mbid),
@@ -189,31 +187,63 @@ pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::
                     (SELECT title FROM release_title_alt WHERE release_mbid = r.mbid AND kind = 'translate')
                 ), ''),
                 (SELECT MIN(f.added_at) FROM track t JOIN file f ON f.track_id = t.id
-                   WHERE t.release_mbid = r.mbid),
+                   WHERE t.release_mbid = r.mbid) AS added_at,
                 a.name_original,
                 COALESCE(a.transliteration_override, a.transliteration),
-                r.album_artist_mbid
-         FROM release r
+                r.album_artist_mbid";
+
+const ALBUM_FROM: &str = "FROM release r
          JOIN artist a ON a.mbid = r.album_artist_mbid
-         LEFT JOIN release_group rg ON rg.mbid = r.release_group_mbid
+         LEFT JOIN release_group rg ON rg.mbid = r.release_group_mbid";
+
+/// Maps one [`ALBUM_COLUMNS`] row.
+fn album_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Album> {
+    Ok(Album {
+        release_mbid: r.get(0)?,
+        title: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+        album_artist: r.get(2)?,
+        original_year: r.get(3)?,
+        reissue_year: r.get(4)?,
+        title_translit: r.get(5)?,
+        title_translate: r.get(6)?,
+        added_at: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
+        album_artist_original: r.get(8)?,
+        album_artist_reading: r.get(9)?,
+        album_artist_mbid: r.get(10)?,
+    })
+}
+
+/// Albums for one album-artist, ordered by original year then title
+/// (case-insensitive; spec §6.1).
+pub fn albums_for_artist(conn: &Connection, album_artist_mbid: &str) -> anyhow::Result<Vec<Album>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {ALBUM_COLUMNS}
+         {ALBUM_FROM}
          WHERE r.album_artist_mbid = ?1
-         ORDER BY COALESCE(rg.first_release_date, r.date, '9999'), r.title COLLATE NOCASE",
-    )?;
-    let rows = stmt.query_map([album_artist_mbid], |r| {
-        Ok(Album {
-            release_mbid: r.get(0)?,
-            title: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
-            album_artist: r.get(2)?,
-            original_year: r.get(3)?,
-            reissue_year: r.get(4)?,
-            title_translit: r.get(5)?,
-            title_translate: r.get(6)?,
-            added_at: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
-            album_artist_original: r.get(8)?,
-            album_artist_reading: r.get(9)?,
-            album_artist_mbid: r.get(10)?,
-        })
-    })?;
+         ORDER BY COALESCE(rg.first_release_date, r.date, '9999'), r.title COLLATE NOCASE"
+    ))?;
+    let rows = stmt.query_map([album_artist_mbid], album_from_row)?;
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
+/// Every album in the library ordered by when its earliest file was added —
+/// newest first when [`newest_first`], oldest first otherwise. An album whose
+/// tracks have no files sorts as added_at 0 (oldest). Title breaks ties so a
+/// whole batch imported in one scan still lists in a stable, readable order.
+pub fn albums_by_added(conn: &Connection, newest_first: bool) -> anyhow::Result<Vec<Album>> {
+    // Not user input — a bool picked here, so it cannot be an injection vector.
+    let dir = if newest_first { "DESC" } else { "ASC" };
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {ALBUM_COLUMNS}
+         {ALBUM_FROM}
+         ORDER BY COALESCE(added_at, 0) {dir}, r.title COLLATE NOCASE"
+    ))?;
+    let rows = stmt.query_map([], album_from_row)?;
     for r in rows {
         out.push(r?);
     }
@@ -389,7 +419,8 @@ pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<V
                 aa.name, aa.name_original,
                 COALESCE(aa.transliteration_override, aa.transliteration),
                 t.recording_mbid, r.album_artist_mbid,
-                substr(rg.first_release_date, 1, 4), substr(r.date, 1, 4)
+                substr(rg.first_release_date, 1, 4), substr(r.date, 1, 4),
+                t.disc, t.position
          FROM file f JOIN track t ON t.id = f.track_id
          JOIN release r ON r.mbid = t.release_mbid
          LEFT JOIN release_group rg ON rg.mbid = r.release_group_mbid
@@ -404,6 +435,8 @@ pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<V
                 Ok(QueueTrack {
                     path: path.clone(),
                     track_id: Some(r.get(0)?),
+                    disc: r.get::<_, Option<i64>>(16)?.map(|v| v as u32),
+                    position: r.get::<_, Option<i64>>(17)?.map(|v| v as u32),
                     title: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
                     artist: r.get(2)?,
                     album: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
@@ -425,6 +458,8 @@ pub fn tracks_for_paths(conn: &Connection, paths: &[String]) -> anyhow::Result<V
         out.push(found.unwrap_or_else(|| QueueTrack {
             path: path.clone(),
             track_id: None,
+            disc: None,
+            position: None,
             title: path.rsplit('/').next().unwrap_or(path).to_string(),
             artist: None,
             album: String::new(),

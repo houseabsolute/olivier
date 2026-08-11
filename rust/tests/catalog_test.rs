@@ -1,8 +1,8 @@
 use rust_lib_olivier::catalog::ids::{album_artist_key, sort_name};
 use rust_lib_olivier::catalog::query::{
-    albums_for_artist, artist_reading, artists_page, file_paths_for_album, record_play,
-    set_artist_reading_override, track_path, track_paths_for_artist, track_paths_for_library,
-    tracks_for_album, tracks_for_paths,
+    albums_by_added, albums_for_artist, artist_reading, artists_page, file_paths_for_album,
+    record_play, set_artist_reading_override, track_path, track_paths_for_artist,
+    track_paths_for_library, tracks_for_album, tracks_for_paths,
 };
 use rust_lib_olivier::catalog::roots::{add_root, list_roots, remove_root};
 use rust_lib_olivier::catalog::scan::{
@@ -497,6 +497,8 @@ fn tracks_for_paths_preserves_order_with_placeholder() {
     assert_eq!(got[0].path, "/m/missing.mp3");
     assert_eq!(got[0].track_id, None);
     assert_eq!(got[0].title, "missing.mp3");
+    assert_eq!(got[0].disc, None, "no album numbering for a missing path");
+    assert_eq!(got[0].position, None);
 
     // Real metadata for the catalogued path.
     assert_eq!(got[1].path, "/m/a.flac");
@@ -505,6 +507,8 @@ fn tracks_for_paths_preserves_order_with_placeholder() {
     assert_eq!(got[1].artist.as_deref(), Some("Art"));
     assert_eq!(got[1].album, "Album");
     assert_eq!(got[1].length_ms, Some(1000));
+    assert_eq!(got[1].disc, Some(1));
+    assert_eq!(got[1].position, Some(1));
 
     // Empty input → empty output.
     assert!(tracks_for_paths(&conn, &[]).unwrap().is_empty());
@@ -1911,4 +1915,62 @@ fn reread_album_tags_applies_a_tag_change_across_the_album() {
         )
         .unwrap();
     assert_eq!(old, 0);
+}
+
+#[test]
+fn albums_by_added_orders_both_ways_across_artists() {
+    let conn = open(":memory:").unwrap();
+    for (mbid, name) in [("m-a", "Artist A"), ("m-b", "Artist B")] {
+        conn.execute(
+            "INSERT INTO artist(mbid, name, sort_name) VALUES (?1, ?2, ?2)",
+            rusqlite::params![mbid, name],
+        )
+        .unwrap();
+    }
+    // Two albums by different artists plus one whose tracks have no files, so
+    // the NULL added_at case is covered too.
+    for (rel, artist, title) in [
+        ("r-old", "m-a", "Old Import"),
+        ("r-new", "m-b", "New Import"),
+        ("r-none", "m-a", "No Files"),
+    ] {
+        conn.execute(
+            "INSERT INTO release(mbid, album_artist_mbid, title) VALUES (?1, ?2, ?3)",
+            rusqlite::params![rel, artist, title],
+        )
+        .unwrap();
+    }
+    // added_at 100 for the old album, 900 for the new one.
+    for (id, rel, added) in [(1, "r-old", 100), (2, "r-new", 900)] {
+        conn.execute(
+            "INSERT INTO track(id, release_mbid, disc, position, title) VALUES (?1, ?2, 1, 1, 't')",
+            rusqlite::params![id, rel],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO file(path, mtime, size, track_id, added_at) VALUES (?1, 0, 0, ?2, ?3)",
+            rusqlite::params![format!("/m/{id}.flac"), id, added],
+        )
+        .unwrap();
+    }
+
+    let newest: Vec<String> = albums_by_added(&conn, true)
+        .unwrap()
+        .into_iter()
+        .map(|a| a.release_mbid)
+        .collect();
+    assert_eq!(newest, ["r-new", "r-old", "r-none"]);
+
+    let oldest = albums_by_added(&conn, false).unwrap();
+    assert_eq!(
+        oldest
+            .iter()
+            .map(|a| a.release_mbid.as_str())
+            .collect::<Vec<_>>(),
+        ["r-none", "r-old", "r-new"]
+    );
+    // The projection still carries the album's own added_at.
+    assert_eq!(oldest[1].added_at, 100);
+    assert_eq!(oldest[2].added_at, 900);
+    assert_eq!(oldest[0].added_at, 0);
 }

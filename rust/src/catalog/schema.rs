@@ -103,6 +103,11 @@ pub struct Track {
 pub struct QueueTrack {
     pub path: String,
     pub track_id: Option<i64>,
+    /// disc / track number on the album the entry came from. None (like
+    /// `track_id`) for a path no longer in the catalog, so the queue panel
+    /// renders a placeholder instead of a bogus "0".
+    pub disc: Option<u32>,
+    pub position: Option<u32>,
     pub title: String,
     pub artist: Option<String>,
     pub album: String,

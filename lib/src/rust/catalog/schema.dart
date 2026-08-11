@@ -153,6 +153,12 @@ class ArtistReading {
 class QueueTrack {
   final String path;
   final PlatformInt64? trackId;
+
+  /// disc / track number on the album the entry came from. None (like
+  /// `track_id`) for a path no longer in the catalog, so the queue panel
+  /// renders a placeholder instead of a bogus "0".
+  final int? disc;
+  final int? position;
   final String title;
   final String? artist;
   final String album;
@@ -172,6 +178,8 @@ class QueueTrack {
   const QueueTrack({
     required this.path,
     this.trackId,
+    this.disc,
+    this.position,
     required this.title,
     this.artist,
     required this.album,
@@ -193,6 +201,8 @@ class QueueTrack {
   int get hashCode =>
       path.hashCode ^
       trackId.hashCode ^
+      disc.hashCode ^
+      position.hashCode ^
       title.hashCode ^
       artist.hashCode ^
       album.hashCode ^
@@ -216,6 +226,8 @@ class QueueTrack {
           runtimeType == other.runtimeType &&
           path == other.path &&
           trackId == other.trackId &&
+          disc == other.disc &&
+          position == other.position &&
           title == other.title &&
           artist == other.artist &&
           album == other.album &&
