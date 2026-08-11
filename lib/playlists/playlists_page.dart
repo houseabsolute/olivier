@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/src/rust/catalog/playlists.dart';
 import 'package:olivier/state/playlists.dart';
+import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/state/browse_level.dart';
+import 'package:olivier/state/list_selection.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
+import 'package:olivier/widgets/context_menu.dart';
 import 'package:olivier/widgets/text_prompt_dialog.dart';
 
 /// Pure reorder helper for ReorderableListView's `onReorderItem` callback,
@@ -161,6 +164,10 @@ class _PlaylistSidebar extends ConsumerWidget {
   }
 }
 
+/// The paths a playlist-detail selection points at, in playlist order.
+List<String> _selectedPaths(SelectionBinding selection, List<String> paths) =>
+    [for (final key in selection.selectedKeys) paths[int.parse(key)]];
+
 class _PlaylistDetail extends ConsumerWidget {
   const _PlaylistDetail({this.narrow = false});
 
@@ -190,6 +197,15 @@ class _PlaylistDetail extends ConsumerWidget {
       error: (e, _) => Center(child: Text('Failed to load tracks: $e')),
       data: (tracks) {
         final paths = tracks.map((t) => t.path).toList();
+        // Keyed by position, not path: a playlist may legitimately hold the
+        // same track twice, so the path is not a unique row key.
+        final selection = SelectionBinding(
+          ref: ref,
+          provider: playlistSelectionProvider,
+          rowKeys: [for (var i = 0; i < tracks.length; i++) '$i'],
+          selection: ref.watch(playlistSelectionProvider),
+          singular: 'track',
+        );
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -267,31 +283,58 @@ class _PlaylistDetail extends ConsumerWidget {
                       itemCount: tracks.length,
                       onReorderItem: (oldIndex, newIndex) {
                         final newPaths = reordered(paths, oldIndex, newIndex);
+                        selection.clear(); // the positions just moved
                         ref
                             .read(playlistsProvider.notifier)
                             .setItems(id, newPaths);
                       },
                       itemBuilder: (context, i) {
                         final t = tracks[i];
-                        return ListTile(
+                        return RowContextMenu(
                           key: ValueKey('${t.path}#$i'),
-                          title: BilingualText(
-                            original: t.title,
-                            translit: t.titleTranslit,
-                            translate: t.titleTranslate,
-                            leads: leads,
-                          ),
-                          subtitle: Text(t.artist ?? ''),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.close),
-                            tooltip: 'Remove',
-                            onPressed: () {
-                              final newPaths = List<String>.of(paths)
-                                ..removeAt(i);
-                              ref
-                                  .read(playlistsProvider.notifier)
-                                  .setItems(id, newPaths);
-                            },
+                          // Playlist rows are positions, not catalog entities;
+                          // every handler below works off the selection, so the
+                          // entity is only here for the menu's signature.
+                          entity: const QueueEntityRef.track(0),
+                          longPressToOpen: narrow,
+                          onOpenSelection: () => selection.openMenu('$i'),
+                          onAddToQueue: (_) => ref
+                              .read(playlistPlaybackProvider)
+                              .addToQueue(_selectedPaths(selection, paths)),
+                          onRemoveFromPlaylist: (_) {
+                            final drop =
+                                selection.selectedKeys.map(int.parse).toSet();
+                            final kept = [
+                              for (var j = 0; j < paths.length; j++)
+                                if (!drop.contains(j)) paths[j],
+                            ];
+                            selection.clear();
+                            ref
+                                .read(playlistsProvider.notifier)
+                                .setItems(id, kept);
+                          },
+                          child: ListTile(
+                            selected: selection.contains('$i'),
+                            onTap: () => selection.tap('$i'),
+                            title: BilingualText(
+                              original: t.title,
+                              translit: t.titleTranslit,
+                              translate: t.titleTranslate,
+                              leads: leads,
+                            ),
+                            subtitle: Text(t.artist ?? ''),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.close),
+                              tooltip: 'Remove',
+                              onPressed: () {
+                                final newPaths = List<String>.of(paths)
+                                  ..removeAt(i);
+                                selection.clear();
+                                ref
+                                    .read(playlistsProvider.notifier)
+                                    .setItems(id, newPaths);
+                              },
+                            ),
                           ),
                         );
                       },

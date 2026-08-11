@@ -7,6 +7,7 @@ import 'package:olivier/catalog/catalog_mutation.dart';
 import 'package:olivier/playlists/add_to_playlist_dialog.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/enrich_controller.dart';
+import 'package:olivier/state/list_selection.dart';
 import 'package:olivier/state/capabilities.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/album_cover.dart';
@@ -16,9 +17,12 @@ import 'package:olivier/widgets/context_menu.dart';
 import 'package:olivier/widgets/info_dialog.dart';
 import 'package:olivier/widgets/title_override_dialog.dart';
 
-Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
-  final paths = await resolveEntityPaths(
-    entity,
+/// Append every selected album's tracks, in list order. The selection always
+/// contains the row the menu was opened on (see [RowSelection.ensureContains]),
+/// so this covers the single-row case too.
+Future<void> enqueueSelectedAlbums(WidgetRef ref, List<String> selected) async {
+  final paths = await resolveEntitiesPaths(
+    [for (final mbid in selected) QueueEntityRef.album(mbid)],
     ref.read(entityPathFnsProvider),
   );
   if (paths.isEmpty) return;
@@ -87,6 +91,13 @@ class _AlbumListState extends ConsumerState<_AlbumList> {
     final leads = ref.watch(languageLeadsProvider);
     // A synced-catalog device must not edit what the desktop owns.
     final canModify = ref.watch(canModifyCatalogProvider);
+    final selection = SelectionBinding(
+      ref: ref,
+      provider: albumSelectionProvider,
+      rowKeys: [for (final a in widget.albums) a.releaseMbid],
+      selection: ref.watch(albumSelectionProvider),
+      singular: 'album',
+    );
     if (widget.albums.isEmpty) {
       return const Center(child: Text('Select an artist'));
     }
@@ -101,7 +112,10 @@ class _AlbumListState extends ConsumerState<_AlbumList> {
       scrollCacheExtent: const ScrollCacheExtent.pixels(600),
       itemBuilder: (context, index) {
         final album = widget.albums[index];
-        final isSelected = selected == album.releaseMbid;
+        // Highlighted either as the drilled-into album or as part of a
+        // multi-row selection.
+        final isSelected = selected == album.releaseMbid ||
+            selection.contains(album.releaseMbid);
         final year = album.originalYear ?? album.reissueYear ?? '';
         final entity = QueueEntityRef.album(album.releaseMbid);
         return BrowseDragSource(
@@ -111,7 +125,9 @@ class _AlbumListState extends ConsumerState<_AlbumList> {
           child: RowContextMenu(
             longPressToOpen: widget.narrow,
             entity: entity,
-            onAddToQueue: (e) => _enqueue(ref, e),
+            onOpenSelection: () => selection.openMenu(album.releaseMbid),
+            onAddToQueue: (_) =>
+                enqueueSelectedAlbums(ref, selection.selectedKeys),
             onAddToPlaylist: (entity) =>
                 showAddToPlaylistDialog(context, ref, entity),
             onInfo: (_) => showInfoDialog(context,
@@ -162,20 +178,35 @@ class _AlbumListState extends ConsumerState<_AlbumList> {
                   },
             onRemove: !canModify
                 ? null
-                : (_) => runCatalogMutation(
+                : (_) {
+                    final mbids = selection.selectedKeys;
+                    final what = mbids.length == 1
+                        ? '"${album.title}"'
+                        : '${mbids.length} albums';
+                    runCatalogMutation(
                       context,
                       ref,
-                      action: () =>
-                          ref.read(removeAlbumFnProvider)(album.releaseMbid),
-                      clearSelection: () =>
-                          ref.read(selectedAlbumProvider.notifier).clear(),
-                      successMessage: 'Removed "${album.title}"',
-                      failureMessage: 'Failed to remove "${album.title}"',
+                      action: () async {
+                        final remove = ref.read(removeAlbumFnProvider);
+                        for (final mbid in mbids) {
+                          await remove(mbid);
+                        }
+                      },
+                      clearSelection: () {
+                        ref.read(selectedAlbumProvider.notifier).clear();
+                        selection.clear();
+                      },
+                      successMessage: 'Removed $what',
+                      failureMessage: 'Failed to remove $what',
                       reconcileQueue: true,
-                    ),
+                    );
+                  },
             child: InkWell(
               key: ValueKey(album.releaseMbid),
               onTap: () {
+                // A modified click only edits the selection; a plain one still
+                // drills into the album as it always has.
+                if (!selection.tap(album.releaseMbid)) return;
                 ref
                     .read(selectedAlbumProvider.notifier)
                     .select(album.releaseMbid);

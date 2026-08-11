@@ -7,6 +7,7 @@ import 'package:olivier/catalog/catalog_mutation.dart';
 import 'package:olivier/playlists/add_to_playlist_dialog.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
 import 'package:olivier/state/capabilities.dart';
+import 'package:olivier/state/list_selection.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/widgets/bilingual_text.dart';
 import 'package:olivier/widgets/browse_drag_source.dart';
@@ -25,9 +26,11 @@ const double _trackMetaMinWidth = 480;
 // bilingual content needs ~36px, so 42 packs the rows closer together.
 const double _trackRowBase = 42;
 
-Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
-  final paths = await resolveEntityPaths(
-    entity,
+/// Append every selected track, in list order. The selection always contains
+/// the row the menu was opened on, so this covers the single-row case too.
+Future<void> enqueueSelectedTracks(WidgetRef ref, List<int> trackIds) async {
+  final paths = await resolveEntitiesPaths(
+    [for (final id in trackIds) QueueEntityRef.track(id)],
     ref.read(entityPathFnsProvider),
   );
   if (paths.isEmpty) return;
@@ -101,6 +104,16 @@ class _TrackListState extends ConsumerState<_TrackList> {
     // A synced-catalog device must not edit what the desktop owns.
     final canModify = ref.watch(canModifyCatalogProvider);
     final selectedTrack = ref.watch(selectedTrackProvider);
+    // Track rows key their selection by id, as a string like every other list.
+    final selection = SelectionBinding(
+      ref: ref,
+      provider: trackSelectionProvider,
+      rowKeys: [for (final t in tracks) '${t.id}'],
+      selection: ref.watch(trackSelectionProvider),
+      singular: 'track',
+    );
+    List<int> selectedIds() =>
+        [for (final key in selection.selectedKeys) int.parse(key)];
 
     ref.listen<int?>(
         selectedTrackProvider, (_, next) => _scrollToSelected(next));
@@ -126,7 +139,8 @@ class _TrackListState extends ConsumerState<_TrackList> {
               itemBuilder: (context, index) {
                 final track = tracks[index];
                 final trackId = track.id;
-                final isSelected = selectedTrack == trackId;
+                final isSelected =
+                    selectedTrack == trackId || selection.contains('$trackId');
                 final entity = QueueEntityRef.track(trackId);
                 final recordingMbid = track.recordingMbid;
                 return BrowseDragSource(
@@ -136,7 +150,9 @@ class _TrackListState extends ConsumerState<_TrackList> {
                   child: RowContextMenu(
                     longPressToOpen: widget.narrow,
                     entity: entity,
-                    onAddToQueue: (e) => _enqueue(ref, e),
+                    onOpenSelection: () => selection.openMenu('$trackId'),
+                    onAddToQueue: (_) =>
+                        enqueueSelectedTracks(ref, selectedIds()),
                     onAddToPlaylist: (entity) =>
                         showAddToPlaylistDialog(context, ref, entity),
                     onInfo: (_) => showInfoDialog(context,
@@ -177,24 +193,40 @@ class _TrackListState extends ConsumerState<_TrackList> {
                           },
                     onRemove: !canModify
                         ? null
-                        : (_) => runCatalogMutation(
+                        : (_) {
+                            final ids = selectedIds();
+                            final what = ids.length == 1
+                                ? '"${track.title}"'
+                                : '${ids.length} tracks';
+                            runCatalogMutation(
                               context,
                               ref,
-                              action: () =>
-                                  ref.read(removeTrackFnProvider)(track.id),
-                              clearSelection: () => ref
-                                  .read(selectedTrackProvider.notifier)
-                                  .clear(),
-                              successMessage: 'Removed "${track.title}"',
-                              failureMessage:
-                                  'Failed to remove "${track.title}"',
+                              action: () async {
+                                final remove = ref.read(removeTrackFnProvider);
+                                for (final id in ids) {
+                                  await remove(id);
+                                }
+                              },
+                              clearSelection: () {
+                                ref
+                                    .read(selectedTrackProvider.notifier)
+                                    .clear();
+                                selection.clear();
+                              },
+                              successMessage: 'Removed $what',
+                              failureMessage: 'Failed to remove $what',
                               reconcileQueue: true,
-                            ),
+                            );
+                          },
                     child: InkWell(
                       key: ValueKey(track.id),
-                      onTap: () => ref
-                          .read(selectedTrackProvider.notifier)
-                          .select(trackId),
+                      onTap: () {
+                        // Modified clicks only edit the selection.
+                        if (!selection.tap('$trackId')) return;
+                        ref
+                            .read(selectedTrackProvider.notifier)
+                            .select(trackId);
+                      },
                       child: Container(
                         color: isSelected
                             ? Theme.of(context).colorScheme.primaryContainer

@@ -4,6 +4,7 @@ import 'package:olivier/audio/playback_controller.dart';
 import 'package:olivier/audio/queue_controller.dart';
 import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
+import 'package:olivier/state/list_selection.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/state/queue_view.dart';
@@ -363,6 +364,15 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
     final controller = ref.read(queueControllerProvider);
     final scheme = Theme.of(context).colorScheme;
     final showPlayed = ref.watch(showPlayedProvider);
+    // Queue rows are keyed by canonical index; the selection resets on every
+    // structural change, which is exactly when those indices are renumbered.
+    final selection = SelectionBinding(
+      ref: ref,
+      provider: queueSelectionProvider,
+      rowKeys: [for (var i = 0; i < view.tracks.length; i++) '$i'],
+      selection: ref.watch(queueSelectionProvider),
+      singular: 'track',
+    );
     final start = queueVisibleStart(
       showPlayed: showPlayed,
       currentIndex: view.currentIndex,
@@ -401,7 +411,8 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                   itemBuilder: (context, j) {
                     final i = start + j; // canonical index in the full queue
                     final t = view.tracks[i];
-                    final selected = i == view.currentIndex && !view.ended;
+                    final playing = i == view.currentIndex && !view.ended;
+                    final picked = selection.contains('$i');
                     final muted = Theme.of(context)
                         .textTheme
                         .bodySmall
@@ -417,67 +428,82 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                         title: 'Track',
                         fields: queueTrackInfoFields(t),
                       ),
-                      onRemoveFromQueue: (_) => controller.removeAt(i),
+                      onOpenSelection: () => selection.openMenu('$i'),
+                      onRemoveFromQueue: (_) => controller.removeAtAll(
+                        [
+                          for (final key in selection.selectedKeys)
+                            int.parse(key)
+                        ],
+                      ),
                       child: Material(
-                        color: selected
-                            ? scheme.tertiaryContainer
-                            : Colors.transparent,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          child: _queueRowLayout(
-                            lead: ReorderableDragStartListener(
-                              index: j,
-                              child: const Icon(Icons.drag_handle),
-                            ),
-                            number: Text(
-                              '${i + 1}',
-                              textAlign: TextAlign.end,
-                              style: muted,
-                              maxLines: 1,
-                              overflow: TextOverflow.clip,
-                            ),
-                            trackNo: Text(
-                              queueTrackNumber(t),
-                              textAlign: TextAlign.end,
-                              style: muted,
-                              maxLines: 1,
-                              overflow: TextOverflow.clip,
-                            ),
-                            title: BilingualText(
-                              original: t.title,
-                              translit: t.titleTranslit,
-                              translate: t.titleTranslate,
-                              leads: leads,
-                            ),
-                            artist: BilingualText(
-                              original:
-                                  t.albumArtistOriginal ?? t.albumArtist ?? '',
-                              translit: t.albumArtistReading,
-                              translate: null,
-                              leads: leads,
-                              primaryStyle: muted,
-                            ),
-                            album: Text(
-                              albumLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: muted,
-                            ),
-                            meta: TrackMeta(
-                              lengthMs: t.lengthMs,
-                              addedAt: t.addedAt,
-                              lastPlayed: t.lastPlayed,
-                            ),
-                            showMeta: showMeta,
-                            trailing: IconButton(
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                  minWidth: 40, minHeight: 40),
-                              iconSize: 20,
-                              icon: const Icon(Icons.close),
-                              tooltip: 'Remove from queue',
-                              onPressed: () => controller.removeAt(i),
+                        // A row picked for a bulk action takes the selection
+                        // colour; the now-playing tint shows through on every
+                        // other row.
+                        color: picked
+                            ? scheme.primaryContainer
+                            : playing
+                                ? scheme.tertiaryContainer
+                                : Colors.transparent,
+                        child: InkWell(
+                          onTap: () => selection.tap('$i'),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            child: _queueRowLayout(
+                              lead: ReorderableDragStartListener(
+                                index: j,
+                                child: const Icon(Icons.drag_handle),
+                              ),
+                              number: Text(
+                                '${i + 1}',
+                                textAlign: TextAlign.end,
+                                style: muted,
+                                maxLines: 1,
+                                overflow: TextOverflow.clip,
+                              ),
+                              trackNo: Text(
+                                queueTrackNumber(t),
+                                textAlign: TextAlign.end,
+                                style: muted,
+                                maxLines: 1,
+                                overflow: TextOverflow.clip,
+                              ),
+                              title: BilingualText(
+                                original: t.title,
+                                translit: t.titleTranslit,
+                                translate: t.titleTranslate,
+                                leads: leads,
+                              ),
+                              artist: BilingualText(
+                                original: t.albumArtistOriginal ??
+                                    t.albumArtist ??
+                                    '',
+                                translit: t.albumArtistReading,
+                                translate: null,
+                                leads: leads,
+                                primaryStyle: muted,
+                              ),
+                              album: Text(
+                                albumLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: muted,
+                              ),
+                              meta: TrackMeta(
+                                lengthMs: t.lengthMs,
+                                addedAt: t.addedAt,
+                                lastPlayed: t.lastPlayed,
+                              ),
+                              showMeta: showMeta,
+                              trailing: IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                    minWidth: 40, minHeight: 40),
+                                iconSize: 20,
+                                icon: const Icon(Icons.close),
+                                tooltip: 'Remove from queue',
+                                onPressed: () => controller.removeAt(i),
+                              ),
                             ),
                           ),
                         ),

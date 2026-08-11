@@ -39,6 +39,21 @@ class EntityPathFns {
   final Future<String?> Function(int trackId) trackPath;
 }
 
+/// Resolve several entities to one ordered path list — a multi-row selection
+/// enqueued as a single block, in the order the rows appear. Duplicates are
+/// kept: the same track selected via two rows is the caller's intent, and the
+/// queue already tolerates repeated paths.
+Future<List<String>> resolveEntitiesPaths(
+  Iterable<QueueEntityRef> entities,
+  EntityPathFns fns,
+) async {
+  final out = <String>[];
+  for (final entity in entities) {
+    out.addAll(await resolveEntityPaths(entity, fns));
+  }
+  return out;
+}
+
 /// Resolve one entity to the ordered list of file paths it contributes.
 Future<List<String>> resolveEntityPaths(
   QueueEntityRef entity,

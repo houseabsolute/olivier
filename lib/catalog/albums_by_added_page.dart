@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/audio/playback_controller.dart'
-    show queueControllerProvider, selectedAlbumObjectProvider;
+    show selectedAlbumObjectProvider;
 import 'package:olivier/audio/queue_entity.dart';
 import 'package:olivier/playlists/add_to_playlist_dialog.dart';
 import 'package:olivier/src/rust/catalog/schema.dart';
+import 'package:olivier/catalog/album_column.dart' show enqueueSelectedAlbums;
+import 'package:olivier/state/list_selection.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_view.dart';
 import 'package:olivier/widgets/album_cover.dart';
@@ -67,19 +69,17 @@ class _AlbumsByAddedList extends ConsumerWidget {
     Navigator.of(context).pop();
   }
 
-  Future<void> _enqueue(WidgetRef ref, QueueEntityRef entity) async {
-    final paths = await resolveEntityPaths(
-      entity,
-      ref.read(entityPathFnsProvider),
-    );
-    if (paths.isEmpty) return;
-    await ref.read(queueControllerProvider).append(paths);
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final leads = ref.watch(languageLeadsProvider);
     final scheme = Theme.of(context).colorScheme;
+    final selection = SelectionBinding(
+      ref: ref,
+      provider: albumsByAddedSelectionProvider,
+      rowKeys: [for (final a in albums) a.releaseMbid],
+      selection: ref.watch(albumsByAddedSelectionProvider),
+      singular: 'album',
+    );
     final muted = Theme.of(context)
         .textTheme
         .bodySmall
@@ -94,7 +94,9 @@ class _AlbumsByAddedList extends ConsumerWidget {
         return RowContextMenu(
           key: ValueKey(album.releaseMbid),
           entity: entity,
-          onAddToQueue: (e) => _enqueue(ref, e),
+          onOpenSelection: () => selection.openMenu(album.releaseMbid),
+          onAddToQueue: (_) =>
+              enqueueSelectedAlbums(ref, selection.selectedKeys),
           onAddToPlaylist: (e) => showAddToPlaylistDialog(context, ref, e),
           onInfo: (_) => showInfoDialog(
             context,
@@ -103,44 +105,55 @@ class _AlbumsByAddedList extends ConsumerWidget {
             header: AlbumCover(releaseMbid: album.releaseMbid, size: 220),
           ),
           child: InkWell(
-            onTap: () => _openInBrowse(context, ref, album),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Row(
-                children: [
-                  AlbumCover(releaseMbid: album.releaseMbid, size: 40),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: BilingualText(
-                      original: album.title,
-                      translit: album.titleTranslit,
-                      translate: album.titleTranslate,
-                      leads: leads,
-                      suffix: year.isNotEmpty ? ' ($year)' : null,
+            // A modified click only edits the selection; a plain one opens the
+            // album in the browse cascade as before.
+            onTap: () {
+              if (!selection.tap(album.releaseMbid)) return;
+              _openInBrowse(context, ref, album);
+            },
+            child: Container(
+              color: selection.contains(album.releaseMbid)
+                  ? scheme.primaryContainer
+                  : null,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: Row(
+                  children: [
+                    AlbumCover(releaseMbid: album.releaseMbid, size: 40),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: BilingualText(
+                        original: album.title,
+                        translit: album.titleTranslit,
+                        translate: album.titleTranslate,
+                        leads: leads,
+                        suffix: year.isNotEmpty ? ' ($year)' : null,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      album.albumArtistOriginal ?? album.albumArtist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: muted,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: kTrackMetaDateWidth,
-                    child: Tooltip(
-                      message: 'Date added',
+                    const SizedBox(width: 8),
+                    Expanded(
                       child: Text(
-                        formatMetaDate(album.addedAt),
-                        textAlign: TextAlign.right,
+                        album.albumArtistOriginal ?? album.albumArtist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: muted,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: kTrackMetaDateWidth,
+                      child: Tooltip(
+                        message: 'Date added',
+                        child: Text(
+                          formatMetaDate(album.addedAt),
+                          textAlign: TextAlign.right,
+                          style: muted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

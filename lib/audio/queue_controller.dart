@@ -153,6 +153,32 @@ class QueueController implements ShuffleAllTarget {
     revision.value++;
   }
 
+  /// Remove several entries by DISPLAYED canonical index — a multi-row
+  /// selection removed in one go. Works highest-index-first so each removal
+  /// leaves the lower indices addressing the same entries, and persists +
+  /// revises once at the end rather than per row (a 200-row removal would
+  /// otherwise write the snapshot 200 times and rebuild the panel as often).
+  /// Out-of-range indices are ignored; an empty set is a no-op.
+  Future<void> removeAtAll(Iterable<int> indices) async {
+    final ordered = indices
+        .where((i) => i >= 0 && i < _orderedPaths.length)
+        .toSet()
+        .toList()
+      ..sort();
+    if (ordered.isEmpty) return;
+    _ended = false;
+    for (final index in ordered.reversed) {
+      final playerIndex = _playerIndexForCanonical(index);
+      _orderedPaths.removeAt(index);
+      if (playerIndex >= 0 && playerIndex < _playOrder.length) {
+        _playOrder.removeAt(playerIndex);
+        await _player.removeAudioSourceAt(playerIndex);
+      }
+    }
+    await _persist();
+    revision.value++;
+  }
+
   /// Drop every queue entry whose path is in [paths] — e.g. tracks just removed
   /// from the library. Occurrence-aware (all copies go); mirrors each removal to
   /// the player (descending so source indices stay valid). If the
