@@ -1,4 +1,4 @@
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 
 use crate::enrich::select::{is_non_latin, AltKind, ChosenAlias};
 
@@ -132,6 +132,136 @@ pub fn upsert_track_alt(
         rusqlite::params![recording_mbid, kind_str(kind), title],
     )?;
     Ok(())
+}
+
+/// Fold away the differences that don't make two titles different titles to a
+/// reader: case, punctuation, and whitespace. Every non-alphanumeric character
+/// becomes a separator, so `Rock'n'Roll` / `Rock’n’Roll` / `Rock n Roll` and
+/// `Moondust` / `moondust` / `Moondust!` all compare equal. `is_alphanumeric` is
+/// Unicode-aware, so CJK titles survive as themselves.
+///
+/// Comparison only — never what gets stored.
+fn norm(s: &str) -> String {
+    s.split(|c: char| !c.is_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+/// Delete stored alts that don't actually differ from what they annotate, for
+/// one release. Returns how many rows were removed.
+///
+/// Two rules, applied in order (the first can make the second apply):
+///
+/// 1. An alt equal to its own original title is not an alternate. This is
+///    routine in MB data: an English edition repeats an already-English track
+///    title verbatim, and editors often leave an English edition's ALBUM title
+///    in the original script — which then lands as a "translation" that is the
+///    untranslated title.
+/// 2. A translation equal to the reading is a duplicate; the reading is kept.
+///    Katakana loanwords do this by construction — the romanization of
+///    アネモネ and its English translation are both "Anemone".
+///
+/// A post-pass rather than a check at insert time so the outcome can't depend on
+/// the order editions were processed in. Runs inside the caller's per-release
+/// transaction. Track alts are keyed by recording, so a deletion also clears the
+/// row for any other release sharing that recording — correct, since the
+/// recording's original title is the same there too.
+pub fn prune_redundant_alts(conn: &Connection, release_mbid: &str) -> anyhow::Result<usize> {
+    let mut pruned = 0usize;
+
+    let album_title: Option<String> = conn
+        .query_row(
+            "SELECT COALESCE(title,'') FROM release WHERE mbid = ?1",
+            rusqlite::params![release_mbid],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if let Some(album_title) = album_title {
+        let alts: Vec<(String, String)> = conn
+            .prepare("SELECT kind, title FROM release_title_alt WHERE release_mbid = ?1")?
+            .query_map(rusqlite::params![release_mbid], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })?
+            .collect::<Result<_, _>>()?;
+        for kind in redundant_kinds(&album_title, &alts) {
+            pruned += conn.execute(
+                "DELETE FROM release_title_alt WHERE release_mbid = ?1 AND kind = ?2",
+                rusqlite::params![release_mbid, kind],
+            )?;
+        }
+    }
+
+    let tracks: Vec<(String, String)> = conn
+        .prepare(
+            "SELECT recording_mbid, COALESCE(title,'') FROM track
+              WHERE release_mbid = ?1 AND recording_mbid IS NOT NULL",
+        )?
+        .query_map(rusqlite::params![release_mbid], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })?
+        .collect::<Result<_, _>>()?;
+    for (recording_mbid, track_title) in tracks {
+        let alts: Vec<(String, String)> = conn
+            .prepare("SELECT kind, title FROM track_title_alt WHERE recording_mbid = ?1")?
+            .query_map(rusqlite::params![&recording_mbid], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })?
+            .collect::<Result<_, _>>()?;
+        for kind in redundant_kinds(&track_title, &alts) {
+            pruned += conn.execute(
+                "DELETE FROM track_title_alt WHERE recording_mbid = ?1 AND kind = ?2",
+                rusqlite::params![&recording_mbid, kind],
+            )?;
+        }
+    }
+
+    Ok(pruned)
+}
+
+/// Which of `alts` (a `(kind, title)` list for ONE entity) are redundant against
+/// the entity's `original` title. See [`prune_redundant_alts`] for the rules.
+fn redundant_kinds(original: &str, alts: &[(String, String)]) -> Vec<&'static str> {
+    let mut doomed = Vec::new();
+    let alt_of = |want: &str| {
+        alts.iter()
+            .find(|(kind, _)| kind == want)
+            .map(|(_, title)| title.as_str())
+    };
+    let translit = alt_of("translit").filter(|t| norm(t) != norm(original));
+    let translate = alt_of("translate").filter(|t| norm(t) != norm(original));
+
+    if alt_of("translit").is_some() && translit.is_none() {
+        doomed.push("translit");
+    }
+    // A translation is dropped when it repeats the original OR the surviving
+    // reading.
+    let translate_dupes_reading =
+        matches!((translate, translit), (Some(a), Some(b)) if norm(a) == norm(b));
+    if alt_of("translate").is_some() && (translate.is_none() || translate_dupes_reading) {
+        doomed.push("translate");
+    }
+    doomed
+}
+
+/// Run [`prune_redundant_alts`] over every release in the catalog. Returns the
+/// total rows removed.
+///
+/// For the one-time migration that cleans up libraries enriched before the prune
+/// pass existed — those rows were written by an earlier build and nothing else
+/// revisits them until each album happens to be re-enriched. Pure SQLite work:
+/// no network, no MusicBrainz refetch.
+pub fn prune_all_redundant_alts(conn: &Connection) -> anyhow::Result<usize> {
+    let releases: Vec<String> = conn
+        .prepare("SELECT mbid FROM release")?
+        .query_map([], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    let mut pruned = 0usize;
+    for release_mbid in releases {
+        pruned += prune_redundant_alts(conn, &release_mbid)?;
+    }
+    Ok(pruned)
 }
 
 /// Flip `enriched` for every file whose track belongs to this release.

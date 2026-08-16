@@ -870,6 +870,199 @@ fn upserts_release_and_track_alts() {
     assert_eq!(title, "Muzai Moratorium 2");
 }
 
+// ── Pruning alts that don't differ from what they annotate ────────────────
+
+/// Add a second track to `seed_one_release`'s release: an already-English title,
+/// whose "translation" from an English edition is the title verbatim.
+fn seed_english_track(conn: &rusqlite::Connection) {
+    conn.execute(
+        "INSERT INTO track(release_mbid,recording_mbid,disc,position,title) VALUES ('rel1','rec2',1,2,'Song for you')",
+        [],
+    )
+    .unwrap();
+}
+
+fn alts_of(conn: &rusqlite::Connection, recording_mbid: &str) -> Vec<(String, String)> {
+    conn.prepare("SELECT kind,title FROM track_title_alt WHERE recording_mbid=?1 ORDER BY kind")
+        .unwrap()
+        .query_map([recording_mbid], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+}
+
+/// An alt equal to the original title it annotates is not an alternate.
+#[test]
+fn prunes_alts_identical_to_the_original() {
+    let conn = open(":memory:").unwrap();
+    seed_one_release(&conn);
+    seed_english_track(&conn);
+
+    // Album: an English edition left its title in the original script, so the
+    // stored "translation" IS the untranslated title (the Moondust case).
+    store::upsert_release_alt(&conn, "rel1", AltKind::Translate, "無罪モラトリアム").unwrap();
+    store::upsert_release_alt(&conn, "rel1", AltKind::Translit, "Muzai Moratorium").unwrap();
+    // Track: an already-English title repeated verbatim by the English edition.
+    store::upsert_track_alt(&conn, "rec2", AltKind::Translate, "Song for you").unwrap();
+    // A genuine alt on the Japanese track survives untouched.
+    store::upsert_track_alt(&conn, "rec1", AltKind::Translit, "Kabukichou no Joou").unwrap();
+
+    assert_eq!(store::prune_redundant_alts(&conn, "rel1").unwrap(), 2);
+
+    let album: Vec<(String, String)> = conn
+        .prepare("SELECT kind,title FROM release_title_alt WHERE release_mbid='rel1'")
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        album,
+        vec![("translit".to_string(), "Muzai Moratorium".to_string())]
+    );
+    assert!(alts_of(&conn, "rec2").is_empty());
+    assert_eq!(
+        alts_of(&conn, "rec1"),
+        vec![("translit".to_string(), "Kabukichou no Joou".to_string())]
+    );
+}
+
+/// A translation that repeats the reading is a duplicate; the reading is kept.
+/// Katakana loanwords do this by construction (アネモネ → "Anemone" both ways).
+#[test]
+fn prunes_translation_that_duplicates_the_reading() {
+    let conn = open(":memory:").unwrap();
+    seed_one_release(&conn);
+
+    store::upsert_track_alt(&conn, "rec1", AltKind::Translit, "Anemone").unwrap();
+    // Differs only by letter case — still a duplicate to a reader.
+    store::upsert_track_alt(&conn, "rec1", AltKind::Translate, "anemone").unwrap();
+
+    assert_eq!(store::prune_redundant_alts(&conn, "rel1").unwrap(), 1);
+    assert_eq!(
+        alts_of(&conn, "rec1"),
+        vec![("translit".to_string(), "Anemone".to_string())]
+    );
+}
+
+/// Comparison folds case, punctuation and whitespace — but what stays stored is
+/// untouched.
+#[test]
+fn prune_comparison_folds_punctuation_and_whitespace() {
+    let conn = open(":memory:").unwrap();
+    seed_one_release(&conn);
+    conn.execute(
+        "INSERT INTO track(release_mbid,recording_mbid,disc,position,title) VALUES ('rel1','rec3',1,3,'About A Rock''n''Roll Band')",
+        [],
+    )
+    .unwrap();
+
+    // Curly apostrophes, a doubled space, different case, a trailing bang: all
+    // the same title to a reader.
+    store::upsert_track_alt(
+        &conn,
+        "rec3",
+        AltKind::Translate,
+        "about a  Rock\u{2019}n\u{2019}roll band!",
+    )
+    .unwrap();
+    assert_eq!(store::prune_redundant_alts(&conn, "rel1").unwrap(), 1);
+    assert!(alts_of(&conn, "rec3").is_empty());
+
+    // A genuinely different title with curly punctuation is preserved verbatim.
+    store::upsert_track_alt(
+        &conn,
+        "rec3",
+        AltKind::Translate,
+        "Rock\u{2019}n\u{2019}Roll",
+    )
+    .unwrap();
+    assert_eq!(store::prune_redundant_alts(&conn, "rel1").unwrap(), 0);
+    assert_eq!(
+        alts_of(&conn, "rec3"),
+        vec![(
+            "translate".to_string(),
+            "Rock\u{2019}n\u{2019}Roll".to_string()
+        )]
+    );
+}
+
+/// A reading pruned by rule 1 must not then "protect" the translation: the
+/// translation is judged against the ORIGINAL, not against a deleted reading.
+#[test]
+fn prune_rules_compose_without_order_dependence() {
+    let conn = open(":memory:").unwrap();
+    seed_one_release(&conn);
+
+    // Both alts are just the original title back again.
+    store::upsert_track_alt(&conn, "rec1", AltKind::Translit, "歌舞伎町の女王").unwrap();
+    store::upsert_track_alt(&conn, "rec1", AltKind::Translate, "歌舞伎町の女王").unwrap();
+
+    assert_eq!(store::prune_redundant_alts(&conn, "rel1").unwrap(), 2);
+    assert!(alts_of(&conn, "rec1").is_empty());
+}
+
+/// Pruning is idempotent and leaves genuinely distinct alts alone.
+#[test]
+fn prune_keeps_distinct_reading_and_translation() {
+    let conn = open(":memory:").unwrap();
+    seed_one_release(&conn);
+
+    store::upsert_track_alt(&conn, "rec1", AltKind::Translit, "Kabukichou no Joou").unwrap();
+    store::upsert_track_alt(&conn, "rec1", AltKind::Translate, "Queen of Kabukicho").unwrap();
+
+    assert_eq!(store::prune_redundant_alts(&conn, "rel1").unwrap(), 0);
+    assert_eq!(store::prune_redundant_alts(&conn, "rel1").unwrap(), 0);
+    assert_eq!(alts_of(&conn, "rec1").len(), 2);
+}
+
+/// The library-wide sweep behind the one-time migration: every release, no
+/// network, and it leaves genuine alts alone.
+#[test]
+fn prunes_redundant_alts_across_every_release() {
+    let conn = open(":memory:").unwrap();
+    seed_one_release(&conn);
+    seed_english_track(&conn);
+    // A second release, untouched by the per-release calls in the other tests.
+    conn.execute(
+        "INSERT INTO release(mbid,release_group_mbid,album_artist_mbid,title) VALUES ('rel2','rg1','art1','ムーンダスト')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO track(release_mbid,recording_mbid,disc,position,title) VALUES ('rel2','rec9',1,1,'アネモネ')",
+        [],
+    )
+    .unwrap();
+
+    store::upsert_track_alt(&conn, "rec2", AltKind::Translate, "Song for you").unwrap();
+    store::upsert_release_alt(&conn, "rel2", AltKind::Translate, "ムーンダスト").unwrap();
+    store::upsert_track_alt(&conn, "rec9", AltKind::Translit, "Anemone").unwrap();
+    store::upsert_track_alt(&conn, "rec9", AltKind::Translate, "Anemone").unwrap();
+    // Genuine alts on the first release's Japanese track.
+    store::upsert_track_alt(&conn, "rec1", AltKind::Translit, "Kabukichou no Joou").unwrap();
+    store::upsert_track_alt(&conn, "rec1", AltKind::Translate, "Queen of Kabukicho").unwrap();
+
+    assert_eq!(store::prune_all_redundant_alts(&conn).unwrap(), 3);
+    assert!(alts_of(&conn, "rec2").is_empty());
+    assert_eq!(
+        alts_of(&conn, "rec9"),
+        vec![("translit".to_string(), "Anemone".to_string())]
+    );
+    assert_eq!(alts_of(&conn, "rec1").len(), 2);
+    let album_rows: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM release_title_alt WHERE release_mbid='rel2'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(album_rows, 0);
+
+    // Idempotent — a second sweep finds nothing.
+    assert_eq!(store::prune_all_redundant_alts(&conn).unwrap(), 0);
+}
+
 #[test]
 fn marks_files_enriched_for_release() {
     let conn = open(":memory:").unwrap();
@@ -1168,15 +1361,17 @@ async fn international_edition_supplies_translate_alts() {
     assert_eq!(english(REC2).as_deref(), Some("Burn"));
     assert_eq!(english(REC3).as_deref(), Some("CO2"));
 
-    // The album title alt is the edition's title (here also "W"), stored translate.
-    let album_translate: String = conn
+    // The English edition's album title is "W" — the SAME as the original's — so
+    // it is not an alternate at all and the prune pass drops it. The per-track
+    // translations above, which do differ, are unaffected.
+    let album_rows: i64 = conn
         .query_row(
-            &format!("SELECT title FROM release_title_alt WHERE release_mbid='{W_REL}' AND kind='translate'"),
+            &format!("SELECT count(*) FROM release_title_alt WHERE release_mbid='{W_REL}'"),
             [],
             |r| r.get(0),
         )
         .unwrap();
-    assert_eq!(album_translate, "W");
+    assert_eq!(album_rows, 0);
 
     // The original Japanese edition (same script) contributed NO alts: no
     // `translit` rows, and the Japanese titles were never stored as alts.

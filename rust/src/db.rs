@@ -135,13 +135,32 @@ const MIGRATION_SLICE: &[M<'_>] = &[
          CREATE INDEX idx_playlist_item_path ON playlist_item(path);",
     ),
 ];
-const MIGRATIONS: Migrations<'_> = Migrations::from_slice(MIGRATION_SLICE);
+
+/// Every migration, in order: the const SQL-only ones above, then those needing
+/// Rust (a hook closure can't be built in a `const`). Cheap to rebuild — `M` is
+/// `Clone` and this runs once per `open`.
+fn all_migrations() -> Vec<M<'static>> {
+    let mut all: Vec<M<'static>> = MIGRATION_SLICE.to_vec();
+    // ── One-time cleanup of title alts that repeat what they annotate ────
+    // Libraries enriched before the prune pass existed hold alts equal to the
+    // original title (an English edition repeating an already-English track, or
+    // leaving its album title in the original script) and translations that just
+    // repeat the reading (katakana loanwords romanize to the English word). The
+    // enricher now drops these per release, but only when a release is next
+    // enriched — so sweep the whole catalog once. SQLite only; no refetch.
+    all.push(M::up_with_hook("", |tx: &rusqlite::Transaction| {
+        crate::enrich::store::prune_all_redundant_alts(tx)
+            .map_err(|e| rusqlite_migration::HookError::Hook(e.to_string()))?;
+        Ok(())
+    }));
+    all
+}
 
 /// The `user_version` a catalog created by this build carries — one per
 /// migration. A snapshot claiming a higher version came from a newer app and
 /// can't be imported.
 pub fn current_schema_version() -> i64 {
-    MIGRATION_SLICE.len() as i64
+    all_migrations().len() as i64
 }
 
 pub fn open(path: &str) -> anyhow::Result<Connection> {
@@ -155,7 +174,7 @@ pub fn open(path: &str) -> anyhow::Result<Connection> {
         // scanning), so a contended write retries rather than erroring.
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
     }
-    MIGRATIONS.to_latest(&mut conn)?;
+    Migrations::new(all_migrations()).to_latest(&mut conn)?;
     Ok(conn)
 }
 

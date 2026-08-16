@@ -364,6 +364,19 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
 
             apply_alias_alt(&tx, rel_mbid, &release.title, alias_alt, log, title)?;
 
+            // Last, once every edition and the alias fallback have had their say:
+            // drop the alts that don't differ from what they annotate, so the
+            // result can't depend on the order editions were processed in.
+            let pruned = store::prune_redundant_alts(&tx, rel_mbid)?;
+            if pruned > 0 {
+                log.line(
+                    "APPLY",
+                    &format!(
+                        "release \"{title}\": dropped {pruned} title alt(s) identical to the original or to the reading"
+                    ),
+                );
+            }
+
             store::mark_release_files_enriched(&tx, rel_mbid)?;
             tx.commit()?;
             Ok(())
