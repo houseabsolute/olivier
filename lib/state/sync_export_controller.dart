@@ -193,6 +193,16 @@ class SyncExportController extends Notifier<SyncExportState> {
   bool canExport(List<String> roots) =>
       state.destDir != null && !state.exporting && roots.isNotEmpty;
 
+  /// Export only if the user has set up phone sync at all. The automatic
+  /// post-scan path: silent when there is no destination folder (nobody asked
+  /// for a snapshot) or an export is already running, but a *configured*
+  /// destination with a broken mapping still goes through [export], so the
+  /// problem lands in Settings instead of being swallowed.
+  Future<void> exportIfConfigured(List<String> roots) async {
+    if (state.destDir == null || state.exporting || roots.isEmpty) return;
+    await export(roots);
+  }
+
   Future<void> export(List<String> roots) async {
     final dest = state.destDir;
     if (dest == null || state.exporting) return;

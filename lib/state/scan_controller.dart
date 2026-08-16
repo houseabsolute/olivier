@@ -7,6 +7,7 @@ import 'package:olivier/state/enrich_controller.dart';
 import 'package:olivier/state/providers.dart';
 import 'package:olivier/state/queue_provider.dart';
 import 'package:olivier/state/scan_refresh_gate.dart';
+import 'package:olivier/state/sync_export_controller.dart';
 
 /// Sentinel so [ScanState.copyWith] can distinguish "leave lastError unchanged"
 /// from "clear lastError to null".
@@ -147,6 +148,9 @@ class ScanController extends Notifier<ScanState> {
   Future<void> _drain() async {
     if (_draining) return;
     _draining = true;
+    // Summed over every folder in this drain, so one unchanged folder can't
+    // hide another folder's new music from the post-drain snapshot.
+    var filesChanged = 0;
     try {
       while (_queue.isNotEmpty) {
         final job = _queue.removeAt(0);
@@ -187,6 +191,7 @@ class ScanController extends Notifier<ScanState> {
           state = state.copyWith(lastError: '$e');
         }
         if (_disposed) return;
+        filesChanged += state.filesChanged;
         // New music may have appeared — refresh the displayed columns.
         _invalidateBrowse();
       }
@@ -195,14 +200,37 @@ class ScanController extends Notifier<ScanState> {
       // stale once the batch has finished merging/removing artists.
       await _reconcileSelection();
       // Auto-enrich newly-scanned items in the background (resumable; force=false
-      // skips already-enriched entities, so it's cheap when nothing changed).
+      // skips already-enriched entities, so it's cheap when nothing changed),
+      // then publish the result to the phone.
       if (!_disposed) {
-        unawaited(ref.read(enrichControllerProvider.notifier).enrich());
+        unawaited(_enrichThenPublish(filesChanged));
       }
     } finally {
       _draining = false;
       if (!_disposed) state = state.copyWith(scanning: false, queued: 0);
     }
+  }
+
+  /// Enrich what the scan just found, then hand the phone a fresh snapshot.
+  ///
+  /// The export waits for enrichment because enrichment writes to the catalog
+  /// too (transliterations, title alts, original dates). Exporting between the
+  /// two would ship a half-enriched catalog that only the *next* scan corrects.
+  ///
+  /// A snapshot is a full copy of the catalog plus the cover cache, so it is
+  /// only written when this run actually changed something. An enrichment pass
+  /// that touched entities has already published on its own way out, so all
+  /// that is left here is the case it doesn't cover: the scan changed files but
+  /// enrichment found nothing to do. An idle rescan that finds neither leaves
+  /// the sync folder — and Syncthing — alone.
+  Future<void> _enrichThenPublish(int filesChanged) async {
+    await ref.read(enrichControllerProvider.notifier).enrich();
+    if (_disposed) return;
+    if (ref.read(enrichControllerProvider).entitiesDone > 0) return;
+    if (filesChanged == 0) return;
+    await ref
+        .read(syncExportControllerProvider.notifier)
+        .exportIfConfigured(state.roots);
   }
 
   void _invalidateBrowse() {

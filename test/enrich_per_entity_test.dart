@@ -8,6 +8,10 @@ void main() {
   test('enrichArtist runs single-flight and finishes not-running', () async {
     final container = ProviderContainer(overrides: [
       dbPathProvider.overrideWithValue('/x.db'),
+      // The pass publishes a phone snapshot on its way out; keep that off the
+      // FFI. With no destination folder set it stops at the roots lookup.
+      listRootsFnProvider.overrideWithValue(() async => const []),
+      getSettingFnProvider.overrideWithValue((_) async => null),
       enrichArtistFnProvider.overrideWithValue((mbid) async* {
         yield EnrichProgress(
             entitiesDone: BigInt.one,

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olivier/src/rust/api/enrich.dart';
 import 'package:olivier/src/rust/enrich/progress.dart';
 import 'package:olivier/state/providers.dart';
+import 'package:olivier/state/sync_export_controller.dart';
 
 /// Sentinel so [EnrichState.copyWith] can clear [lastError] to null.
 const Object _unset = Object();
@@ -119,6 +120,7 @@ class EnrichController extends Notifier<EnrichState> {
         ref.invalidate(tracksProvider);
       }
     }
+    await _publishIfChanged();
   }
 
   /// Empty the MB response cache, then re-enrich everything from the network.
@@ -163,6 +165,26 @@ class EnrichController extends Notifier<EnrichState> {
         ref.invalidate(tracksProvider);
       }
     }
+    await _publishIfChanged();
+  }
+
+  /// Hand the phone a fresh snapshot when a pass actually wrote something.
+  ///
+  /// Enrichment changes the catalog just as a scan does — transliterations,
+  /// title alts, original dates — so the phone is out of date until it is
+  /// re-exported. A pass that enriched nothing (the common resumable case)
+  /// writes no snapshot: see [SyncExportController.exportIfConfigured], which
+  /// is also silent unless a destination folder has been set up.
+  ///
+  /// Roots come from the catalog rather than [ScanController] so enrichment
+  /// doesn't depend on the scanner having been touched this session.
+  Future<void> _publishIfChanged() async {
+    if (_disposed || state.entitiesDone == 0) return;
+    final roots = await ref.read(listRootsFnProvider)();
+    if (_disposed) return;
+    await ref
+        .read(syncExportControllerProvider.notifier)
+        .exportIfConfigured(roots);
   }
 }
 
