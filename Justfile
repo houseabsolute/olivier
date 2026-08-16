@@ -18,6 +18,34 @@ run *args:
 install-desktop:
     ./scripts/install-desktop.sh
 
+# Build the release APK for a phone (arm64 only — the ABI every current Android
+# device uses; a universal APK is several times the size for no gain here).
+# Extra flags pass through, e.g. `just apk --target-platform android-arm,android-arm64`.
+#
+# Signed with android/key.properties when it exists, else the debug key (see
+# android/app/build.gradle.kts). Needs the Android SDK — `flutter doctor` must
+# show the Android toolchain — plus a JDK that Gradle 8.12 accepts: JDK 21 by
+# default here, override with JAVA_HOME.
+apk *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-21-openjdk-amd64}"
+    mise exec -- flutter build apk --release --target-platform android-arm64 {{ args }}
+    apk=build/app/outputs/flutter-apk/app-release.apk
+    ls -lh "$apk"
+    echo "Install on a connected device with:  just apk-install"
+
+# Install the APK built by `just apk` onto the one connected device. A signing-key
+# change (debug key <-> release key) makes this fail with
+# INSTALL_FAILED_UPDATE_INCOMPATIBLE; uninstall the old app first, which erases
+# its on-device catalog.
+apk-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    adb="$HOME/Android/Sdk/platform-tools/adb"
+    [[ -x "$adb" ]] || adb=adb
+    "$adb" install -r build/app/outputs/flutter-apk/app-release.apk
+
 # Build the Linux release and produce dist/*.deb, *.rpm, and *.tar.gz locally
 # (the same script + nfpm config the release workflow uses). Usage:
 # `just package` or `just package 0.0.1`. Requires the Flutter build toolchain.
