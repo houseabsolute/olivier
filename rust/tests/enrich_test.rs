@@ -20,7 +20,8 @@ use rust_lib_olivier::enrich::model::{MbAlias, MbArtist, MbRelease, MbTextRepres
 use rust_lib_olivier::enrich::run;
 use rust_lib_olivier::enrich::run::enrich;
 use rust_lib_olivier::enrich::select::{
-    classify_from_text_representation, select_transliteration, AltKind,
+    classify_from_text_representation, english_words, select_alias_alt, select_transliteration,
+    AltKind,
 };
 use rust_lib_olivier::enrich::store;
 
@@ -406,19 +407,19 @@ async fn url_contains_expected_inc_params() {
         "artist URL must contain fmt=json"
     );
 
-    // Check release URL contains the recordings+release-groups+artist-credits bundle
+    // Check release URL contains the recordings+release-groups+artist-credits+aliases bundle
     // and no longer requests release-rels.
     let conn2 = open(":memory:").unwrap();
     let release_url = format!(
-        "https://musicbrainz.org/ws/2/release/{release_mbid}?inc=recordings+release-groups+artist-credits&fmt=json"
+        "https://musicbrainz.org/ws/2/release/{release_mbid}?inc=recordings+release-groups+artist-credits+aliases&fmt=json"
     );
     let http2 = FakeHttp::new().with(&release_url, 200, &fixture("release_muzai.json"));
     let client2 = rust_lib_olivier::enrich::client::MbClient::new(http2);
     let _ = client2.fetch_release(&conn2, release_mbid).await.unwrap();
     let release_call = client2.http().calls.borrow()[0].clone();
     assert!(
-        release_call.contains("recordings+release-groups+artist-credits"),
-        "release URL must contain the recordings+release-groups+artist-credits inc bundle"
+        release_call.contains("recordings+release-groups+artist-credits+aliases"),
+        "release URL must contain the recordings+release-groups+artist-credits+aliases inc bundle"
     );
     assert!(
         !release_call.contains("release-rels"),
@@ -465,6 +466,123 @@ fn classify_from_text_representation_is_the_edition_primitive() {
         None
     );
     assert_eq!(classify_from_text_representation(None), None);
+}
+
+// ── Alias fallback (no usable sibling edition) ────────────────────────────
+
+/// A list of `(name, locale, primary)` tuples as `MbAlias` values.
+fn aliases_of(aliases: &[(&str, Option<&str>, bool)]) -> Vec<MbAlias> {
+    aliases
+        .iter()
+        .map(|(name, locale, primary)| MbAlias {
+            name: (*name).to_string(),
+            sort_name: None,
+            locale: locale.map(str::to_string),
+            primary: Some(*primary),
+            alias_type: None,
+        })
+        .collect()
+}
+
+#[test]
+fn alias_kind_comes_from_content_not_locale() {
+    let dict = english_words();
+
+    // Mostly-English alias ⇒ translation.
+    assert_eq!(
+        select_alias_alt(
+            "楽園",
+            &aliases_of(&[("The Paradise", Some("en"), true)]),
+            dict
+        ),
+        Some((AltKind::Translate, "The Paradise".to_string()))
+    );
+
+    // Romanization ⇒ reading, even though it is filed under an `en` locale
+    // (MB data does this routinely; locale is not a usable signal).
+    assert_eq!(
+        select_alias_alt(
+            "夜の探検",
+            &aliases_of(&[("Yoru no Tanken", Some("en"), true)]),
+            dict
+        ),
+        Some((AltKind::Translit, "Yoru no Tanken".to_string()))
+    );
+
+    // ...and the same romanization filed under `ja` classifies identically.
+    assert_eq!(
+        select_alias_alt(
+            "夜の探検",
+            &aliases_of(&[("Yoru no Tanken", Some("ja"), false)]),
+            dict
+        ),
+        Some((AltKind::Translit, "Yoru no Tanken".to_string()))
+    );
+}
+
+#[test]
+fn alias_rejects_unusable_candidates() {
+    let dict = english_words();
+
+    // No aliases at all.
+    assert_eq!(select_alias_alt("楽園", &[], dict), None);
+
+    // A non-Latin alias is another native-script title, not an alt.
+    assert_eq!(
+        select_alias_alt("楽園", &aliases_of(&[("らくえん", Some("ja"), true)]), dict),
+        None
+    );
+
+    // An alias identical to the entity's own title carries no new information.
+    assert_eq!(
+        select_alias_alt(
+            "Paradise",
+            &aliases_of(&[("Paradise", Some("en"), true)]),
+            dict
+        ),
+        None
+    );
+
+    // An empty/whitespace alias is skipped.
+    assert_eq!(
+        select_alias_alt("楽園", &aliases_of(&[("   ", Some("en"), true)]), dict),
+        None
+    );
+}
+
+#[test]
+fn alias_tie_break_prefers_primary_then_en_then_name() {
+    let dict = english_words();
+    let pick = |aliases: &[(&str, Option<&str>, bool)]| {
+        select_alias_alt("楽園", &aliases_of(aliases), dict)
+            .unwrap()
+            .1
+    };
+
+    // primary + en beats a bare primary and a bare en.
+    assert_eq!(
+        pick(&[
+            ("The Garden", Some("fr"), true),
+            ("The Paradise", Some("en"), true),
+            ("The Orchard", Some("en"), false),
+        ]),
+        "The Paradise"
+    );
+
+    // No primary anywhere: the `en` alias wins over the non-`en` one.
+    assert_eq!(
+        pick(&[
+            ("The Garden", Some("fr"), false),
+            ("The Orchard", Some("en"), false),
+        ]),
+        "The Orchard"
+    );
+
+    // Nothing to prefer: name ascending, deterministic.
+    assert_eq!(
+        pick(&[("The Orchard", None, false), ("The Garden", None, false)]),
+        "The Garden"
+    );
 }
 
 // ── Alt-kind classification: the surviving classifier ─────────────────────
@@ -783,7 +901,7 @@ fn artist_url() -> String {
     format!("{BASE}/artist/{ARTIST_MBID}?inc=aliases&fmt=json")
 }
 fn release_url() -> String {
-    format!("{BASE}/release/{RELEASE_MBID}?inc=recordings+release-groups+artist-credits&fmt=json")
+    format!("{BASE}/release/{RELEASE_MBID}?inc=recordings+release-groups+artist-credits+aliases&fmt=json")
 }
 /// Release-group browse (inc=recordings) — the alt-discovery path.
 fn browse_url() -> String {
@@ -1011,8 +1129,9 @@ async fn international_edition_supplies_translate_alts() {
     }
 
     let artist_url = format!("{BASE}/artist/{W_ARTIST}?inc=aliases&fmt=json");
-    let release_url =
-        format!("{BASE}/release/{W_REL}?inc=recordings+release-groups+artist-credits&fmt=json");
+    let release_url = format!(
+        "{BASE}/release/{W_REL}?inc=recordings+release-groups+artist-credits+aliases&fmt=json"
+    );
     let browse_url =
         format!("{BASE}/release?release-group={W_RG}&inc=recordings&limit=100&offset=0&fmt=json");
     // Minimal artist body — no usable EN "Artist name" alias, so artist
@@ -1118,8 +1237,9 @@ async fn no_text_representation_edition_is_skipped() {
     .unwrap();
 
     let artist_url = format!("{BASE}/artist/{ARTIST}?inc=aliases&fmt=json");
-    let release_url =
-        format!("{BASE}/release/{REL}?inc=recordings+release-groups+artist-credits&fmt=json");
+    let release_url = format!(
+        "{BASE}/release/{REL}?inc=recordings+release-groups+artist-credits+aliases&fmt=json"
+    );
     let browse_url =
         format!("{BASE}/release?release-group={RG}&inc=recordings&limit=100&offset=0&fmt=json");
     let artist_body = format!(
@@ -1211,8 +1331,9 @@ async fn multi_page_browse_fetches_all_pages() {
     .unwrap();
 
     let artist_url = format!("{BASE}/artist/{ARTIST}?inc=aliases&fmt=json");
-    let release_url =
-        format!("{BASE}/release/{REL}?inc=recordings+release-groups+artist-credits&fmt=json");
+    let release_url = format!(
+        "{BASE}/release/{REL}?inc=recordings+release-groups+artist-credits+aliases&fmt=json"
+    );
     let browse_url_p0 =
         format!("{BASE}/release?release-group={RG}&inc=recordings&limit=100&offset=0&fmt=json");
     let browse_url_p1 =
@@ -1314,8 +1435,9 @@ async fn same_script_reissue_does_not_clobber_translate_alt() {
     .unwrap();
 
     let artist_url = format!("{BASE}/artist/{ARTIST}?inc=aliases&fmt=json");
-    let release_url =
-        format!("{BASE}/release/{REL}?inc=recordings+release-groups+artist-credits&fmt=json");
+    let release_url = format!(
+        "{BASE}/release/{REL}?inc=recordings+release-groups+artist-credits+aliases&fmt=json"
+    );
     let browse_url =
         format!("{BASE}/release?release-group={RG}&inc=recordings&limit=100&offset=0&fmt=json");
     let artist_body = format!(
@@ -1357,6 +1479,256 @@ async fn same_script_reissue_does_not_clobber_translate_alt() {
         )
         .unwrap();
     assert_eq!(translate_rows, 1);
+}
+
+// ── Alias fallback, end to end ────────────────────────────────────────────
+
+const AL_RG: &str = "b0000000-0000-0000-0000-00000000alrg";
+const AL_REL: &str = "22222222-2222-2222-2222-222222222222";
+const AL_ARTIST: &str = "aaaaaaaa-0000-0000-0000-00000000alar";
+const AL_REC: &str = "rec00000-0000-0000-0000-00000000alrc";
+
+/// One Japanese-titled release ("楽園") with a single track, ready to enrich.
+fn seed_alias_catalog(conn: &rusqlite::Connection) {
+    conn.execute(
+        &format!(
+            "INSERT INTO artist(mbid,name,sort_name) VALUES ('{AL_ARTIST}','結城アイラ','結城アイラ')"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO release_group(mbid,title) VALUES ('{AL_RG}','楽園')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO release(mbid,release_group_mbid,album_artist_mbid,title) VALUES ('{AL_REL}','{AL_RG}','{AL_ARTIST}','楽園')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        &format!("INSERT INTO track(release_mbid,recording_mbid,disc,position,title) VALUES ('{AL_REL}','{AL_REC}',1,1,'夜の探検')"),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO file(path,mtime,size,track_id,added_at,enriched) VALUES ('/m/alias.flac',0,0,1,0,0)",
+        [],
+    )
+    .unwrap();
+}
+
+/// An `aliases` JSON array with one English primary alias (or `[]` for none).
+fn alias_json(name: Option<&str>) -> String {
+    match name {
+        Some(n) => format!(
+            "[{{\"name\":\"{n}\",\"sort-name\":null,\"locale\":\"en\",\"primary\":true,\"type\":null}}]"
+        ),
+        None => "[]".to_string(),
+    }
+}
+
+/// The release fetch body: Japanese original, with `release_alias` on the
+/// release itself.
+fn alias_release_body(release_alias: Option<&str>) -> String {
+    format!(
+        "{{\"id\":\"{AL_REL}\",\"title\":\"楽園\",\"date\":\"2019-01-01\",\
+         \"text-representation\":{{\"script\":\"Jpan\",\"language\":\"jpn\"}},\
+         \"release-group\":{{\"id\":\"{AL_RG}\",\"first-release-date\":\"2019-01-01\"}},\
+         \"media\":[{{\"tracks\":[{{\"title\":\"夜の探検\",\"recording\":{{\"id\":\"{AL_REC}\"}}}}]}}],\
+         \"aliases\":{}}}",
+        alias_json(release_alias)
+    )
+}
+
+/// The browse body for a group holding ONLY the same-script original — no
+/// pseudo-release, no international edition, so nothing the edition path can use.
+fn alias_browse_original_only() -> String {
+    format!(
+        "{{\"release-count\":1,\"release-offset\":0,\"releases\":[{{\"id\":\"{AL_REL}\",\"title\":\"楽園\",\
+          \"text-representation\":{{\"script\":\"Jpan\",\"language\":\"jpn\"}},\
+          \"media\":[{{\"tracks\":[{{\"title\":\"夜の探検\",\"recording\":{{\"id\":\"{AL_REC}\"}}}}]}}]}}]}}"
+    )
+}
+
+async fn run_alias_enrich(
+    conn: &rusqlite::Connection,
+    browse_body: &str,
+    release_alias: Option<&str>,
+    group_alias: Option<&str>,
+) {
+    let artist_url = format!("{BASE}/artist/{AL_ARTIST}?inc=aliases&fmt=json");
+    let release_url = format!(
+        "{BASE}/release/{AL_REL}?inc=recordings+release-groups+artist-credits+aliases&fmt=json"
+    );
+    let browse_url =
+        format!("{BASE}/release?release-group={AL_RG}&inc=recordings&limit=100&offset=0&fmt=json");
+    let artist_body = format!(
+        "{{\"id\":\"{AL_ARTIST}\",\"name\":\"結城アイラ\",\"sort-name\":\"Yuki, Aira\",\"aliases\":[]}}"
+    );
+    let rg_url = format!("{BASE}/release-group/{AL_RG}?inc=aliases&fmt=json");
+    let rg_body = format!(
+        "{{\"id\":\"{AL_RG}\",\"title\":\"楽園\",\"aliases\":{}}}",
+        alias_json(group_alias)
+    );
+    let http = FakeHttp::new()
+        .with(&artist_url, 200, &artist_body)
+        .with(&release_url, 200, &alias_release_body(release_alias))
+        .with(&browse_url, 200, browse_body)
+        .with(&rg_url, 200, &rg_body);
+    let client = rust_lib_olivier::enrich::client::MbClient::new(http);
+    enrich(conn, &client, false, &DecisionLog::to_path(None), |_| true)
+        .await
+        .unwrap();
+    // Expose the call log so tests can assert the release-group leg was (or was
+    // not) hit — it costs an extra request, so it must stay conditional.
+    RG_FETCHED.with(|c| {
+        c.set(
+            client
+                .http()
+                .calls
+                .borrow()
+                .iter()
+                .any(|u| u.contains("/release-group/")),
+        )
+    });
+}
+
+thread_local! {
+    static RG_FETCHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn rg_was_fetched() -> bool {
+    RG_FETCHED.with(|c| c.get())
+}
+
+fn album_alt(conn: &rusqlite::Connection, kind: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT title FROM release_title_alt WHERE release_mbid=?1 AND kind=?2",
+        [AL_REL, kind],
+        |r| r.get::<_, String>(0),
+    )
+    .ok()
+}
+
+/// With no usable sibling edition (the group holds only the same-script
+/// original), the release's OWN alias supplies the album-title alt.
+#[tokio::test]
+async fn release_alias_supplies_album_alt_when_no_sibling_edition() {
+    let conn = open(":memory:").unwrap();
+    seed_alias_catalog(&conn);
+
+    // Browse returns only the original Japanese edition — skipped by the
+    // same-script guard, so the edition pass stores nothing.
+    run_alias_enrich(
+        &conn,
+        &alias_browse_original_only(),
+        Some("The Paradise"),
+        None,
+    )
+    .await;
+
+    assert_eq!(
+        album_alt(&conn, "translate").as_deref(),
+        Some("The Paradise")
+    );
+
+    // The release's own alias sufficed — no extra release-group request.
+    assert!(!rg_was_fetched());
+
+    // The alias covers the ALBUM title only — it says nothing about tracks.
+    let track_rows: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM track_title_alt WHERE recording_mbid=?1",
+            [AL_REC],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(track_rows, 0);
+}
+
+/// The スターシャンク case: no sibling edition AND no release alias — the album's
+/// English title lives on the RELEASE GROUP, which is where MB editors usually
+/// put it. The group is fetched and supplies the alt.
+#[tokio::test]
+async fn release_group_alias_supplies_album_alt_when_release_has_none() {
+    let conn = open(":memory:").unwrap();
+    seed_alias_catalog(&conn);
+
+    run_alias_enrich(
+        &conn,
+        &alias_browse_original_only(),
+        None,
+        Some("Yoru no Rakuen"),
+    )
+    .await;
+
+    assert!(rg_was_fetched());
+    // A romanization, so it lands in the READING slot, not the translation one.
+    assert_eq!(
+        album_alt(&conn, "translit").as_deref(),
+        Some("Yoru no Rakuen")
+    );
+    assert_eq!(album_alt(&conn, "translate"), None);
+}
+
+/// The release's own alias wins over the group's, and short-circuits the fetch.
+#[tokio::test]
+async fn release_alias_beats_release_group_alias() {
+    let conn = open(":memory:").unwrap();
+    seed_alias_catalog(&conn);
+
+    run_alias_enrich(
+        &conn,
+        &alias_browse_original_only(),
+        Some("The Paradise"),
+        Some("The Garden"),
+    )
+    .await;
+
+    assert!(!rg_was_fetched());
+    assert_eq!(
+        album_alt(&conn, "translate").as_deref(),
+        Some("The Paradise")
+    );
+}
+
+/// A sibling edition always wins over the release alias for the same kind: it
+/// is curated across the whole tracklist and carries per-track alts too.
+#[tokio::test]
+async fn sibling_edition_beats_release_alias() {
+    let conn = open(":memory:").unwrap();
+    seed_alias_catalog(&conn);
+
+    // Same group, but now with an English edition titled "Paradise" — which must
+    // win the `translate` slot over the alias's "The Paradise".
+    let browse = format!(
+        "{{\"release-count\":2,\"release-offset\":0,\"releases\":[\
+          {{\"id\":\"{AL_REL}\",\"title\":\"楽園\",\
+            \"text-representation\":{{\"script\":\"Jpan\",\"language\":\"jpn\"}},\
+            \"media\":[{{\"tracks\":[{{\"title\":\"夜の探検\",\"recording\":{{\"id\":\"{AL_REC}\"}}}}]}}]}},\
+          {{\"id\":\"22222222-2222-2222-2222-2222222222e1\",\"title\":\"Paradise\",\
+            \"text-representation\":{{\"script\":\"Latn\",\"language\":\"eng\"}},\
+            \"media\":[{{\"tracks\":[{{\"title\":\"Night Expedition\",\"recording\":{{\"id\":\"{AL_REC}\"}}}}]}}]}}]}}"
+    );
+    run_alias_enrich(&conn, &browse, Some("The Paradise"), Some("The Garden")).await;
+
+    assert_eq!(album_alt(&conn, "translate").as_deref(), Some("Paradise"));
+
+    // A usable edition existed, so neither alias leg ran — and in particular the
+    // release-group fetch was skipped entirely.
+    assert!(!rg_was_fetched());
+
+    // Exactly one translate row — the alias never wrote a second or clobbered it.
+    let album_rows: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM release_title_alt WHERE release_mbid=?1 AND kind='translate'",
+            [AL_REL],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(album_rows, 1);
 }
 
 #[tokio::test]
@@ -1565,7 +1937,7 @@ async fn enrich_after_scan_is_safe_noop_for_untagged_fixtures() {
     let fake_release_mbid = "bbbbbbbb-0000-0000-0000-000000000001";
     let artist_url = format!("{BASE_URL}/artist/{fake_artist_mbid}?inc=aliases&fmt=json");
     let release_url = format!(
-        "{BASE_URL}/release/{fake_release_mbid}?inc=recordings+release-groups+artist-credits&fmt=json"
+        "{BASE_URL}/release/{fake_release_mbid}?inc=recordings+release-groups+artist-credits+aliases&fmt=json"
     );
 
     let dir = tempfile::tempdir().unwrap();

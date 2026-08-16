@@ -27,7 +27,7 @@ pub struct MbAlias {
     pub alias_type: Option<String>,
 }
 
-// ── release?inc=recordings+release-groups+artist-credits ────
+// ── release?inc=recordings+release-groups+artist-credits+aliases ────
 #[derive(Debug, Deserialize)]
 pub struct MbRelease {
     pub id: String,
@@ -42,6 +42,11 @@ pub struct MbRelease {
     pub release_group: Option<MbReleaseGroup>,
     #[serde(default)]
     pub media: Vec<MbMedium>,
+    /// Release aliases (present only on the direct `release` fetch, not on the
+    /// edition browse). Unlike artist aliases these carry no `type`, so the
+    /// selection filters on content rather than `alias_type`.
+    #[serde(default)]
+    pub aliases: Vec<MbAlias>,
 }
 
 /// MB `text-representation`: the script the titles are written in and the
@@ -57,6 +62,17 @@ pub struct MbReleaseGroup {
     pub id: String,
     #[serde(rename = "first-release-date")]
     pub first_release_date: Option<String>,
+}
+
+// ── release-group?inc=aliases ───────────────────────────────────────────
+/// A release group fetched for its aliases alone. Distinct from
+/// [`MbReleaseGroup`], which is the stub embedded in a release response and
+/// never carries aliases.
+#[derive(Debug, Deserialize)]
+pub struct MbReleaseGroupAliases {
+    pub title: String,
+    #[serde(default)]
+    pub aliases: Vec<MbAlias>,
 }
 
 #[derive(Debug, Deserialize)]

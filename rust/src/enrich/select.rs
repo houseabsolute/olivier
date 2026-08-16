@@ -206,3 +206,59 @@ pub fn classify_from_text_representation(tr: Option<&MbTextRepresentation>) -> O
         None => None,                        // no script + non-eng language => skip
     }
 }
+
+// ── Release / release-group aliases ───────────────────────────────────────
+
+/// Pick an album-title alt from an entity's aliases, for the case where the
+/// release group has NO usable sibling edition (no pseudo-release and no
+/// international edition). `title` is that entity's own title, which the alias
+/// is an alternative to. Returns the kind and the alias title.
+///
+/// Called for both the release's aliases and — since MB editors usually record
+/// an album's English or romanized title at the group level, where it applies to
+/// every edition — the release GROUP's aliases.
+///
+/// Candidates are filtered on content, not on `locale`: MB release aliases carry
+/// no `type`, and locale is a poor signal here — a Japanese album's romanization
+/// is as often filed under `locale: ja` as under `en`, and an `en` alias is as
+/// often a romanization as a translation. So the kind comes from
+/// [`correct_alt_kind`], the same English-dictionary arbiter the sibling-edition
+/// path uses. Its min-token guard means a one-word alias is always classified
+/// `Translate`; that is the conservative direction (a translation is stored for
+/// every original, a reading only for non-Latin ones) and is left as-is.
+///
+/// Rejected outright: a non-Latin alias (it is another native-script title, not
+/// an alt — mirroring the same-script sibling skip) and an alias equal to the
+/// entity's own title.
+///
+/// Tie-break, deterministic and mirroring [`select_transliteration`]'s tiering:
+/// primary + `en` locale, then primary, then `en` locale, then name ascending.
+pub fn select_alias_alt(
+    title: &str,
+    aliases: &[MbAlias],
+    dict: &HashSet<String>,
+) -> Option<(AltKind, String)> {
+    let usable: Vec<&MbAlias> = aliases
+        .iter()
+        .filter(|a| !a.name.trim().is_empty())
+        .filter(|a| !is_non_latin(&a.name))
+        .filter(|a| a.name != title)
+        .collect();
+
+    let primary = |a: &&MbAlias| a.primary.unwrap_or(false);
+    // `locale` is region-qualified in MB data ("en_GB", "en_US"), so match the
+    // language subtag rather than the whole string.
+    let en = |a: &&MbAlias| {
+        a.locale
+            .as_deref()
+            .is_some_and(|l| l == "en" || l.starts_with("en-") || l.starts_with("en_"))
+    };
+
+    let chosen = pick_min_by_name(usable.iter().copied().filter(|a| primary(a) && en(a)))
+        .or_else(|| pick_min_by_name(usable.iter().copied().filter(primary)))
+        .or_else(|| pick_min_by_name(usable.iter().copied().filter(en)))
+        .or_else(|| pick_min_by_name(usable.iter().copied()))?;
+
+    let kind = correct_alt_kind(AltKind::Translate, &[chosen.name.as_str()], dict);
+    Some((kind, chosen.name.clone()))
+}

@@ -8,7 +8,7 @@ use crate::enrich::model::{MbRelease, MbTextRepresentation, MbTrack};
 use crate::enrich::progress::EnrichProgress;
 use crate::enrich::select::{
     classify_from_text_representation, english_words, is_non_latin, resolve_edition_kind,
-    select_transliteration, store_alt_for, AltKind,
+    select_alias_alt, select_transliteration, store_alt_for, AltKind,
 };
 use crate::enrich::store;
 use std::collections::HashMap;
@@ -301,6 +301,31 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
                 }
             }
 
+            // Alias fallback for the album title, resolved BEFORE the transaction
+            // because the release-group leg may hit the network. Only consulted
+            // when no sibling edition is usable — an edition supplies per-track
+            // alts too, so it always wins over a lone alias string.
+            //
+            // Release aliases come free with the release fetch; the release GROUP
+            // costs an extra request, so it is fetched only when the release's own
+            // aliases came up empty. In MB practice the group is where an album's
+            // English or romanized title usually lives (it applies to every
+            // edition), so this leg is the one that fires most often.
+            let mut alias_alt = None;
+            if usable_editions(rel_mbid, release.text_representation.as_ref(), &editions).is_empty()
+            {
+                alias_alt = select_alias_alt(&release.title, &release.aliases, english_words());
+                if alias_alt.is_none() {
+                    if let Some(rg) = release.release_group.as_ref() {
+                        if is_real_mbid(&rg.id) {
+                            let group = client.fetch_release_group(conn, &rg.id).await?;
+                            alias_alt =
+                                select_alias_alt(&group.title, &group.aliases, english_words());
+                        }
+                    }
+                }
+            }
+
             // ── per-release unit of work: ONE transaction ──
             // apply dates + all sibling-edition title-alts + mark files enriched
             // commit together, so a crash can't leave dates committed but files
@@ -336,6 +361,8 @@ async fn enrich_lists<H: MbHttp, P: Pacer>(
                 log,
                 title,
             )?;
+
+            apply_alias_alt(&tx, rel_mbid, &release.title, alias_alt, log, title)?;
 
             store::mark_release_files_enriched(&tx, rel_mbid)?;
             tx.commit()?;
@@ -472,31 +499,7 @@ fn apply_edition_alts(
     log: &DecisionLog,
     title: &str,
 ) -> anyhow::Result<()> {
-    let original_script = original_text_rep.and_then(|tr| tr.script.as_deref());
-
-    let mut ordered: Vec<&MbRelease> = editions
-        .iter()
-        .filter(|ed| ed.id != release_mbid)
-        .filter(|ed| {
-            let tr = ed.text_representation.as_ref();
-            let ed_script = tr.and_then(|t| t.script.as_deref());
-            let ed_lang = tr.and_then(|t| t.language.as_deref());
-            match original_script {
-                // Known original script: skip a sibling written in that SAME
-                // script — a native-script reissue is neither a transliteration
-                // nor a translation, and would otherwise be stored as a
-                // (spurious) translation (the Some(_) arm of
-                // classify_from_text_representation).
-                Some(orig) => ed_script != Some(orig),
-                // Unknown original script: we can't confirm a non-Latin /
-                // non-English sibling differs from the original, so accept only
-                // the two reliably-safe alt forms — a Latin-script romanization
-                // or an English translation.
-                None => ed_script == Some("Latn") || ed_lang == Some("eng"),
-            }
-        })
-        .collect();
-    ordered.sort_by(|a, b| a.id.cmp(&b.id));
+    let ordered = usable_editions(release_mbid, original_text_rep, editions);
 
     // The original release supplies each track's ORIGINAL-script title, which
     // decides whether a romanized alt is a genuine reading (non-Latin original)
@@ -577,6 +580,77 @@ fn apply_edition_alts(
     Ok(())
 }
 
+/// The sibling editions that can supply title alts for `release_mbid`, in
+/// ascending `id` order. See [`apply_edition_alts`] for why a same-script sibling
+/// is excluded. Shared with the run loop, which treats an empty result as "this
+/// release group has no edition to learn from" and falls back to aliases.
+fn usable_editions<'a>(
+    release_mbid: &str,
+    original_text_rep: Option<&MbTextRepresentation>,
+    editions: &'a [MbRelease],
+) -> Vec<&'a MbRelease> {
+    let original_script = original_text_rep.and_then(|tr| tr.script.as_deref());
+    let mut ordered: Vec<&MbRelease> = editions
+        .iter()
+        .filter(|ed| ed.id != release_mbid)
+        .filter(|ed| {
+            let tr = ed.text_representation.as_ref();
+            let ed_script = tr.and_then(|t| t.script.as_deref());
+            let ed_lang = tr.and_then(|t| t.language.as_deref());
+            match original_script {
+                // Known original script: skip a sibling written in that SAME
+                // script — a native-script reissue is neither a transliteration
+                // nor a translation, and would otherwise be stored as a
+                // (spurious) translation (the Some(_) arm of
+                // classify_from_text_representation).
+                Some(orig) => ed_script != Some(orig),
+                // Unknown original script: we can't confirm a non-Latin /
+                // non-English sibling differs from the original, so accept only
+                // the two reliably-safe alt forms — a Latin-script romanization
+                // or an English translation.
+                None => ed_script == Some("Latn") || ed_lang == Some("eng"),
+            }
+        })
+        .collect();
+    ordered.sort_by(|a, b| a.id.cmp(&b.id));
+    ordered
+}
+
+/// Store the album-title alt chosen from release / release-group aliases (see
+/// the run loop, which resolves `chosen` and only does so when no sibling
+/// edition was usable).
+///
+/// Only the album title is covered — these aliases say nothing about tracks.
+/// (Per-track alts would need a `recording?inc=aliases` fetch each; deliberately
+/// out of scope.)
+fn apply_alias_alt(
+    conn: &Connection,
+    release_mbid: &str,
+    release_title: &str,
+    chosen: Option<(AltKind, String)>,
+    log: &DecisionLog,
+    title: &str,
+) -> anyhow::Result<()> {
+    let Some((kind, alias)) = chosen else {
+        return Ok(());
+    };
+    // Same gate as the edition path: a reading is stored only for a non-Latin
+    // original, a translation for any.
+    if !store_alt_for(kind, is_non_latin(release_title)) {
+        return Ok(());
+    }
+    store::upsert_release_alt(conn, release_mbid, kind, &alias)?;
+    let kind_label = match kind {
+        AltKind::Translit => "reading",
+        AltKind::Translate => "translation",
+    };
+    log.line(
+        "APPLY",
+        &format!("release \"{title}\": album {kind_label} \"{alias}\" from release alias"),
+    );
+    Ok(())
+}
+
 /// Browse every edition in a release group, paging `limit=100&offset=` until
 /// we've seen all of them (`offset >= release_count`). Each edition carries its
 /// full tracklist (`inc=recordings`) and its `text-representation`.
@@ -649,6 +723,7 @@ mod gate_tests {
             media: vec![MbMedium {
                 tracks: vec![track("夜の探検", "jp1"), track("Lukewarm", "en1")],
             }],
+            aliases: Vec::new(),
         };
 
         // ROMANIZED sibling R2: Latin script (MB would tag a romanization). Same
@@ -662,6 +737,7 @@ mod gate_tests {
             media: vec![MbMedium {
                 tracks: vec![track("Yoru no Tanken", "jp1"), track("Lukewarm", "en1")],
             }],
+            aliases: Vec::new(),
         };
 
         let editions = vec![original, romanized];

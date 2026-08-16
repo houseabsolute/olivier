@@ -3,11 +3,17 @@ use std::time::Duration;
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::enrich::http::MbHttp;
-use crate::enrich::model::{MbArtist, MbRelease, MbReleaseBrowse};
+use crate::enrich::model::{MbArtist, MbRelease, MbReleaseBrowse, MbReleaseGroupAliases};
 
 const BASE: &str = "https://musicbrainz.org/ws/2";
 const ARTIST_INC: &str = "aliases";
-const RELEASE_INC: &str = "recordings+release-groups+artist-credits";
+/// `aliases` supplies the fallback album-title alt used when the release group
+/// has no sibling edition (no pseudo-release, no international edition) — see
+/// `select::select_release_alias_alt`. Note that the inc string is part of the
+/// `mb_cache` key, so extending it makes pre-existing cached rows miss and
+/// refetch; no cache migration is needed.
+const RELEASE_INC: &str = "recordings+release-groups+artist-credits+aliases";
+const RG_INC: &str = "aliases";
 /// The release-group browse pulls every edition's full tracklist (each track's
 /// `recording.id`) so sibling editions can be classified and their titles joined
 /// to our tracks by recording MBID.
@@ -99,6 +105,22 @@ impl<H: MbHttp, P: Pacer> MbClient<H, P> {
         let url = format!("{BASE}/release/{mbid}?inc={RELEASE_INC}&fmt=json");
         let body = self
             .get_cached(conn, "release", mbid, RELEASE_INC, &url)
+            .await?;
+        Ok(serde_json::from_str(&body)?)
+    }
+
+    /// A release group's own aliases — where MB editors usually record an album's
+    /// English or romanized title, since it applies to every edition. Fetched only
+    /// as the last fallback (no usable sibling edition, no release alias), because
+    /// it costs an extra request per release group.
+    pub async fn fetch_release_group(
+        &self,
+        conn: &Connection,
+        mbid: &str,
+    ) -> anyhow::Result<MbReleaseGroupAliases> {
+        let url = format!("{BASE}/release-group/{mbid}?inc={RG_INC}&fmt=json");
+        let body = self
+            .get_cached(conn, "release-group", mbid, RG_INC, &url)
             .await?;
         Ok(serde_json::from_str(&body)?)
     }
