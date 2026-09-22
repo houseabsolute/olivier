@@ -19,6 +19,9 @@ typedef ShuffleFn = List<String> Function(List<String> paths);
 
 List<String> _defaultShuffle(List<String> paths) => List.of(paths)..shuffle();
 
+List<bool> _pathsExist(List<String> paths) =>
+    [for (final p in paths) File(p).existsSync()];
+
 /// The single method "Shuffle entire library" needs from the queue controller.
 /// Narrowed to an interface so the action is unit-testable with a fake.
 abstract interface class ShuffleAllTarget {
@@ -335,15 +338,20 @@ class QueueController implements ShuffleAllTarget {
   /// since last run) are dropped and logged so the player never tries to open
   /// them; the saved current track keeps pointing at the right song.
   Future<void> restoreFromSnapshot(QueueSnapshot snap) async {
+    // One sync stat per path in a background isolate. Awaiting File.exists()
+    // per path costs an async round trip each, which took ~14s for a ~10k-track
+    // queue and blocked the first frame.
+    final paths = snap.paths;
+    final exists = await compute(_pathsExist, paths);
     final kept = <String>[];
     var currentIndex = 0;
-    for (var i = 0; i < snap.paths.length; i++) {
-      if (await File(snap.paths[i]).exists()) {
+    for (var i = 0; i < paths.length; i++) {
+      if (exists[i]) {
         if (i <= snap.currentIndex) currentIndex = kept.length;
-        kept.add(snap.paths[i]);
+        kept.add(paths[i]);
       } else {
         developer.log(
-          'skipping missing queued file: ${snap.paths[i]}',
+          'skipping missing queued file: ${paths[i]}',
           name: 'olivier.queue',
         );
       }
