@@ -175,8 +175,8 @@ class _QueueColumnHeader extends StatelessWidget {
 }
 
 /// Collapsible queue panel between the browse split and the now-playing bar.
-/// Collapsed: shows the count + up-next header with fully-wired Shuffle,
-/// Empty, and Shuffle-all controls plus an expand caret. Expanded: the header
+/// Collapsed: shows an Empty control at the far left, then the count + up-next
+/// header with Shuffle and Shuffle-all controls plus an expand caret. Expanded: the header
 /// plus a column header and a ReorderableListView of queued tracks (bilingual
 /// title, separate artist/album columns, drag handle, × remove,
 /// current-track highlight).
@@ -237,6 +237,17 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
+                // Empty — clears the entire queue. Disabled when already empty.
+                // Kept at the far left, away from the other controls, so it's
+                // hard to hit by accident.
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Empty queue',
+                  onPressed: count == 0
+                      ? null
+                      : () => ref.read(queueControllerProvider).clear(),
+                ),
+                const SizedBox(width: 8),
                 if (nowPlaying != null && !compact) ...[
                   PathCover(
                     filePath: nowPlaying.path,
@@ -308,14 +319,6 @@ class _QueuePanelState extends ConsumerState<QueuePanel> {
                       );
                     },
                   ),
-                // Empty — clears the entire queue. Disabled when already empty.
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: 'Empty queue',
-                  onPressed: count == 0
-                      ? null
-                      : () => ref.read(queueControllerProvider).clear(),
-                ),
                 // Expand / collapse caret.
                 IconButton(
                   icon: Icon(
