@@ -193,7 +193,11 @@ class PlaybackController {
   // -------------------------------------------------------------------------
 
   void _subscribeIndex() {
-    _indexSub = audioHandler.player.currentIndexStream.listen((i) {
+    // just_audio's currentIndexStream re-emits on every playback event, not only
+    // when the index changes. Without distinct() the same mediaItem is re-added
+    // dozens of times a second, which makes the MPRIS layer emit a Metadata
+    // PropertiesChanged for each one and pegs the compositor.
+    _indexSub = audioHandler.player.currentIndexStream.distinct().listen((i) {
       // NOTE: clearing now-playing when the queue empties is handled by the
       // queue-revision path (_syncNowPlayingFromQueue's empty branch), NOT here:
       // this stream is the player's own index, which reports null transiently

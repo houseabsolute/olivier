@@ -14,8 +14,36 @@ class OlivierAudioHandler extends BaseAudioHandler
     with QueueHandler, SeekHandler {
   final AudioPlayer player = AudioPlayer();
 
+  /// Floor on how often a position-only state update reaches the platform.
+  /// Just_audio emits a playback event on every position tick, and forwarding
+  /// each one makes the MPRIS layer emit a `PropertiesChanged` per tick — GNOME
+  /// Shell's MPRIS controller re-reads every one, which pegs the compositor.
+  /// Real state changes (play/pause, buffering, track change) still go out at once.
+  static const _minPositionUpdateInterval = Duration(seconds: 1);
+
+  PlaybackState? _lastEmitted;
+  DateTime? _lastEmit;
+
   OlivierAudioHandler() {
-    player.playbackEventStream.map(_toState).pipe(playbackState);
+    player.playbackEventStream.map(_toState).listen(_emitPlaybackState);
+  }
+
+  void _emitPlaybackState(PlaybackState state) {
+    final prev = _lastEmitted;
+    final meaningful = prev == null ||
+        state.playing != prev.playing ||
+        state.processingState != prev.processingState ||
+        state.queueIndex != prev.queueIndex ||
+        state.speed != prev.speed;
+
+    final now = DateTime.now();
+    final tooSoon = _lastEmit != null &&
+        now.difference(_lastEmit!) < _minPositionUpdateInterval;
+    if (!meaningful && tooSoon) return;
+
+    _lastEmitted = state;
+    _lastEmit = now;
+    playbackState.add(state);
   }
 
   @override
